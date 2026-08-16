@@ -1,0 +1,25 @@
+node_modules/
+data.sqlite
+
+# Local agent/editor config — contains absolute paths from this machine.
+.claude/
+data.sqlite-*
+*.log
+.env
+.env.tvtest
+
+# Source cache + transcode output. Can be hundreds of GB — never in git.
+cache/
+media/
+data/
+transcode/
+
+# VidLink's wasm binary + glue, fetched once at runtime and pinned by hash on
+# first use. Third-party artifacts, not source — never redistribute them.
+vidlink/
+
+# Tizen build output (regenerate with `npm run tv-build`)
+tizen/Mediawan/Debug/
+tizen/Mediawan/Release/
+tizen/Mediawan/.buildResult/
+*.wgt

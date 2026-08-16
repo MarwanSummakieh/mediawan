@@ -1,0 +1,448 @@
+/* ============================================================================
+   TV mode — everything here is scoped to html.tv, which public/tv.js adds on a
+   Tizen webview, ?tv=1, or localStorage.tv=1. Desktop never loads a pixel of it.
+
+   Two jobs:
+
+   1. SURVIVE CHROMIUM 69. Samsung's 2020 sets (Tizen 5.5) predate flexbox
+      `gap` — that landed in Chromium 84. styles.css has 49 gap declarations
+      and every one of them silently collapses to zero there, so cards sit
+      flush against each other and the player controls jam together. esbuild
+      lowers syntax, not layout, so the spacing has to be restored by hand.
+
+   2. BE READABLE AT THREE METRES. The webview is 1920×1080 regardless of the
+      panel's own resolution (the TV upscales), so this is not "4K styling" —
+      it's a 1920 canvas viewed from across a room on a 65" screen. Everything
+      roughly doubles: 22px base text, 280px posters, 30px row titles.
+
+   No clamp()/min()/max() below — those need Chromium 79. Sizes come from
+   custom properties (Chromium 49, fine) and switch on plain media queries.
+   ========================================================================= */
+
+html.tv {
+  --tv-pad: 80px;          /* side safe area — TVs can still overscan a little */
+  --tv-pad-y: 44px;
+  --tv-card-w: 330px;
+  --tv-card-h: 470px;      /* ~2:3 poster (horizontal rows) */
+  --tv-grid-card-w: 250px; /* wrapped grids (Movies/TV/search) — six across, not four monsters */
+  --tv-grid-card-h: 375px;
+  --tv-gap: 26px;
+  --tv-row-title: 36px;
+}
+
+/* ---------------------------------------------------------------------------
+   1. Flexbox gap fallbacks (Chromium 69)
+   `> * + *` margins reproduce each container's gap. Row containers get
+   margin-left, column containers margin-top.
+   ------------------------------------------------------------------------ */
+/* Zero the gaps first. Chromium 69 ignores them anyway, but a modern browser in
+   TV mode (?tv=1 on a desktop, which is how this gets tested) would otherwise
+   add gap AND margin and lay out differently from the actual television. */
+html.tv .nav, html.tv .brand, html.tv .cards, html.tv .filter-bar, html.tv .genres,
+html.tv .card-actions, html.tv .sheet-actions, html.tv .p-controls, html.tv .p-titles,
+html.tv .up-next-actions, html.tv .srv-row, html.tv .p-drawer-ep, html.tv .p-drawer-head,
+html.tv .drawer-link, html.tv .eps, html.tv .p-drawer-list, html.tv .srv-foot,
+html.tv .card-scrim, html.tv .drawer-panel, html.tv .drawer-nav, html.tv .drawer-genres,
+html.tv .drawer-foot { gap: 0; }
+
+html.tv .nav > * + * { margin-left: 20px; }
+html.tv .brand > * + * { margin-left: 10px; }
+html.tv .p-top > * + * { margin-left: 22px; } /* back button ⟷ title (gap:14px upstream) */
+html.tv .cards > * + * { margin-left: var(--tv-gap); }
+html.tv .filter-bar > * + * { margin-left: 10px; }
+html.tv .genres > * + * { margin-left: 8px; }
+html.tv .card-actions > * + * { margin-left: 8px; }
+html.tv .sheet-actions > * + * { margin-left: 10px; }
+html.tv .p-controls > * + * { margin-left: 8px; }
+html.tv .p-titles > * + * { margin-left: 0; }
+html.tv .up-next-actions > * + * { margin-left: 8px; }
+html.tv .srv-row > * + * { margin-left: 12px; }
+html.tv .p-drawer-ep > * + * { margin-left: 14px; }
+html.tv .p-drawer-head > * + * { margin-left: 12px; }
+html.tv .drawer-link > * + * { margin-left: 16px; }
+html.tv .drawer-panel > * + * { margin-top: 10px; }
+html.tv .drawer-nav > * + * { margin-top: 8px; }
+html.tv .drawer-foot > * + * { margin-left: 12px; }
+html.tv .drawer-genre { margin: 5px; } /* wrapping row — per-child margin stands in for gap */
+/* column-direction containers */
+html.tv .eps > * + * { margin-top: 10px; }
+html.tv .p-drawer-list > * + * { margin-top: 8px; }
+html.tv .srv-foot > * + * { margin-top: 12px; }
+html.tv .card-scrim > * + * { margin-top: 4px; }
+html.tv .rows > * + * { margin-top: 0; } /* .row already carries its own margin */
+
+/* ---------------------------------------------------------------------------
+   2. 10-foot scale
+   ------------------------------------------------------------------------ */
+html.tv body { font-size: 26px; }
+
+html.tv .nav { padding: 28px var(--tv-pad); }
+html.tv .brand { font-size: 40px; }
+html.tv .brand::before { width: 19px; height: 24px; }
+/* left padding must keep clearing the magnifier icon at this scale — the icon
+   sits absolutely at left:16px inside the wrap and is sized up below */
+html.tv .nav .search { font-size: 26px; padding: 18px 22px 18px 68px; }
+html.tv .nav-search-wrap { max-width: 760px; }
+html.tv .nav-search-ic { width: 28px; height: 28px; left: 22px; }
+html.tv .nav-icon-btn { width: 68px; height: 68px; }
+html.tv .nav-icon-btn svg { width: 34px; height: 34px; }
+html.tv .nav .btn { font-size: 22px; padding: 14px 24px; }
+/* The search wrap stops growing at its max-width and nothing else in the nav
+   flexes, so the account cluster was stranded mid-screen. Send it to the edge. */
+html.tv .nav .who { margin-left: auto; }
+html.tv .who, html.tv #who { font-size: 22px; }
+
+html.tv .rows { padding: 0 var(--tv-pad) 80px; }
+html.tv .row { margin: 40px 0; }
+html.tv .row h2 { font-size: var(--tv-row-title); margin-bottom: 14px; }
+
+/* Posters: bigger, and spaced with margins since gap is inert here. */
+html.tv .card { width: var(--tv-card-w); }
+html.tv .card img { height: var(--tv-card-h); }
+html.tv .movie-noart { height: var(--tv-card-h); }
+html.tv .movie-noart span { font-size: 22px; }
+html.tv .card .cap { font-size: 20px; padding-top: 12px; }
+html.tv .card-t { font-size: 22px; }
+html.tv .card-sub { font-size: 18px; }
+html.tv .card .badge { font-size: 17px; padding: 5px 12px; }
+html.tv .card-act { width: 46px; height: 46px; font-size: 20px; }
+html.tv .card .prog-track { height: 5px; }
+
+/* Fixed columns, not minmax(...,1fr): the stretch made four ~400px cards per
+   row. And the poster height must be pinned per-context — the row-card height
+   would otherwise win specificity here, and the aspect-ratio fallback that
+   should catch it needs Chromium 88. */
+html.tv .cards-grid { grid-template-columns: repeat(auto-fill, var(--tv-grid-card-w)); gap: 30px var(--tv-gap); justify-content: start; }
+/* the row-card width/height overrides above outrank the grid's own `width:auto`,
+   so the grid sizing has to be restated at higher specificity */
+html.tv .cards-grid .card { width: var(--tv-grid-card-w); }
+html.tv .cards-grid .card img, html.tv .cards-grid .movie-noart { height: var(--tv-grid-card-h); }
+html.tv .grid-empty { font-size: 22px; padding: 46px 2px; }
+
+/* The row scrollers get breathing room so a focused card at either end isn't
+   pinned against the safe-area edge when scrollIntoView lands it. */
+/* scroll-behavior:smooth in styles.css would override scrollIntoView's own
+   "auto" option, so a held-down arrow could never snap and the highlight would
+   run ahead of the artwork. Hand the choice to tv.js, which asks for smooth on
+   a single press and instant while the key repeats. */
+html.tv .cards { padding: 26px 2px 32px; scroll-behavior: auto;
+  scroll-padding-left: var(--tv-pad); scroll-padding-right: var(--tv-pad); }
+html.tv .card { scroll-margin: 0 var(--tv-gap); }
+
+/* Mouse-only affordances: the D-pad scrolls rows by moving between cards, so
+   the hover arrows are dead weight on a remote. */
+html.tv .row-arrow, html.tv .hero-pager { display: none; }
+
+/* Player buttons that cannot do anything on this device: the app already IS
+   fullscreen; the PiP API needs Chromium 70+ (this webview is 69); and casting
+   to a TV from the TV is circular — the Cast SDK never even loads on Tizen.
+   Hiding them also shortens the D-pad walk along the control bar. */
+html.tv #pFs, html.tv #pPip, html.tv #pCast { display: none; }
+/* the remote's Back button IS the back control — the on-screen ‹ only ever
+   collided with the title up there */
+html.tv #pBack { display: none; }
+
+/* ---------------------------------------------------------------------------
+   The rail — TV navigation as a fixed icon column (built by tv.js). The top
+   bar keeps only the search field; everything else lives here, one Left away.
+   Overlays (detail, player) sit above it, so playback stays edge to edge.
+   ------------------------------------------------------------------------ */
+html.tv body { padding-left: 104px; }
+html.tv #tvRail { position: fixed; left: 0; top: 0; bottom: 0; width: 104px; z-index: 40;
+  background: var(--bg2); border-right: 1px solid var(--line);
+  display: flex; flex-direction: column; align-items: center; padding: 26px 0; }
+html.tv #tvRail > * + * { margin-top: 12px; }
+html.tv .tv-rail-mark { flex: 0 0 auto; width: 20px; height: 24px; background: var(--accent);
+  clip-path: polygon(0 0, 100% 50%, 0 100%); margin-bottom: 14px; }
+html.tv .tv-rail-btn { flex: 0 0 auto; width: 68px; height: 68px; border: 0; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  background: transparent; color: var(--muted); border-radius: var(--radius); }
+html.tv .tv-rail-spacer { flex: 1 1 auto; }
+html.tv .tv-rail-btn.tv-focus { background: var(--accent); color: var(--on-accent); transform: scale(1.08); }
+/* The current destination stays tinted so the column doubles as a "you are
+   here". The rail lists the libraries separately — one press each, rather than
+   the web's Browse-then-pick-a-pill — so it tints by library, not by tab. */
+html.tv body[data-tab="home"] #tvRail [data-id="home"]:not(.tv-focus),
+html.tv body[data-lib="anime"] #tvRail [data-id="anime"]:not(.tv-focus),
+html.tv body[data-lib="movies"] #tvRail [data-id="movies"]:not(.tv-focus),
+html.tv body[data-lib="tv"] #tvRail [data-id="tv"]:not(.tv-focus) { color: var(--accent); }
+
+/* The rail replaces the top bar outright. The bar (now just the search field —
+   its other children are hidden, the rail clicks them by proxy) only appears
+   while a search is actually happening: summoned by the rail's search icon,
+   dismissed when the field is left empty. */
+html.tv .nav { display: none; }
+html.tv body.tv-search .nav { display: flex; }
+html.tv #navBurger, html.tv .nav .brand, html.tv .nav #randomBtn,
+html.tv .nav .who, html.tv .nav #adminLink, html.tv .nav #logout { display: none; }
+html.tv .nav-search-wrap { max-width: none; }
+
+/* Films and shows share the anime detail sheet now (one full-screen page for
+   all three), so the old side-list season picker is gone with the in-page TV
+   layout it belonged to. The season <select> stays: tv.js makes OK cycle its
+   options, which a remote CAN drive. Facts read at 10 feet. */
+html.tv .facts { gap: 16px 34px; }
+html.tv .fact dt { font-size: 15px; }
+html.tv .fact dd { font-size: 20px; }
+
+/* TV-show page: seasons as a column beside the episodes. A native <select>
+   opens a list the D-pad cannot drive, so the remote gets real buttons and the
+   dropdown is hidden — only THIS one, the catalog filter selects keep theirs. */
+/* ---------------------------------------------------------------------------
+   No lists, no genres on the TV.
+   Both are curation rather than watching, and both cost D-pad presses on the
+   way to something playable: the list rows sit between the hero and the
+   discovery rows, the heart/+ overlays add two stops to every card, and a
+   genre chip is a detour into a different page mid-browse. The <select>
+   filters go for a harder reason — a native dropdown opens a list the remote
+   cannot drive at all, which is why seasons got their own column (below).
+   All of it is display:none rather than deleted: the web keeps every one of
+   these, and the same markup serves both.
+   ------------------------------------------------------------------------ */
+html.tv .list-row { display: none; }                 /* My List, Favorites, collections */
+html.tv .card-actions { display: none; }             /* the heart / + overlays on artwork */
+html.tv #detailActions { display: none; }            /* Favorite / My List / Collections */
+html.tv .hero-genres { display: none; }              /* genre chips under the hero title */
+html.tv .genres { display: none; }                   /* genre chips on every detail page */
+html.tv .drawer-genres-wrap { display: none; }       /* the drawer's genre chip cloud */
+html.tv #catGenre, html.tv #catYear { display: none; } /* undrivable native dropdowns */
+
+html.tv .eps-split { display: flex; align-items: flex-start; }
+html.tv .eps-split > * + * { margin-left: 34px; } /* flex gap is inert on Chromium 69 */
+html.tv .season-list { display: block; flex: 0 0 300px; }
+html.tv .season-list > * + * { margin-top: 10px; }
+html.tv .eps-split .eps { flex: 1 1 auto; min-width: 0; }
+html.tv #m-season { display: none; }
+html.tv .season-item { display: block; width: 100%; text-align: left; cursor: pointer;
+  background: var(--card); border: 1px solid transparent; border-radius: var(--radius);
+  color: var(--text); padding: 16px 18px; scroll-margin-top: 170px; scroll-margin-bottom: 60px; }
+html.tv .season-item .t { display: block; font-size: 22px; font-weight: 700; }
+html.tv .season-item .s { display: block; font-size: 16px; color: var(--muted); margin-top: 3px; }
+html.tv .season-item.active { border-color: var(--accent); color: var(--accent); }
+html.tv .season-item.active .t { color: var(--accent); }
+html.tv .season-item.tv-focus { background: var(--accent); border-color: var(--accent); }
+html.tv .season-item.tv-focus .t, html.tv .season-item.tv-focus .s { color: var(--on-accent); }
+
+/* Hamburger drawer at 10-foot scale — unreachable now the burger is hidden,
+   kept styled in case a future surface reopens it. */
+html.tv .drawer-panel { width: 520px; max-width: 40vw; padding: 34px 26px; }
+html.tv .drawer-link { font-size: 26px; padding: 18px 22px; }
+html.tv .drawer-link svg { width: 28px; height: 28px; }
+html.tv .drawer-section-t { font-size: 17px; }
+html.tv .drawer-genre { font-size: 20px; padding: 12px 20px; }
+html.tv .drawer-who { font-size: 19px; }
+html.tv .drawer-foot .btn { font-size: 20px; padding: 12px 20px; }
+
+/* The nav is sticky, so a focused card scrolled to the viewport's top edge
+   lands UNDERNEATH it — the highlight vanishes and the D-pad feels broken.
+   Focus targets keep their clearance from both edges instead. */
+html.tv .card, html.tv .fr-card, html.tv .ep-row, html.tv .sched-item,
+html.tv .mode-pill, html.tv .act-btn, html.tv .detail-play, html.tv .season-select,
+html.tv .sheet-back, html.tv .filter-bar .btn, html.tv #catMore {
+  scroll-margin-top: 170px; scroll-margin-bottom: 60px;
+}
+
+/* Hero. The -76px pull-up exists to slide under the translucent desktop nav —
+   with the nav gone on TV it just decapitates the artwork, so it goes. The
+   badge/pager offsets assumed that nav too. */
+html.tv .hero-car { margin-top: 0; height: 44vh; min-height: 420px; max-height: 560px; }
+html.tv .hero-badge { top: 34px; left: var(--tv-pad); font-size: 19px; padding: 12px 22px; }
+html.tv .hero-title { font-size: 58px; }
+html.tv .hero-btn { font-size: 22px; padding: 16px 34px; background: rgba(14,14,14,.78); }
+html.tv .hero-btn.primary { background: var(--accent); }
+html.tv .hero-badge { font-size: 18px; padding: 10px 20px; }
+html.tv .hero-chip, html.tv button.hero-chip { font-size: 18px; padding: 8px 16px; background: rgba(14,14,14,.72); }
+/* its flex gaps are dead on Chromium 69, like everything else's */
+html.tv .hero-content, html.tv .hero-chips, html.tv .hero-actions { gap: 0; }
+html.tv .hero-content > * + * { margin-top: 18px; }
+html.tv .hero-chips > * { margin: 5px; }
+html.tv .hero-actions > * + * { margin-left: 14px; }
+/* Focus targets sit two-thirds of the way DOWN the hero, and scrollIntoView
+   only guarantees the target itself — so climbing back up from the grid left
+   the hero beheaded at the top of the viewport. These margins drag the whole
+   banner back on screen whenever anything inside it takes the highlight. */
+html.tv .hero .hero-btn, html.tv .hero button.hero-chip {
+  scroll-margin-top: 520px; scroll-margin-bottom: 250px;
+}
+
+/* Detail sheet */
+html.tv .sheet-back { width: 58px; height: 58px; }
+html.tv .sheet-meta { font-size: 20px; }
+html.tv .d-desc { font-size: 21px; line-height: 1.5; }
+html.tv .genres span, html.tv .genres button { font-size: 18px; padding: 8px 18px; }
+html.tv .act-btn { font-size: 20px; padding: 14px 24px; }
+html.tv .detail-play { font-size: 22px; padding: 16px 32px; }
+html.tv .ep-row { padding: 16px; }
+html.tv .ep-row-t { font-size: 21px; }
+html.tv .ep-row-date { font-size: 17px; }
+html.tv .season-select { font-size: 20px; padding: 12px 16px; }
+html.tv .mode-pill { font-size: 19px; padding: 12px 22px; }
+
+/* Player chrome. The control bar sits inside the safe area too — on the photo
+   from the TV it was running right into the bottom-left corner. */
+html.tv .p-top { padding: 34px var(--tv-pad); }
+html.tv .p-bottom { padding: 0 var(--tv-pad) 34px; }
+html.tv .p-title-main { font-size: 38px; }
+html.tv .p-title-sub { font-size: 24px; }
+html.tv .p-icon { width: 68px; height: 68px; font-size: 28px; }
+html.tv .p-icon svg { width: 34px; height: 34px; }
+html.tv .p-icon.wide { padding: 0 24px; font-size: 24px; }
+html.tv .p-time { font-size: 24px; }
+html.tv .p-status { font-size: 26px; padding: 20px 32px; }
+html.tv .scrub-track { height: 8px; }
+html.tv .scrub-knob { width: 24px; height: 24px; }
+html.tv .scrub { padding-bottom: 10px; }
+/* subtitle sync: `gap` is inert on Chromium 69, and the nudge buttons are
+   D-pad targets like anything else, so they need thumb-sized hit areas */
+html.tv .sub-sync { gap: 0; padding: 8px 14px 12px; }
+html.tv .sub-sync > * + * { margin-left: 10px; }
+html.tv .sub-sync .p-icon { width: 52px; height: 52px; font-size: 26px; }
+html.tv .sub-sync-val { font-size: 18px; min-width: 78px; }
+html.tv .up-next { width: 440px; }
+html.tv .up-next-title { font-size: 24px; }
+
+/* Auth pages — reachable with the remote, so size them too */
+html.tv .auth-card input { font-size: 22px; padding: 16px 18px; }
+html.tv .auth-card .btn { font-size: 22px; padding: 16px 28px; }
+
+/* ---------------------------------------------------------------------------
+   2b. Compositing — why the video was black with stale UI smeared over it.
+
+   A Samsung TV decodes video into a hardware plane and the browser punches a
+   hole through the page for it. Anything that forces the surrounding content
+   onto its own composited layer can stop that hole being punched, or stop the
+   region repainting at all: you get a black rectangle where the film should be
+   and whatever was on screen beforehand left behind around it.
+
+   Two culprits here, both harmless on a desktop:
+     • `animation: playerIn` on the overlay. fill-mode is `both`, so the layer
+       it creates never goes away after the fade finishes — it is permanent.
+     • `backdrop-filter: blur()` on the nav and the player menus, which is
+       expensive on a TV GPU and composites the same way.
+   Neither buys anything at three metres, so TV mode drops both.
+   ------------------------------------------------------------------------ */
+html.tv .player-overlay.show { animation: none; }
+html.tv .overlay.show .sheet { animation: none; }
+html.tv .nav, html.tv .p-menu, html.tv .up-next, html.tv .card .badge, html.tv .card-act,
+html.tv .row-arrow, html.tv .scrub-tip, html.tv .hero-badge, html.tv .hero-chip,
+html.tv .hero-btn, html.tv .hero-count, html.tv .hero-pg-btn { backdrop-filter: none; }
+/* Fully opaque, not a fade-to-transparent: the nav is sticky, so rows scroll
+   underneath it, and without blur a translucent tail just reads as the movie
+   grid crashing into the top bar. */
+html.tv .nav { background: var(--bg); border-bottom: 1px solid var(--line); }
+html.tv .p-menu { background: #171a20; }
+html.tv .up-next { background: #171a20; }
+/* give the video its own solid backdrop so a missed repaint shows black, not
+   the previous screen */
+html.tv #video { background: #000; }
+
+/* ---------------------------------------------------------------------------
+   3. Focus — the only cursor a remote has, so it has to be unmissable.
+   `tv-focus-within` is set by tv.js on the card owning the highlight, because
+   :has() needs Chromium 105 and we have 69.
+   ------------------------------------------------------------------------ */
+html.tv .tv-focus {
+  outline: none !important;
+  position: relative; z-index: 20;
+  transform: scale(1.04);
+  transition: transform .12s ease, background-color .12s ease, color .12s ease;
+}
+
+/* Lists, menus and buttons: the focused row LIGHTS UP and grows a little. A
+   filled bar is legible across a room in a way a hairline never is, and it
+   leaves the accent colour meaning "you are here" rather than decorating an
+   edge. Anything with its own text colour has to be overridden too, or the
+   accent fill washes it out. */
+html.tv .p-menu-item.tv-focus, html.tv .p-menu-row.tv-focus, html.tv .p-menu-back.tv-focus,
+html.tv .srv-row.tv-focus, html.tv .p-drawer-ep.tv-focus, html.tv .ep-row.tv-focus,
+html.tv .drawer-link.tv-focus, html.tv .drawer-genre.tv-focus, html.tv .col-row.tv-focus,
+html.tv .sched-item.tv-focus, html.tv .fr-card.tv-focus {
+  background: var(--accent);
+  color: var(--on-accent);
+  border-color: var(--accent);
+  box-shadow: 0 10px 30px rgba(0,0,0,.55);
+}
+html.tv .srv-row.tv-focus .srv-s, html.tv .srv-row.tv-focus .srv-t,
+html.tv .p-drawer-ep.tv-focus .t, html.tv .p-drawer-ep.tv-focus .s,
+html.tv .p-drawer-ep.tv-focus .p-drawer-num,
+html.tv .ep-row.tv-focus .ep-row-t, html.tv .ep-row.tv-focus .ep-row-date,
+html.tv .sched-item.tv-focus .sched-time,
+html.tv .p-menu-item.tv-focus::after, html.tv .p-menu-val {
+  color: var(--on-accent);
+}
+html.tv .srv-row.tv-focus::before { background: var(--on-accent); }
+html.tv .srv-row.tv-focus .srv-fav { color: var(--on-accent); }
+html.tv .srv-row.tv-focus .srv-live { background: rgba(0,0,0,.35); color: #fff; }
+
+/* Buttons and pills: same idea, a solid accent fill. */
+html.tv .btn.tv-focus, html.tv .act-btn.tv-focus, html.tv .mode-pill.tv-focus,
+html.tv .hero-btn.tv-focus, html.tv .p-icon.tv-focus, html.tv .nav-icon-btn.tv-focus,
+html.tv .sheet-back.tv-focus, html.tv .season-select.tv-focus, html.tv .detail-play.tv-focus,
+html.tv .card-act.tv-focus, html.tv .srv-fav.tv-focus {
+  background: var(--accent);
+  color: var(--on-accent);
+  border-color: var(--accent);
+  transform: scale(1.08);
+}
+html.tv .p-icon.tv-focus svg, html.tv .card-act.tv-focus svg, html.tv .srv-fav.tv-focus svg {
+  color: var(--on-accent);
+}
+html.tv #search.tv-focus { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-dim); transform: none; }
+
+/* Posters carry their own picture, so a colour fill would fight the artwork.
+   They grow instead, lift off the row, and reveal their scrim and actions —
+   the same language the desktop uses for hover. */
+html.tv .card.tv-focus { transform: none; }
+html.tv .card.tv-focus .card-art {
+  transform: scale(1.12);
+  box-shadow: 0 22px 55px rgba(0,0,0,.8);
+  transition: transform .14s ease, box-shadow .14s ease;
+}
+html.tv .card.tv-focus .card-scrim { opacity: 1; }
+html.tv .card.tv-focus .cap { opacity: 0; }
+html.tv .card.tv-focus .card-actions,
+html.tv .card.tv-focus-within .card-actions { opacity: 1; }
+
+/* No hover states on a remote — stop them firing from stray pointer events. */
+html.tv .card:hover .card-art { transform: none; }
+html.tv .card:hover .card-scrim { opacity: 0; }
+html.tv .card:hover .cap { opacity: 1; }
+html.tv .card-actions { opacity: 0; }
+
+/* ---------------------------------------------------------------------------
+   4. If the webview really is 3840 wide (newer sets), scale up rather than
+      leaving a 1920-sized UI marooned in the corner.
+   ------------------------------------------------------------------------ */
+@media (min-width: 2400px) {
+  html.tv {
+    --tv-pad: 120px;
+    --tv-card-w: 520px;
+    --tv-card-h: 760px;
+    --tv-grid-card-w: 420px;
+    --tv-grid-card-h: 630px;
+    --tv-gap: 32px;
+    --tv-row-title: 54px;
+  }
+  html.tv body { font-size: 40px; }
+  html.tv .brand { font-size: 62px; }
+  html.tv .hero-title { font-size: 130px; }
+  html.tv .p-icon { width: 96px; height: 96px; }
+  html.tv .p-icon svg { width: 48px; height: 48px; }
+  html.tv .p-drawer { width: 900px; }
+}
+
+/* Narrow webview (some older sets report 1280) — keep it usable. */
+@media (max-width: 1400px) {
+  html.tv {
+    --tv-pad: 40px;
+    --tv-card-w: 200px;
+    --tv-card-h: 290px;
+    --tv-grid-card-w: 165px;
+    --tv-grid-card-h: 248px;
+    --tv-gap: 14px;
+    --tv-row-title: 24px;
+  }
+  html.tv body { font-size: 18px; }
+  html.tv .brand { font-size: 26px; }
+  html.tv .hero-title { font-size: 48px; }
+}

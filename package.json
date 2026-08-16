@@ -1,0 +1,28 @@
+{
+  "name": "mediawan",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Closed, invite-only, Netflix-style anime streamer for a small group.",
+  "scripts": {
+    "start": "node --env-file-if-exists=.env --experimental-sqlite server.mjs",
+    "dev": "node --env-file-if-exists=.env --experimental-sqlite --watch server.mjs",
+    "check-sources": "node --env-file-if-exists=.env scripts/check-providers.mjs",
+    "why": "node --env-file-if-exists=.env scripts/why.mjs",
+    "tizen-icon": "node scripts/make-tizen-icon.mjs",
+    "build:tv": "node scripts/build-tv-assets.mjs",
+    "tv-build": "node scripts/build-tizen.mjs",
+    "tv-install": "node scripts/install-tizen.mjs",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "tweetnacl": "^1.0.3"
+  },
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.1"
+  }
+}

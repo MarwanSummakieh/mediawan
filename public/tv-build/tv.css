@@ -1,0 +1,788 @@
+html.tv {
+  --tv-pad: 80px;
+  --tv-pad-y: 44px;
+  --tv-card-w: 330px;
+  --tv-card-h: 470px;
+  --tv-grid-card-w: 250px;
+  --tv-grid-card-h: 375px;
+  --tv-gap: 26px;
+  --tv-row-title: 36px;
+}
+html.tv .nav,
+html.tv .brand,
+html.tv .cards,
+html.tv .filter-bar,
+html.tv .genres,
+html.tv .card-actions,
+html.tv .sheet-actions,
+html.tv .p-controls,
+html.tv .p-titles,
+html.tv .up-next-actions,
+html.tv .srv-row,
+html.tv .p-drawer-ep,
+html.tv .p-drawer-head,
+html.tv .drawer-link,
+html.tv .eps,
+html.tv .p-drawer-list,
+html.tv .srv-foot,
+html.tv .card-scrim,
+html.tv .drawer-panel,
+html.tv .drawer-nav,
+html.tv .drawer-genres,
+html.tv .drawer-foot {
+  gap: 0;
+}
+html.tv .nav > * + * {
+  margin-left: 20px;
+}
+html.tv .brand > * + * {
+  margin-left: 10px;
+}
+html.tv .p-top > * + * {
+  margin-left: 22px;
+}
+html.tv .cards > * + * {
+  margin-left: var(--tv-gap);
+}
+html.tv .filter-bar > * + * {
+  margin-left: 10px;
+}
+html.tv .genres > * + * {
+  margin-left: 8px;
+}
+html.tv .card-actions > * + * {
+  margin-left: 8px;
+}
+html.tv .sheet-actions > * + * {
+  margin-left: 10px;
+}
+html.tv .p-controls > * + * {
+  margin-left: 8px;
+}
+html.tv .p-titles > * + * {
+  margin-left: 0;
+}
+html.tv .up-next-actions > * + * {
+  margin-left: 8px;
+}
+html.tv .srv-row > * + * {
+  margin-left: 12px;
+}
+html.tv .p-drawer-ep > * + * {
+  margin-left: 14px;
+}
+html.tv .p-drawer-head > * + * {
+  margin-left: 12px;
+}
+html.tv .drawer-link > * + * {
+  margin-left: 16px;
+}
+html.tv .drawer-panel > * + * {
+  margin-top: 10px;
+}
+html.tv .drawer-nav > * + * {
+  margin-top: 8px;
+}
+html.tv .drawer-foot > * + * {
+  margin-left: 12px;
+}
+html.tv .drawer-genre {
+  margin: 5px;
+}
+html.tv .eps > * + * {
+  margin-top: 10px;
+}
+html.tv .p-drawer-list > * + * {
+  margin-top: 8px;
+}
+html.tv .srv-foot > * + * {
+  margin-top: 12px;
+}
+html.tv .card-scrim > * + * {
+  margin-top: 4px;
+}
+html.tv .rows > * + * {
+  margin-top: 0;
+}
+html.tv body {
+  font-size: 26px;
+}
+html.tv .nav {
+  padding: 28px var(--tv-pad);
+}
+html.tv .brand {
+  font-size: 40px;
+}
+html.tv .brand::before {
+  width: 19px;
+  height: 24px;
+}
+html.tv .nav .search {
+  font-size: 26px;
+  padding: 18px 22px 18px 68px;
+}
+html.tv .nav-search-wrap {
+  max-width: 760px;
+}
+html.tv .nav-search-ic {
+  width: 28px;
+  height: 28px;
+  left: 22px;
+}
+html.tv .nav-icon-btn {
+  width: 68px;
+  height: 68px;
+}
+html.tv .nav-icon-btn svg {
+  width: 34px;
+  height: 34px;
+}
+html.tv .nav .btn {
+  font-size: 22px;
+  padding: 14px 24px;
+}
+html.tv .nav .who {
+  margin-left: auto;
+}
+html.tv .who,
+html.tv #who {
+  font-size: 22px;
+}
+html.tv .rows {
+  padding: 0 var(--tv-pad) 80px;
+}
+html.tv .row {
+  margin: 40px 0;
+}
+html.tv .row h2 {
+  font-size: var(--tv-row-title);
+  margin-bottom: 14px;
+}
+html.tv .card {
+  width: var(--tv-card-w);
+}
+html.tv .card img {
+  height: var(--tv-card-h);
+}
+html.tv .movie-noart {
+  height: var(--tv-card-h);
+}
+html.tv .movie-noart span {
+  font-size: 22px;
+}
+html.tv .card .cap {
+  font-size: 20px;
+  padding-top: 12px;
+}
+html.tv .card-t {
+  font-size: 22px;
+}
+html.tv .card-sub {
+  font-size: 18px;
+}
+html.tv .card .badge {
+  font-size: 17px;
+  padding: 5px 12px;
+}
+html.tv .card-act {
+  width: 46px;
+  height: 46px;
+  font-size: 20px;
+}
+html.tv .card .prog-track {
+  height: 5px;
+}
+html.tv .cards-grid {
+  grid-template-columns: repeat(auto-fill, var(--tv-grid-card-w));
+  gap: 30px var(--tv-gap);
+  justify-content: start;
+}
+html.tv .cards-grid .card {
+  width: var(--tv-grid-card-w);
+}
+html.tv .cards-grid .card img,
+html.tv .cards-grid .movie-noart {
+  height: var(--tv-grid-card-h);
+}
+html.tv .grid-empty {
+  font-size: 22px;
+  padding: 46px 2px;
+}
+html.tv .cards {
+  padding: 26px 2px 32px;
+  scroll-behavior: auto;
+  scroll-padding-left: var(--tv-pad);
+  scroll-padding-right: var(--tv-pad);
+}
+html.tv .card {
+  scroll-margin: 0 var(--tv-gap);
+}
+html.tv .row-arrow,
+html.tv .hero-pager {
+  display: none;
+}
+html.tv #pFs,
+html.tv #pPip,
+html.tv #pCast {
+  display: none;
+}
+html.tv #pBack {
+  display: none;
+}
+html.tv body {
+  padding-left: 104px;
+}
+html.tv #tvRail {
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 104px;
+  z-index: 40;
+  background: var(--bg2);
+  border-right: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 26px 0;
+}
+html.tv #tvRail > * + * {
+  margin-top: 12px;
+}
+html.tv .tv-rail-mark {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 24px;
+  background: var(--accent);
+  clip-path: polygon(0 0, 100% 50%, 0 100%);
+  margin-bottom: 14px;
+}
+html.tv .tv-rail-btn {
+  flex: 0 0 auto;
+  width: 68px;
+  height: 68px;
+  border: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  color: var(--muted);
+  border-radius: var(--radius);
+}
+html.tv .tv-rail-spacer {
+  flex: 1 1 auto;
+}
+html.tv .tv-rail-btn.tv-focus {
+  background: var(--accent);
+  color: var(--on-accent);
+  transform: scale(1.08);
+}
+html.tv body[data-tab=home] #tvRail [data-id=home]:not(.tv-focus),
+html.tv body[data-lib=anime] #tvRail [data-id=anime]:not(.tv-focus),
+html.tv body[data-lib=movies] #tvRail [data-id=movies]:not(.tv-focus),
+html.tv body[data-lib=tv] #tvRail [data-id=tv]:not(.tv-focus) {
+  color: var(--accent);
+}
+html.tv .nav {
+  display: none;
+}
+html.tv body.tv-search .nav {
+  display: flex;
+}
+html.tv #navBurger,
+html.tv .nav .brand,
+html.tv .nav #randomBtn,
+html.tv .nav .who,
+html.tv .nav #adminLink,
+html.tv .nav #logout {
+  display: none;
+}
+html.tv .nav-search-wrap {
+  max-width: none;
+}
+html.tv .facts {
+  gap: 16px 34px;
+}
+html.tv .fact dt {
+  font-size: 15px;
+}
+html.tv .fact dd {
+  font-size: 20px;
+}
+html.tv .list-row {
+  display: none;
+}
+html.tv .card-actions {
+  display: none;
+}
+html.tv #detailActions {
+  display: none;
+}
+html.tv .hero-genres {
+  display: none;
+}
+html.tv .genres {
+  display: none;
+}
+html.tv .drawer-genres-wrap {
+  display: none;
+}
+html.tv #catGenre,
+html.tv #catYear {
+  display: none;
+}
+html.tv .eps-split {
+  display: flex;
+  align-items: flex-start;
+}
+html.tv .eps-split > * + * {
+  margin-left: 34px;
+}
+html.tv .season-list {
+  display: block;
+  flex: 0 0 300px;
+}
+html.tv .season-list > * + * {
+  margin-top: 10px;
+}
+html.tv .eps-split .eps {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+html.tv #m-season {
+  display: none;
+}
+html.tv .season-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  background: var(--card);
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  color: var(--text);
+  padding: 16px 18px;
+  scroll-margin-top: 170px;
+  scroll-margin-bottom: 60px;
+}
+html.tv .season-item .t {
+  display: block;
+  font-size: 22px;
+  font-weight: 700;
+}
+html.tv .season-item .s {
+  display: block;
+  font-size: 16px;
+  color: var(--muted);
+  margin-top: 3px;
+}
+html.tv .season-item.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+html.tv .season-item.active .t {
+  color: var(--accent);
+}
+html.tv .season-item.tv-focus {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+html.tv .season-item.tv-focus .t,
+html.tv .season-item.tv-focus .s {
+  color: var(--on-accent);
+}
+html.tv .drawer-panel {
+  width: 520px;
+  max-width: 40vw;
+  padding: 34px 26px;
+}
+html.tv .drawer-link {
+  font-size: 26px;
+  padding: 18px 22px;
+}
+html.tv .drawer-link svg {
+  width: 28px;
+  height: 28px;
+}
+html.tv .drawer-section-t {
+  font-size: 17px;
+}
+html.tv .drawer-genre {
+  font-size: 20px;
+  padding: 12px 20px;
+}
+html.tv .drawer-who {
+  font-size: 19px;
+}
+html.tv .drawer-foot .btn {
+  font-size: 20px;
+  padding: 12px 20px;
+}
+html.tv .card,
+html.tv .fr-card,
+html.tv .ep-row,
+html.tv .sched-item,
+html.tv .mode-pill,
+html.tv .act-btn,
+html.tv .detail-play,
+html.tv .season-select,
+html.tv .sheet-back,
+html.tv .filter-bar .btn,
+html.tv #catMore {
+  scroll-margin-top: 170px;
+  scroll-margin-bottom: 60px;
+}
+html.tv .hero-car {
+  margin-top: 0;
+  height: 44vh;
+  min-height: 420px;
+  max-height: 560px;
+}
+html.tv .hero-badge {
+  top: 34px;
+  left: var(--tv-pad);
+  font-size: 19px;
+  padding: 12px 22px;
+}
+html.tv .hero-title {
+  font-size: 58px;
+}
+html.tv .hero-btn {
+  font-size: 22px;
+  padding: 16px 34px;
+  background: rgba(14, 14, 14, .78);
+}
+html.tv .hero-btn.primary {
+  background: var(--accent);
+}
+html.tv .hero-badge {
+  font-size: 18px;
+  padding: 10px 20px;
+}
+html.tv .hero-chip,
+html.tv button.hero-chip {
+  font-size: 18px;
+  padding: 8px 16px;
+  background: rgba(14, 14, 14, .72);
+}
+html.tv .hero-content,
+html.tv .hero-chips,
+html.tv .hero-actions {
+  gap: 0;
+}
+html.tv .hero-content > * + * {
+  margin-top: 18px;
+}
+html.tv .hero-chips > * {
+  margin: 5px;
+}
+html.tv .hero-actions > * + * {
+  margin-left: 14px;
+}
+html.tv .hero .hero-btn,
+html.tv .hero button.hero-chip {
+  scroll-margin-top: 520px;
+  scroll-margin-bottom: 250px;
+}
+html.tv .sheet-back {
+  width: 58px;
+  height: 58px;
+}
+html.tv .sheet-meta {
+  font-size: 20px;
+}
+html.tv .d-desc {
+  font-size: 21px;
+  line-height: 1.5;
+}
+html.tv .genres span,
+html.tv .genres button {
+  font-size: 18px;
+  padding: 8px 18px;
+}
+html.tv .act-btn {
+  font-size: 20px;
+  padding: 14px 24px;
+}
+html.tv .detail-play {
+  font-size: 22px;
+  padding: 16px 32px;
+}
+html.tv .ep-row {
+  padding: 16px;
+}
+html.tv .ep-row-t {
+  font-size: 21px;
+}
+html.tv .ep-row-date {
+  font-size: 17px;
+}
+html.tv .season-select {
+  font-size: 20px;
+  padding: 12px 16px;
+}
+html.tv .mode-pill {
+  font-size: 19px;
+  padding: 12px 22px;
+}
+html.tv .p-top {
+  padding: 34px var(--tv-pad);
+}
+html.tv .p-bottom {
+  padding: 0 var(--tv-pad) 34px;
+}
+html.tv .p-title-main {
+  font-size: 38px;
+}
+html.tv .p-title-sub {
+  font-size: 24px;
+}
+html.tv .p-icon {
+  width: 68px;
+  height: 68px;
+  font-size: 28px;
+}
+html.tv .p-icon svg {
+  width: 34px;
+  height: 34px;
+}
+html.tv .p-icon.wide {
+  padding: 0 24px;
+  font-size: 24px;
+}
+html.tv .p-time {
+  font-size: 24px;
+}
+html.tv .p-status {
+  font-size: 26px;
+  padding: 20px 32px;
+}
+html.tv .scrub-track {
+  height: 8px;
+}
+html.tv .scrub-knob {
+  width: 24px;
+  height: 24px;
+}
+html.tv .scrub {
+  padding-bottom: 10px;
+}
+html.tv .sub-sync {
+  gap: 0;
+  padding: 8px 14px 12px;
+}
+html.tv .sub-sync > * + * {
+  margin-left: 10px;
+}
+html.tv .sub-sync .p-icon {
+  width: 52px;
+  height: 52px;
+  font-size: 26px;
+}
+html.tv .sub-sync-val {
+  font-size: 18px;
+  min-width: 78px;
+}
+html.tv .up-next {
+  width: 440px;
+}
+html.tv .up-next-title {
+  font-size: 24px;
+}
+html.tv .auth-card input {
+  font-size: 22px;
+  padding: 16px 18px;
+}
+html.tv .auth-card .btn {
+  font-size: 22px;
+  padding: 16px 28px;
+}
+html.tv .player-overlay.show {
+  animation: none;
+}
+html.tv .overlay.show .sheet {
+  animation: none;
+}
+html.tv .nav,
+html.tv .p-menu,
+html.tv .up-next,
+html.tv .card .badge,
+html.tv .card-act,
+html.tv .row-arrow,
+html.tv .scrub-tip,
+html.tv .hero-badge,
+html.tv .hero-chip,
+html.tv .hero-btn,
+html.tv .hero-count,
+html.tv .hero-pg-btn {
+  backdrop-filter: none;
+}
+html.tv .nav {
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+}
+html.tv .p-menu {
+  background: #171a20;
+}
+html.tv .up-next {
+  background: #171a20;
+}
+html.tv #video {
+  background: #000;
+}
+html.tv .tv-focus {
+  outline: none !important;
+  position: relative;
+  z-index: 20;
+  transform: scale(1.04);
+  transition:
+    transform .12s ease,
+    background-color .12s ease,
+    color .12s ease;
+}
+html.tv .p-menu-item.tv-focus,
+html.tv .p-menu-row.tv-focus,
+html.tv .p-menu-back.tv-focus,
+html.tv .srv-row.tv-focus,
+html.tv .p-drawer-ep.tv-focus,
+html.tv .ep-row.tv-focus,
+html.tv .drawer-link.tv-focus,
+html.tv .drawer-genre.tv-focus,
+html.tv .col-row.tv-focus,
+html.tv .sched-item.tv-focus,
+html.tv .fr-card.tv-focus {
+  background: var(--accent);
+  color: var(--on-accent);
+  border-color: var(--accent);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .55);
+}
+html.tv .srv-row.tv-focus .srv-s,
+html.tv .srv-row.tv-focus .srv-t,
+html.tv .p-drawer-ep.tv-focus .t,
+html.tv .p-drawer-ep.tv-focus .s,
+html.tv .p-drawer-ep.tv-focus .p-drawer-num,
+html.tv .ep-row.tv-focus .ep-row-t,
+html.tv .ep-row.tv-focus .ep-row-date,
+html.tv .sched-item.tv-focus .sched-time,
+html.tv .p-menu-item.tv-focus::after,
+html.tv .p-menu-val {
+  color: var(--on-accent);
+}
+html.tv .srv-row.tv-focus::before {
+  background: var(--on-accent);
+}
+html.tv .srv-row.tv-focus .srv-fav {
+  color: var(--on-accent);
+}
+html.tv .srv-row.tv-focus .srv-live {
+  background: rgba(0, 0, 0, .35);
+  color: #fff;
+}
+html.tv .btn.tv-focus,
+html.tv .act-btn.tv-focus,
+html.tv .mode-pill.tv-focus,
+html.tv .hero-btn.tv-focus,
+html.tv .p-icon.tv-focus,
+html.tv .nav-icon-btn.tv-focus,
+html.tv .sheet-back.tv-focus,
+html.tv .season-select.tv-focus,
+html.tv .detail-play.tv-focus,
+html.tv .card-act.tv-focus,
+html.tv .srv-fav.tv-focus {
+  background: var(--accent);
+  color: var(--on-accent);
+  border-color: var(--accent);
+  transform: scale(1.08);
+}
+html.tv .p-icon.tv-focus svg,
+html.tv .card-act.tv-focus svg,
+html.tv .srv-fav.tv-focus svg {
+  color: var(--on-accent);
+}
+html.tv #search.tv-focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-dim);
+  transform: none;
+}
+html.tv .card.tv-focus {
+  transform: none;
+}
+html.tv .card.tv-focus .card-art {
+  transform: scale(1.12);
+  box-shadow: 0 22px 55px rgba(0, 0, 0, .8);
+  transition: transform .14s ease, box-shadow .14s ease;
+}
+html.tv .card.tv-focus .card-scrim {
+  opacity: 1;
+}
+html.tv .card.tv-focus .cap {
+  opacity: 0;
+}
+html.tv .card.tv-focus .card-actions,
+html.tv .card.tv-focus-within .card-actions {
+  opacity: 1;
+}
+html.tv .card:hover .card-art {
+  transform: none;
+}
+html.tv .card:hover .card-scrim {
+  opacity: 0;
+}
+html.tv .card:hover .cap {
+  opacity: 1;
+}
+html.tv .card-actions {
+  opacity: 0;
+}
+@media (min-width: 2400px) {
+  html.tv {
+    --tv-pad: 120px;
+    --tv-card-w: 520px;
+    --tv-card-h: 760px;
+    --tv-grid-card-w: 420px;
+    --tv-grid-card-h: 630px;
+    --tv-gap: 32px;
+    --tv-row-title: 54px;
+  }
+  html.tv body {
+    font-size: 40px;
+  }
+  html.tv .brand {
+    font-size: 62px;
+  }
+  html.tv .hero-title {
+    font-size: 130px;
+  }
+  html.tv .p-icon {
+    width: 96px;
+    height: 96px;
+  }
+  html.tv .p-icon svg {
+    width: 48px;
+    height: 48px;
+  }
+  html.tv .p-drawer {
+    width: 900px;
+  }
+}
+@media (max-width: 1400px) {
+  html.tv {
+    --tv-pad: 40px;
+    --tv-card-w: 200px;
+    --tv-card-h: 290px;
+    --tv-grid-card-w: 165px;
+    --tv-grid-card-h: 248px;
+    --tv-gap: 14px;
+    --tv-row-title: 24px;
+  }
+  html.tv body {
+    font-size: 18px;
+  }
+  html.tv .brand {
+    font-size: 26px;
+  }
+  html.tv .hero-title {
+    font-size: 48px;
+  }
+}

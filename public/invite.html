@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Accept invite · Mediawan</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <meta name="theme-color" content="#101216" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="auth">
+    <div class="auth-card">
+      <h1>MEDIAWAN</h1>
+      <p id="intro">Checking your invite…</p>
+      <form id="f" style="display:none">
+        <label>Email</label>
+        <input id="email" type="email" disabled />
+        <label>Choose a password</label>
+        <!-- must match the server's minPasswordLength default (config.mjs) -->
+        <input id="password" type="password" autocomplete="new-password" minlength="8" required />
+        <button class="btn" type="submit">Create Account</button>
+      </form>
+      <div class="err" id="err"></div>
+    </div>
+  </div>
+  <script>
+    const token = new URLSearchParams(location.search).get("token");
+    const intro = document.getElementById("intro");
+    const f = document.getElementById("f");
+    const err = document.getElementById("err");
+
+    (async () => {
+      const res = await fetch("/api/invite/" + token);
+      if (!res.ok) { intro.textContent = "This invite is invalid or already used."; return; }
+      const inv = await res.json();
+      intro.textContent = `Welcome ${inv.name}! Set a password to finish.`;
+      document.getElementById("email").value = inv.email;
+      f.style.display = "block";
+    })();
+
+    f.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      err.textContent = "";
+      const res = await fetch("/api/invite/" + token, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: document.getElementById("password").value }),
+      });
+      if (res.ok) location.href = "/";
+      else err.textContent = (await res.json()).error || "Failed";
+    });
+  </script>
+</body>
+</html>

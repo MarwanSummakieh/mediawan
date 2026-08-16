@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<widget xmlns="http://www.w3.org/ns/widgets" xmlns:tizen="http://tizen.org/ns/widgets"
+        id="http://mediawan/tv" version="1.0.0" viewmodes="maximized">
+  <!-- The package id must be EXACTLY 10 alphanumeric characters and the
+       application id must be "<package>.<name>" — anything else and the TV
+       rejects the install with a bare "Parsing error". -->
+  <tizen:application id="MediawanTV.Mediawan" package="MediawanTV" required_version="2.4"/>
+  <name>Mediawan</name>
+  <!-- Point the widget straight at the site (the documented "hosted web app"
+       shape). The old index.html shim loaded locally and then did a JS
+       location.replace() to a remote origin, which the runtime can refuse
+       without saying anything — a black screen. index.html is still packaged
+       as a fallback: swap this line back to it if the remote src ever fails. -->
+  <content src="https://your-domain.example/?tv=1"/>
+  <icon src="icon.png"/>
+
+  <!-- Tizen applies a restrictive default CSP from required_version 2.2 up,
+       which blocks inline scripts and the blob:/data: URLs hls.js relies on. -->
+  <tizen:content-security-policy>default-src * data: blob: 'unsafe-inline' 'unsafe-eval'; script-src * 'unsafe-inline' 'unsafe-eval'; style-src * 'unsafe-inline'; img-src * data: blob:; media-src * data: blob:; connect-src *; font-src * data:</tizen:content-security-policy>
+
+  <!-- Samsung TV profile, landscape, hardware keys (Back) delivered to the app -->
+  <tizen:profile name="tv-samsung"/>
+  <tizen:setting screen-orientation="landscape" context-menu="disable"
+                 background-support="disable" encryption="disable"
+                 install-location="auto" hwkey-event="enable"/>
+
+  <!-- 1080p TV -->
+  <feature name="http://tizen.org/feature/screen.size.normal.1080.1920"/>
+
+  <!-- Reach the backend over the network; allow navigating to the tunnel host -->
+  <!-- wildcard origin: `subdomains` is invalid alongside it -->
+  <access origin="*"/>
+  <tizen:allow-navigation>https://your-domain.example https://*.your-domain.example</tizen:allow-navigation>
+
+  <tizen:privilege name="http://tizen.org/privilege/internet"/>
+  <!-- Native player (only needed if you switch the player to AVPlay) -->
+  <tizen:privilege name="http://developer.samsung.com/privilege/avplay"/>
+</widget>

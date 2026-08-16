@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Mediawan</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <meta name="theme-color" content="#101216" />
+  <link rel="stylesheet" href="/styles.css" />
+  <!-- 10-foot overrides; every rule is scoped to html.tv, which tv.js sets -->
+  <link rel="stylesheet" href="/tv.css" />
+  <script src="/config.js"></script>
+  <script src="/vendor/hls.min.js"></script>
+  <!-- Google Cast SDK is loaded conditionally from app.js (only on Chromium
+       browsers that support it) to avoid its noisy http fallback elsewhere. -->
+</head>
+<body>
+  <div class="nav">
+    <button class="nav-icon-btn" id="navBurger" title="Menu" aria-label="Menu"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg></button>
+    <a class="brand" href="/">MEDIAWAN</a>
+    <div class="nav-search-wrap">
+      <svg class="nav-search-ic" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 1 0-.7.7l.27.28v.79l5 4.99L20.49 19zm-6 0A4.5 4.5 0 1 1 14 9.5 4.5 4.5 0 0 1 9.5 14z"/></svg>
+      <input class="search" id="search" type="search" placeholder="Search anime, movies &amp; shows…"
+             autocomplete="off" spellcheck="false" enterkeyhint="search" aria-label="Search anime, movies and shows" />
+    </div>
+    <button class="nav-icon-btn anime-tool" id="randomBtn" title="Surprise me"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M10.59 9.17 5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg></button>
+    <span class="who" id="who"></span>
+    <a class="btn ghost mini" id="adminLink" href="/admin.html" style="display:none">Admin</a>
+    <button class="btn ghost mini" id="logout">Sign out</button>
+  </div>
+
+  <!-- slide-in drawer menu (opened by the hamburger) -->
+  <div class="drawer" id="drawer" hidden>
+    <div class="drawer-backdrop" id="drawerBackdrop"></div>
+    <aside class="drawer-panel">
+      <div class="drawer-head">
+        <a class="brand" href="/">MEDIAWAN</a>
+        <button class="nav-icon-btn" id="drawerClose" title="Close" aria-label="Close menu"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M18.3 5.71 12 12l6.3 6.29-1.42 1.42L10.59 13.4 4.29 19.7 2.88 18.3 9.17 12 2.88 5.71 4.29 4.29l6.3 6.3 6.29-6.3z"/></svg></button>
+      </div>
+      <nav class="drawer-nav" id="drawerNav">
+        <button class="drawer-link" data-tab="home"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 3 2 12h3v8h6v-6h2v6h6v-8h3z"/></svg><span>Home</span></button>
+        <button class="drawer-link" data-tab="browse"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M3 3h8v8H3zM13 3h8v8h-8zM3 13h8v8H3zM13 13h8v8h-8z"/></svg><span>Browse</span></button>
+        <div class="drawer-sep"></div>
+        <button class="drawer-link anime-tool" id="drawerSchedule"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M19 3h-1V1h-2v2H8V1H6v2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2zm0 16H5V9h14v10zM5 7V5h14v2H5zm2 4h5v5H7z"/></svg><span>Schedule</span></button>
+        <button class="drawer-link anime-tool" id="drawerRandom"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M10.59 9.17 5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg><span>Random</span></button>
+      </nav>
+      <div class="drawer-genres-wrap anime-tool">
+        <div class="drawer-section-t">Anime Genres</div>
+        <div class="drawer-genres" id="drawerGenres"></div>
+      </div>
+      <!-- account row — the only place these live on phones (hidden in the top bar there) -->
+      <div class="drawer-foot">
+        <span class="drawer-who" id="drawerWho"></span>
+        <a class="btn ghost mini" id="drawerAdmin" href="/admin.html" style="display:none">Admin</a>
+        <button class="btn ghost mini" id="drawerLogout">Sign out</button>
+      </div>
+    </aside>
+  </div>
+
+  <div id="app"><div class="loading">Loading your library…</div></div>
+
+  <!-- ===== detail modal (info + episode list) ===== -->
+  <div class="overlay" id="detail">
+    <div class="sheet">
+      <button class="sheet-back" id="detailClose" title="Back">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20z"/></svg>
+      </button>
+      <div class="detail-hero" id="detailHero">
+        <div class="detail-hero-bg" id="detailHeroBg"></div>
+        <div class="detail-hero-art" id="detailHeroArt"></div>
+        <div class="detail-hero-fade"></div>
+        <button class="btn detail-play" id="detailPlay">▶ Play</button>
+      </div>
+      <div class="sheet-body">
+        <h2 id="d-title"></h2>
+        <div class="sheet-meta" id="d-meta"></div>
+        <div class="detail-actions" id="detailActions"></div>
+        <div class="genres" id="d-genres"></div>
+        <p id="d-desc" class="d-desc"></p>
+        <div class="eps-head">
+          <div class="eps-head-left">
+            <div class="eps-title">Episodes</div>
+            <select class="season-select" id="d-season" hidden></select>
+          </div>
+          <div class="mode-pills" id="d-modePills"></div>
+        </div>
+        <div class="eps" id="d-eps"></div>
+        <div class="src-note" id="d-note"></div>
+        <div class="fr-wrap" id="d-franchise" hidden></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== media detail (Movies + TV Shows) =====
+       Same full-bleed .overlay/.sheet treatment as the anime detail above —
+       TV shows used to render inside #app, so they sat under the nav bar
+       instead of covering the screen, and films had no detail page at all.
+       Films hide the season/episode block; TV hides nothing. -->
+  <div class="overlay" id="mDetail">
+    <div class="sheet">
+      <button class="sheet-back" id="mDetailClose" title="Back">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20z"/></svg>
+      </button>
+      <div class="detail-hero" id="mHero">
+        <div class="detail-hero-bg" id="mHeroBg"></div>
+        <div class="detail-hero-art" id="mHeroArt"></div>
+        <div class="detail-hero-fade"></div>
+        <button class="btn detail-play" id="mPlay">▶ Play</button>
+      </div>
+      <div class="sheet-body">
+        <h2 id="m-title"></h2>
+        <div class="sheet-meta" id="m-meta"></div>
+        <div class="genres" id="m-genres"></div>
+        <p id="m-desc" class="d-desc"></p>
+        <dl class="facts" id="m-facts"></dl>
+        <div class="eps-head" id="m-epsHead" hidden>
+          <div class="eps-head-left">
+            <div class="eps-title">Episodes</div>
+            <select class="season-select" id="m-season" hidden></select>
+          </div>
+        </div>
+        <!-- Seasons twice, one visible per platform: the <select> above for a
+             pointer, this list for the TV, where a native dropdown can't be
+             driven by a remote. tv.css shows one and hides the other; both
+             call loadSeasonEps, so they can't drift apart. -->
+        <div class="eps-split">
+          <aside class="season-list" id="m-seasonList"></aside>
+          <div class="eps" id="m-eps"></div>
+        </div>
+        <div class="src-note" id="m-note"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== immersive Netflix-style player ===== -->
+  <div class="player-overlay" id="player">
+    <video id="video" playsinline></video>
+
+    <!-- center: spinner / status -->
+    <div class="p-center" id="pCenter">
+      <div class="spinner" id="pSpinner"></div>
+      <div class="p-status" id="pStatus" hidden></div>
+    </div>
+
+    <!-- top bar (title, back) -->
+    <div class="p-top" id="pTop">
+      <button class="p-icon" id="pBack" title="Back (Esc)">‹</button>
+      <div class="p-titles">
+        <div class="p-title-main" id="pTitleMain"></div>
+        <div class="p-title-sub" id="pTitleSub"></div>
+      </div>
+    </div>
+
+    <!-- next-episode toast -->
+    <div class="up-next" id="upNext" hidden>
+      <div class="up-next-label">Next episode</div>
+      <div class="up-next-title" id="upNextTitle"></div>
+      <div class="up-next-actions">
+        <button class="btn" id="upNextPlay">▶ Play now</button>
+        <button class="btn ghost" id="upNextCancel">Cancel</button>
+      </div>
+      <div class="up-next-bar"><div id="upNextFill"></div></div>
+    </div>
+
+    <!-- bottom controls -->
+    <div class="p-bottom" id="pBottom">
+      <div class="scrub" id="scrub">
+        <div class="scrub-track">
+          <div class="scrub-buffered" id="scrubBuffered"></div>
+          <div class="scrub-played" id="scrubPlayed"></div>
+          <div class="scrub-knob" id="scrubKnob"></div>
+        </div>
+        <div class="scrub-tip" id="scrubTip" hidden></div>
+      </div>
+      <div class="p-controls">
+        <button class="p-icon" id="pPlay" title="Play/Pause (k)">▶</button>
+        <button class="p-icon" id="pPrev" title="Previous episode">⏮</button>
+        <button class="p-icon" id="pNext" title="Next episode (n)">⏭</button>
+        <div class="p-vol">
+          <button class="p-icon" id="pMute" title="Mute (m)"></button>
+          <input type="range" id="pVol" class="vol-slider" min="0" max="1" step="0.05" value="1" />
+        </div>
+        <div class="p-time"><span id="pCur">0:00</span> <span class="dim">/ <span id="pDur">0:00</span></span></div>
+        <div class="spacer"></div>
+        <button class="p-icon wide" id="pSkip" title="Skip intro" hidden>Skip Intro</button>
+        <button class="p-icon" id="pAud" title="Audio"></button>
+        <button class="p-icon" id="pCc" title="Subtitles (c)"></button>
+        <button class="p-icon" id="pGear" title="Settings">⚙</button>
+        <button class="p-icon wide" id="pEps" title="Episodes">☰ Eps</button>
+        <button class="p-icon" id="pCast" title="Cast to TV" hidden></button>
+        <button class="p-icon" id="pPip" title="Picture-in-picture">⧉</button>
+        <button class="p-icon" id="pFs" title="Fullscreen (f)">⛶</button>
+      </div>
+    </div>
+
+    <!-- collapsible: audio menu -->
+    <div class="p-menu aud-menu" id="audMenu" hidden>
+      <div class="p-menu-title">Audio</div>
+      <div class="p-menu-section" id="audList"></div>
+      <div class="p-menu-note" id="audNote"></div>
+    </div>
+
+    <!-- collapsible: subtitles menu -->
+    <div class="p-menu cc-menu" id="ccMenu" hidden>
+      <div class="p-menu-title">Subtitles</div>
+      <div class="p-menu-section" id="ccList"></div>
+      <div class="p-menu-note" id="ccNote"></div>
+    </div>
+
+    <!-- collapsible: settings menu (nested submenus; servers live here too) -->
+    <div class="p-menu settings-menu" id="settingsMenu" hidden>
+      <div class="p-submenu" data-sub="root">
+        <button class="p-menu-row" data-goto="quality"><span>Quality</span><span class="p-menu-val" id="valQuality">Auto</span></button>
+        <button class="p-menu-row" data-goto="servers"><span>Server</span><span class="p-menu-val" id="valServer">Auto</span></button>
+        <button class="p-menu-row" data-goto="speed"><span>Playback speed</span><span class="p-menu-val" id="valSpeed">Normal</span></button>
+      </div>
+      <div class="p-submenu" data-sub="quality" hidden>
+        <button class="p-menu-back" data-goto="root">‹ Quality</button>
+        <div id="qualityList"></div>
+      </div>
+      <div class="p-submenu" data-sub="servers" hidden>
+        <button class="p-menu-back" data-goto="root">‹ Server</button>
+        <div class="srv-head-s" id="srvCount">Looking for sources…</div>
+        <div class="p-menu-section" id="srvList"></div>
+        <div class="srv-foot" id="srvFoot" hidden></div>
+      </div>
+      <div class="p-submenu" data-sub="speed" hidden>
+        <button class="p-menu-back" data-goto="root">‹ Playback speed</button>
+        <div id="speedList"></div>
+      </div>
+    </div>
+
+    <!-- collapsible: episodes drawer -->
+    <div class="p-drawer" id="epsDrawer" hidden>
+      <div class="p-drawer-head">
+        <span>Episodes</span>
+        <button class="p-icon" id="epsDrawerClose">✕</button>
+      </div>
+      <div class="p-drawer-list" id="epsDrawerList"></div>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+  <script src="/tv.js"></script>
+</body>
+</html>

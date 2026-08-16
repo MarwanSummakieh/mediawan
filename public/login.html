@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sign in · Mediawan</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <meta name="theme-color" content="#101216" />
+  <link rel="stylesheet" href="/styles.css" />
+  <link rel="stylesheet" href="/tv.css" />
+  <script src="/config.js"></script>
+</head>
+<body>
+  <div class="auth">
+    <div class="auth-card">
+      <h1>MEDIAWAN</h1>
+      <p>Private members only. Ask Marwan for an invite.</p>
+      <form id="f">
+        <label>Email</label>
+        <input id="email" type="email" autocomplete="username" required />
+        <label>Password</label>
+        <input id="password" type="password" autocomplete="current-password" required />
+        <button class="btn" type="submit">Sign In</button>
+      </form>
+      <div class="err" id="err"></div>
+    </div>
+  </div>
+  <script>
+    const form = document.getElementById("f");
+    const err = document.getElementById("err");
+    const btn = form.querySelector("button");
+    // Land back on the page the user was on (?next=/watch/123/5). Only accept
+    // same-origin paths, and keep ?tv=1 through the redirect so TV navigation
+    // survives login.
+    const params = new URLSearchParams(location.search);
+    let dest = params.get("next") || "/";
+    if (!/^\/(?!\/)/.test(dest)) dest = "/";
+    if (params.get("tv") === "1" && !/[?&]tv=1/.test(dest)) dest += (dest.includes("?") ? "&" : "?") + "tv=1";
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      err.textContent = "";
+      btn.disabled = true;
+      try {
+        const res = await fetch("/api/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify({
+            email: document.getElementById("email").value,
+            password: document.getElementById("password").value,
+          }),
+        });
+        if (!res.ok) {
+          const j = await res.json().catch(() => ({}));
+          err.textContent = j.error || "Invalid credentials";
+          btn.disabled = false;
+          return;
+        }
+        // Don't leave until the session cookie is actually live. Some TV
+        // browsers commit Set-Cookie a beat after the fetch resolves, which
+        // otherwise bounces straight back to this screen (looks "stuck").
+        for (let i = 0; i < 15; i++) {
+          const me = await fetch("/api/me", { credentials: "same-origin", cache: "no-store" });
+          if (me.ok) { location.replace(dest); return; }
+          await new Promise((r) => setTimeout(r, 200));
+        }
+        location.replace(dest); // give up waiting after ~3s, try anyway
+      } catch {
+        err.textContent = "Network error — please try again.";
+        btn.disabled = false;
+      }
+    });
+  </script>
+  <script src="/tv.js"></script>
+</body>
+</html>

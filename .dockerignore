@@ -1,0 +1,34 @@
+node_modules
+data.sqlite
+data.sqlite-shm
+data.sqlite-wal
+.git
+.gitignore
+.env
+.env.tvtest
+*.log
+npm-debug.log*
+scratchpad
+
+# RUNTIME DATA — never part of an image.
+#
+# These are bind-mounted at runtime (see docker-compose.yml), so shipping them
+# is pure waste, and on a real deployment it is dangerous waste: the source
+# cache is budgeted at 2 TB. `docker build` sends the whole context to the
+# daemon before the first instruction runs, so a populated cache/ or media/
+# would push hundreds of gigabytes across and can wedge the box.
+#
+# Seen for real: transcode/ held 98 MB of leftover HLS segments and was 98% of
+# a 102 MB build context.
+cache/
+media/
+data/
+transcode/
+
+# Tizen build output (regenerate with `npm run tv-build`). public/tv-build IS
+# needed in the image — it's the Chromium-69 bundle old Samsung TVs load — but
+# the packaging artifacts around it are not.
+tizen/Mediawan/Debug/
+tizen/Mediawan/Release/
+tizen/Mediawan/.buildResult/
+*.wgt

@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Admin · Mediawan</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <meta name="theme-color" content="#101216" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="nav">
+    <a class="brand" href="/">MEDIAWAN</a>
+    <div class="spacer"></div>
+    <a class="btn ghost mini" href="/">← Back to browse</a>
+  </div>
+
+  <div class="admin">
+    <h1>Admin</h1>
+
+    <div class="panel">
+      <h2>Streaming health</h2>
+      <p style="color:var(--muted);font-size:13px;margin:4px 0 10px">
+        Where playback can come from right now. <b>Quality</b> sources are real release
+        files (Real-Debrid); <b>floor</b> sources are streaming sites (Movies and TV only,
+        see VidLink) that start instantly while the release is still being fetched. Playback is fine as long
+        as one source is serving — checking exercises each one against a known title.
+      </p>
+      <div class="row-form" style="align-items:center">
+        <span id="rs-status" class="tag">…</span>
+        <span id="rs-detail" style="color:var(--muted);font-size:13px"></span>
+        <button class="btn ghost mini" id="rs-btn">Check sources now</button>
+      </div>
+      <div id="rs-providers" style="display:flex;flex-direction:column;gap:8px;margin-top:12px"></div>
+      <div id="rs-indexes" style="display:flex;flex-direction:column;gap:4px;margin-top:12px"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Invite a friend</h2>
+      <div class="row-form">
+        <div><label style="color:var(--muted);font-size:13px">Name</label><br /><input id="i-name" placeholder="Ahmad" /></div>
+        <div><label style="color:var(--muted);font-size:13px">Email</label><br /><input id="i-email" type="email" placeholder="ahmad@example.com" /></div>
+        <div><label style="color:var(--muted);font-size:13px">Role</label><br />
+          <select id="i-role"><option value="member">member</option><option value="admin">admin</option></select>
+        </div>
+        <button class="btn" id="i-btn">Generate invite link</button>
+      </div>
+      <div class="invite-link" id="i-out" style="display:none"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Members</h2>
+      <table>
+        <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th></th></tr></thead>
+        <tbody id="users"></tbody>
+      </table>
+    </div>
+
+    <div class="panel">
+      <h2>Pending invites</h2>
+      <table>
+        <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Link</th></tr></thead>
+        <tbody id="invites"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    // same helper as app.js — this page builds rows with innerHTML too
+    function esc(s) { return String(s || "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+
+    async function load() {
+      const meRes = await fetch("/api/me");
+      if (!meRes.ok) { location.href = "/login.html"; return; }
+      const me = await meRes.json();
+      if (me.role !== "admin") { location.href = "/"; return; }
+
+      const res = await fetch("/api/admin/users");
+      const { users, invites } = await res.json();
+
+      document.getElementById("users").innerHTML = users.map((u) => `
+        <tr>
+          <td>${esc(u.name)}</td><td>${esc(u.email)}</td>
+          <td><span class="tag ${u.role === "admin" ? "admin" : ""}">${esc(u.role)}</span></td>
+          <td><span class="tag ${u.active ? "" : "off"}">${u.active ? "active" : "disabled"}</span></td>
+          <td class="center">
+            <button class="btn ghost mini" onclick="toggle(${u.id}, ${u.active ? 0 : 1})">${u.active ? "Disable" : "Enable"}</button>
+            <button class="btn mini" onclick="del(${u.id})">Delete</button>
+          </td>
+        </tr>`).join("");
+
+      document.getElementById("invites").innerHTML = invites.filter(i=>!i.used).map((i) => `
+        <tr><td>${esc(i.name)}</td><td>${esc(i.email)}</td><td>${esc(i.role)}</td>
+        <td><a class="invite-link" style="display:inline-block" href="/invite.html?token=${encodeURIComponent(i.token)}">/invite.html?token=${esc(i.token.slice(0,12))}…</a></td></tr>
+      `).join("") || `<tr><td colspan="4" style="color:var(--muted)">No pending invites</td></tr>`;
+    }
+
+    async function toggle(id, active) {
+      await fetch(`/api/admin/user/${id}/active`, { method: "POST",
+        headers: { "Content-Type": "application/json" }, body: JSON.stringify({ active }) });
+      load();
+    }
+    async function del(id) {
+      if (!confirm("Delete this user? They lose access immediately.")) return;
+      const res = await fetch(`/api/admin/user/${id}`, { method: "DELETE" });
+      if (!res.ok) alert((await res.json()).error);
+      load();
+    }
+    document.getElementById("i-btn").addEventListener("click", async () => {
+      const body = {
+        name: document.getElementById("i-name").value,
+        email: document.getElementById("i-email").value,
+        role: document.getElementById("i-role").value,
+      };
+      const res = await fetch("/api/admin/invite", { method: "POST",
+        headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const out = document.getElementById("i-out");
+      if (res.ok) {
+        const { url } = await res.json();
+        const full = location.origin + url;
+        out.style.display = "block";
+        out.innerHTML = `Send this link to ${esc(body.name)}: <br /><b>${esc(full)}</b>`;
+        load();
+      } else {
+        out.style.display = "block";
+        out.textContent = (await res.json()).error;
+      }
+    });
+    // ---- streaming health ----
+    // Failure is TYPED (see lib/providers/index.mjs), and the type is the whole
+    // point: "blocked" needs a source change and will never heal on its own,
+    // while "upstream-down" heals by itself. Say which, and say what to do.
+    const PROV_LABELS = {
+      ok: "serving", "no-sources": "nothing for that episode", "no-match": "title not in this source",
+      blocked: "blocked / bot-gated", "rate-limited": "rate-limited", "upstream-down": "unreachable",
+      error: "error", unknown: "not checked yet",
+    };
+    const PROV_HINTS = {
+      blocked: "Will not fix itself — swap the source rather than waiting.",
+      "rate-limited": "Backing off automatically, then retrying.",
+      "upstream-down": "Transient; retried automatically.",
+      "no-match": "Normal for an obscure title — not a fault.",
+    };
+    const TIER_LABELS = { quality: "quality · real release files", floor: "floor · instant, lower bitrate" };
+    const SETUP_HINTS = {
+      debrid: "Set REAL_DEBRID_TOKEN in .env.",
+      torrentio: "Needs REAL_DEBRID_TOKEN too — playback goes through our own debrid client.",
+      vidlink: "Set VIDLINK=true in .env. Runs a sandboxed third-party WASM binary — read the VidLink section of .env.example first.",
+    };
+
+    function renderSources(s) {
+      const provs = s.providers || [];
+      const serving = provs.filter((p) => p.status === "ok");
+      const off = provs.filter((p) => p.configured === false);
+      const el = document.getElementById("rs-status");
+      // One source serving is enough to play; none is the only real outage.
+      const ok = serving.length > 0;
+      const checked = provs.some((p) => p.status !== "unknown");
+      el.textContent = !checked ? "not checked yet" : ok ? "streaming ok" : "nothing serving";
+      el.className = "tag " + (ok || !checked ? "" : "off");
+      document.getElementById("rs-detail").textContent = checked
+        ? `${serving.length} of ${provs.length - off.length} configured source${provs.length - off.length === 1 ? "" : "s"} serving`
+          + (off.length ? ` · ${off.length} not set up` : "")
+        : "press check to probe every source";
+
+      document.getElementById("rs-providers").innerHTML = provs.map((p) => {
+        // An unconfigured source declines every title, which the registry
+        // records as "no match" — a NON-fault. Saying that would be a lie of
+        // omission: nothing is wrong with the source, it was never set up.
+        const unset = p.configured === false;
+        const status = unset ? "not set up" : (PROV_LABELS[p.status] || p.status);
+        const hint = unset ? (SETUP_HINTS[p.name] || "") : (PROV_HINTS[p.status] || "");
+        const detail = [
+          !unset && p.lastError ? esc(String(p.lastError).slice(0, 160)) : "",
+          !unset && p.breakerOpen ? `paused for ${Math.round(p.opensInMs / 1000)}s` : "",
+          hint,
+        ].filter(Boolean).join(" · ");
+        return `
+        <div style="display:flex;flex-direction:column;gap:2px;font-size:13px">
+          <span style="display:inline-flex;align-items:center;gap:8px">
+            <span class="tag ${p.status === "ok" && !unset ? "" : p.status === "unknown" || unset ? "" : "off"}" style="min-width:0">${esc(p.label)}</span>
+            <span style="color:var(--muted)">${esc(status)}</span>
+            <span style="color:var(--muted);opacity:.7">${esc(TIER_LABELS[p.tier] || p.tier || "")}</span>
+          </span>
+          ${detail ? `<span style="color:var(--muted);opacity:.85;padding-left:2px">${detail}</span>` : ""}
+        </div>`;
+      }).join("");
+
+      // Index freshness: the newest release timestamp each torrent index has
+      // returned. A stale index doesn't error — it answers, with old results —
+      // which is how AnimeTosho died in May 2026 and went unnoticed till July.
+      const idx = s.indexes || [];
+      document.getElementById("rs-indexes").innerHTML = !idx.length ? "" : `
+        <span style="color:var(--muted);font-size:12px;letter-spacing:.04em;text-transform:uppercase">Index freshness</span>
+        ${idx.map((f) => `
+          <span style="font-size:13px;display:inline-flex;align-items:center;gap:8px">
+            <span class="tag ${f.stale ? "off" : ""}" style="min-width:0">${esc(f.indexer)}</span>
+            <span style="color:var(--muted)">${f.newestAt
+              ? `newest release ${esc(f.newestAt.slice(0, 10))}${f.ageDays != null ? ` · ${esc(String(f.ageDays))}d old` : ""}`
+              : "no timestamps seen yet"}${f.stale ? " · STALE — this index has gone quiet" : ""}</span>
+          </span>`).join("")}`;
+    }
+    async function loadSources() {
+      const res = await fetch("/api/admin/sources");
+      if (res.ok) renderSources(await res.json());
+    }
+    document.getElementById("rs-btn").addEventListener("click", async () => {
+      const btn = document.getElementById("rs-btn");
+      btn.disabled = true; btn.textContent = "Checking…";
+      try {
+        const res = await fetch("/api/admin/sources", { method: "POST" });
+        if (res.ok) renderSources(await res.json());
+      } finally {
+        btn.disabled = false; btn.textContent = "Check sources now";
+      }
+    });
+
+    window.toggle = toggle; window.del = del;
+    load();
+    loadSources();
+  </script>
+</body>
+</html>

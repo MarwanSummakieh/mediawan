@@ -1,0 +1,8 @@
+<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Mediawan">
+  <rect width="64" height="64" fill="#0f0f0f"/>
+  <rect x="1.75" y="1.75" width="60.5" height="60.5" fill="none" stroke="#28bbe4" stroke-opacity=".22" stroke-width="1.5"/>
+  <!-- play triangle -->
+  <path d="M26 21 L46 32 L26 43 Z" fill="#28bbe4"/>
+  <!-- anime sparkle -->
+  <path d="M46.5 12.5 l1.25 3.25 3.25 1.25 -3.25 1.25 -1.25 3.25 -1.25 -3.25 -3.25 -1.25 3.25 -1.25 z" fill="#7fd8f0"/>
+</svg>
