@@ -5,6 +5,10 @@
 // IP-sensitive and transcoding depends on hardware that only exists there.
 //
 // It answers four questions, in the order they can break:
+//   0. Is the debrid subscription actually alive? Nothing in Movies or TV can
+//      play without it, and it expires on a date rather than failing loudly —
+//      so it is checked FIRST and by itself, not inferred from a play that
+//      didn't work.
 //   1. Can ffmpeg use QuickSync here?      (silent fallback = stuttering remote video)
 //   2. Is the source cache sane?
 //   3. Which providers are serving, and when they aren't, WHY — typed, so a
@@ -18,6 +22,8 @@ import { capabilities } from "../lib/transcode/probe.mjs";
 import * as cacheStore from "../lib/cache/store.mjs";
 import { rankReleasesVerbose, searchAnimeTorrents, searchMovies, indexFreshness } from "../lib/torrents.mjs";
 import { config } from "../lib/config.mjs";
+import { backends } from "../lib/debrid/backends.mjs";
+import { userInfo } from "../lib/debrid/realdebrid.mjs";
 
 const pad = (s, n) => String(s).padEnd(n);
 const GB = 1024 ** 3;
@@ -32,8 +38,41 @@ const EP = "1";
 
 console.log(`\n  Mediawan · source check   (run this ON the NAS — reachability and QSV are both local)\n`);
 
+// ---- 0. debrid account ----
+// The whole quality tier hangs off this one subscription, and a lapse doesn't
+// announce itself: Real-Debrid simply starts answering addMagnet with
+// "403 permission_denied", which reads exactly like a hundred unlucky releases
+// unless something asks the account directly. So ask it directly.
+console.log("  DEBRID ACCOUNT   (the quality tier — every movie and TV play)");
+const configured = backends.filter((b) => b.enabled());
+if (!configured.length) {
+  console.log("    ✗ no debrid service configured — Movies and TV cannot play at all.");
+  console.log("      Set REAL_DEBRID_TOKEN (and optionally PREMIUMIZE_API_KEY) in .env");
+} else {
+  for (const b of configured) {
+    if (b.name !== "realdebrid") { console.log(`    – ${b.label} · configured (no account probe implemented)`); continue; }
+    try {
+      const u = await userInfo();
+      const days = u.expiration ? Math.round((new Date(u.expiration) - Date.now()) / 86400e3) : null;
+      if (u.type === "premium" && u.premium > 0) {
+        console.log(`    ✓ ${b.label} · premium${days != null ? ` · ${days} day(s) left (expires ${String(u.expiration).slice(0, 10)})` : ""}`);
+        if (days != null && days <= 7)
+          console.log("      ⚠ renew soon — the day this lapses, every movie and episode stops playing.");
+      } else {
+        console.log(`    ✗ ${b.label} · FREE ACCOUNT — premium is not active${u.expiration ? ` (lapsed ${String(u.expiration).slice(0, 10)})` : ""}.`);
+        console.log("      A free account may not add torrents, so NO release can play — every pick");
+        console.log("      fails with \"403 permission_denied\". Renew at https://real-debrid.com/premium");
+      }
+    } catch (e) {
+      console.log(`    ✗ ${b.label} · could not read the account: ${e.message.slice(0, 70)}`);
+      console.log("      A rejected token looks identical to an outage from the player. Check REAL_DEBRID_TOKEN.");
+    }
+  }
+}
+
 // ---- 1. transcoding ----
-console.log("  TRANSCODING");
+console.log(`
+  TRANSCODING`);
 const caps = await capabilities();
 if (!config.transcode.enabled) {
   console.log("    ✗ disabled (TRANSCODE=false). Remote clients get raw release files they probably can't play.");

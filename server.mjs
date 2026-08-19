@@ -925,7 +925,12 @@ app.get("/api/movie/:id/stream", requireAuth, ah(async (req, res) => {
     return res.status(202).json({ streams: [], downloading: r.downloading, title: r.title ?? null });
   }
   if (r.error) {
-    const code = r.error === "debrid-disabled" ? 503 : 502;
+    // 402 for a lapsed subscription: not a bad gateway and not a bad
+    // request — the service is up and answering, it is the account that
+    // cannot use it. The client keys its wording off this, so a viewer is
+    // told to renew rather than to keep trying other releases.
+    const code = r.error === "debrid-disabled" ? 503
+      : r.error === "debrid-account" ? 402 : 502;
     return res.status(code).json({ error: r.error, detail: r.detail });
   }
   const play = await deliverOrProxy(r.stream, req, r.title,
@@ -982,7 +987,12 @@ app.get("/api/tvshow/:id/:season/:ep/stream", requireAuth, ah(async (req, res) =
     return res.status(202).json({ streams: [], downloading: r.downloading, title: r.title ?? null });
   }
   if (r.error) {
-    const code = r.error === "debrid-disabled" ? 503 : 502;
+    // 402 for a lapsed subscription: not a bad gateway and not a bad
+    // request — the service is up and answering, it is the account that
+    // cannot use it. The client keys its wording off this, so a viewer is
+    // told to renew rather than to keep trying other releases.
+    const code = r.error === "debrid-disabled" ? 503
+      : r.error === "debrid-account" ? 402 : 502;
     return res.status(code).json({ error: r.error, detail: r.detail });
   }
   const play = await deliverOrProxy(r.stream, req, r.title,

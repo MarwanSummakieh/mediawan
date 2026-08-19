@@ -929,10 +929,16 @@ const Player = {
       }
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
-        throw new Error(j.detail || j.error || "no source");
+        const e = new Error(j.detail || j.error || "no source");
+        e.code = j.error || null;
+        throw e;
       }
       data = await res.json();
     } catch (e) {
+      if (e.code === "debrid-account") {
+        this.showStatus(String(e.message || "The debrid account can't play anything right now."), false);
+        return;
+      }
       this.showStatusAction(
         `No cached release played automatically. ${String(e.message || "")}`.trim(),
         this._serversUrl ? "Choose a server" : null,
@@ -1466,8 +1472,14 @@ const Player = {
           key: s.sig,
           label: s.name,
           title: s.name,
+          // Resolution leads the row instead of sitting in the detail line.
+          // Half a film's releases are "1080p BluRay" and the names are long
+          // dotted strings, so deciding "4K or 1080p?" meant reading every
+          // headline down to its middle. As its own column it is scannable,
+          // and being outside .srv-name it survives the truncation that eats
+          // the end of a long release name.
+          res: /^\d{3,4}$/.test(String(s.quality || "")) ? `${s.quality}p` : null,
           detail: [
-            s.quality ? `${s.quality}p` : null,
             s.tag,
             s.group,
             // Language, which is why this row exists at all: without it the
@@ -1488,6 +1500,7 @@ const Player = {
           key: live.sig,
           live: true,
           stream: live,
+          res: /^\d{3,4}$/.test(String(live.quality || "")) ? `${live.quality}p` : null,
           label: live.serverName || live.serverLabel || live.source || "Playing now",
           title: live.serverName || "",
           detail: [live.serverLabel, probedLangLabel(live) || live.langLabel].filter(Boolean).join(" \xB7 ") || "Playing now"
@@ -1500,8 +1513,9 @@ const Player = {
         label: s.source || "Source",
         // The "p" is appended here, so only a bare resolution earns one — a
         // source that already said "1080p" would otherwise read "1080pp".
+        res: /^\d{3,4}$/.test(String(s.quality || "")) ? `${s.quality}p` : null,
         detail: [
-          /^\d{3,4}$/.test(String(s.quality || "")) ? `${s.quality}p` : s.quality && s.quality !== "auto" ? s.quality : "Auto quality",
+          /^\d{3,4}$/.test(String(s.quality || "")) ? null : s.quality && s.quality !== "auto" ? s.quality : "Auto quality",
           // Same rule as films: probed truth for what's playing, the release
           // name's claim for everything else.
           (s === this.quality ? probedLangLabel(s) : null) || s.langLabel,
@@ -1519,14 +1533,17 @@ const Player = {
     const rows = this._serverRows();
     const live = rows.find((r) => r.live);
     const val = $("#valServer");
-    if (val) val.textContent = live ? live.label.length > 26 ? live.label.slice(0, 25) + "\u2026" : live.label : "Auto";
+    if (val) {
+      const name = live ? live.label.length > 26 ? live.label.slice(0, 25) + "\u2026" : live.label : "Auto";
+      val.textContent = (live == null ? void 0 : live.res) ? `${live.res} \xB7 ${name}` : name;
+    }
     $("#srvCount").textContent = !rows.length && this._srvBusy ? "Looking for sources\u2026" : `${rows.length} server${rows.length === 1 ? "" : "s"}${this._srvBusy ? " \xB7 searching\u2026" : ""}`;
     list.innerHTML = rows.length ? rows.map((r, i) => {
       const on = srvIsFav(r.key);
       const busy = this._srvBusyId && r.id === this._srvBusyId;
       return `<div class="srv-row ${r.live ? "live" : ""} ${on ? "fav" : ""}" data-i="${i}" title="${esc(r.title || r.label)}">
             <div class="srv-body">
-              <div class="srv-t"><span class="srv-name">${esc(r.label)}</span>${r.stream ? srcBadge(r.stream) : ""}</div>
+              <div class="srv-t">${r.res ? `<span class="srv-res">${esc(r.res)}</span>` : ""}<span class="srv-name">${esc(r.label)}</span>${r.stream ? srcBadge(r.stream) : ""}</div>
               <div class="srv-s">${busy ? "Starting\u2026" : esc(r.detail)}</div>
             </div>
             <button class="srv-fav ${on ? "on" : ""}" data-fav="${i}"
@@ -1609,7 +1626,7 @@ const Player = {
   // falling through to the ranked default, which would silently undo the
   // choice — so an uncached pick fails fast and the old stream comes back.
   async switchServer(r) {
-    var _a;
+    var _a, _b, _c, _d;
     if (!r.id) return;
     const at = this.curT(), prev = this.quality;
     this._audioIndex = null;
@@ -1618,22 +1635,38 @@ const Player = {
     this._srvError = "";
     this.buildServers();
     const token = this._srvToken();
-    let data = null, err = "";
+    let data = null, err = "", errCode = null;
     try {
       const res = await fetch(withQuery(this._streamBase, { server: r.id }));
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
-        throw new Error(j.detail || j.error || "unavailable");
+        const e = new Error(j.detail || j.error || `the server replied ${res.status}`);
+        e.code = j.error || null;
+        throw e;
       }
       data = await res.json();
+      if (res.status === 202 && (((_a = data.downloading) == null ? void 0 : _a.torrentId) || ((_b = data.upgrade) == null ? void 0 : _b.key))) {
+        if (this._closing || this._srvToken() !== token) return;
+        this._srvBusy = false;
+        this._srvBusyId = null;
+        this.closeServers();
+        if ((_c = data.downloading) == null ? void 0 : _c.torrentId) {
+          this.watchDebridDownload(data.downloading);
+          return;
+        }
+        this.showStatus("Fetching the release you picked\u2026", true);
+        this.watchUpgrade(data.upgrade, at, { primary: true });
+        return;
+      }
     } catch (e) {
       err = String(e.message || "unavailable");
+      errCode = e.code || null;
     }
     if (this._closing || this._srvToken() !== token) return;
     this._srvBusy = false;
     this._srvBusyId = null;
-    if (!((_a = data == null ? void 0 : data.streams) == null ? void 0 : _a.length)) {
-      this._srvError = /network unreachable/i.test(err) ? `Couldn't reach the debrid service \u2014 ${err.replace(/^.*network unreachable/i, "network unreachable")}. Try again.` : `${r.label} didn't start \u2014 ${err}`;
+    if (!((_d = data == null ? void 0 : data.streams) == null ? void 0 : _d.length)) {
+      this._srvError = /network unreachable/i.test(err) ? `Couldn't reach the debrid service \u2014 ${err.replace(/^.*network unreachable/i, "network unreachable")}. Try again.` : errCode === "debrid-account" ? err : `${r.label} didn't start \u2014 ${err}`;
       this.buildServers();
       if (prev) this.loadQuality(prev, at, true);
       return;
