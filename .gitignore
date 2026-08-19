@@ -9,14 +9,19 @@ data.sqlite-*
 .env.tvtest
 
 # Source cache + transcode output. Can be hundreds of GB — never in git.
-cache/
-media/
-data/
-transcode/
+#
+# ANCHORED with a leading slash, and it has to stay that way. A bare "transcode/"
+# matches a directory of that name at ANY depth, so it also swallowed
+# lib/transcode/ and lib/cache/ — four source modules that server.mjs imports at
+# the top level. The repo looked complete and could not boot from a fresh clone.
+/cache/
+/media/
+/data/
+/transcode/
 
 # VidLink's wasm binary + glue, fetched once at runtime and pinned by hash on
 # first use. Third-party artifacts, not source — never redistribute them.
-vidlink/
+/vidlink/
 
 # Tizen build output (regenerate with `npm run tv-build`)
 tizen/Mediawan/Debug/
