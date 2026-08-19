@@ -1,136 +1,53 @@
-# Mediawan + Cloudflare Tunnel. Only the tunnel talks to the app;
-# the app is never published to the host or the LAN.
-#
-# DEPLOYMENT IS PULL-BASED. `web` no longer builds from this directory — it runs
-# the image .github/workflows/deploy.yml publishes to GHCR on every push to
-# main, and the watchtower service at the bottom polls for a new one. Nothing
-# reaches into the NAS from outside; it only ever dials out. That is what makes
-# this work without an SSH key, a port forward, or a runner on the box.
-#
-# To deploy a local change without going through GitHub:
-#   docker compose build web && docker compose up -d web
-# (add `--build` and it will use this directory instead of the registry) — but
-# the next Watchtower poll will replace it with :latest, so treat that as a
-# debugging move rather than a release.
 services:
   web:
-    # Was `build: .`. Published by CI; see .github/workflows/deploy.yml.
     image: ghcr.io/marwansummakieh/mediawan:latest
     restart: unless-stopped
     labels:
-      # Watchtower runs with --label-enable, so ONLY what carries this label is
-      # ever restarted under us. cloudflared and seanime are third-party images
-      # on their own release cadence and are deliberately left out: an
-      # unattended Seanime upgrade can take the extensions with it.
       - "com.centurylinklabs.watchtower.enable=true"
-    # Runs as ROOT so the bind mounts always work.
-    #
-    # /data and /media are bind mounts, which means the HOST directory's
-    # ownership decides whether the app can write — the image's own chown is
-    # overlaid and irrelevant. The image user is uid 1000; if the host dirs
-    # belong to anyone else (root, or a NAS-specific account, or a remapped uid
-    # under userns) the app can't write, and the very first thing it does is
-    # open a SQLite file. The container then dies with
-    #   Error: unable to open database file   (ERR_SQLITE_ERROR, errcode 14)
-    # which reads like a missing file and is really a permission denial.
-    #
-    # Root sidesteps all of that with no host-side setup, which matters when the
-    # deployment target is a NAS GUI rather than a shell. It is also what most
-    # NAS container UIs do by default. The app never writes to /app at runtime —
-    # database, cache and transcode scratch all live under the mounts — and it
-    # sits behind the tunnel's auth either way.
-    #
-    # To drop privileges later, set PUID/PGID to whatever owns those directories.
     user: "${PUID:-0}:${PGID:-0}"
     environment:
       NODE_ENV: production
       DB_PATH: /data/data.sqlite
-      TRUST_PROXY: "1"            # behind cloudflared → trust one proxy hop
+      TRUST_PROXY: "1"
       ADMIN_EMAIL: ${ADMIN_EMAIL}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
-      # Real-Debrid is the quality tier: it acquires the ranked release.
       REAL_DEBRID_TOKEN: ${REAL_DEBRID_TOKEN:-}
-      # Optional second debrid backend. Worth having because it still offers a
-      # bulk cache-check endpoint, which Real-Debrid retired — see lib/debrid/backends.mjs.
       PREMIUMIZE_API_KEY: ${PREMIUMIZE_API_KEY:-}
-      # Source cache + transcoding.
       CACHE_DIR: /media/cache
-      CACHE_BUDGET_BYTES: ${CACHE_BUDGET_BYTES:-2199023255552}   # 2 TB of the array
-      TRANSCODE_REMOTE_MBPS: ${TRANSCODE_REMOTE_MBPS:-6}         # fits the tunnel's 9-26 Mbit/s ceiling
-      TRANSCODE_MAX_SESSIONS: ${TRANSCODE_MAX_SESSIONS:-2}       # an N100 will not do more
+      CACHE_BUDGET_BYTES: ${CACHE_BUDGET_BYTES:-2199023255552}
+      TRANSCODE_REMOTE_MBPS: ${TRANSCODE_REMOTE_MBPS:-6}
+      TRANSCODE_MAX_SESSIONS: ${TRANSCODE_MAX_SESSIONS:-2}
       LAN_PORT: "8788"
-      # Seanime is the FLOOR tier: instant playback from streaming sites while
-      # the debrid release is still being acquired. Reached over the compose
-      # network only. The password is not optional — Seanime refuses API calls
-      # addressed by service name unless one is set. See lib/providers/seanime.mjs.
       SEANIME_BASE: ${SEANIME_BASE-http://seanime:43211}
       SEANIME_PASSWORD: ${SEANIME_PASSWORD:-}
       SEANIME_PROVIDERS: ${SEANIME_PROVIDERS:-}
     volumes:
       - ${DATA_DIR:-./data}:/data
-      # The array. A bind mount, not a named volume — the cache needs real NAS
-      # storage, and 2 TB does not belong in Docker's internal volume tree.
       - ${MEDIA_DIR:-./media}:/media
     devices:
-      # Intel QuickSync (N100). Without this ffmpeg silently falls back to
-      # software encoding and the CPU will not keep up with a 1080p session.
       - /dev/dri:/dev/dri
     group_add:
-      # /dev/dri is owned by video/render on the host. The device can be passed
-      # through and still be unopenable without membership — check the GIDs on
-      # the NAS with `stat -c '%g %n' /dev/dri/*` and override if they differ.
       - "${VIDEO_GID:-44}"
       - "${RENDER_GID:-104}"
     expose:
-      - "8787"                    # visible to cloudflared only, not the host
+      - "8787"
     ports:
-      # LAN listener. Reaching the app on THIS port is what marks a client as
-      # local, and local clients get original-quality bytes with no transcode.
       - "8788:8788"
 
-  # The floor tier's source engine.
-  #
-  # Anime streaming sites die constantly — HiAnime in March 2026, AnimeKai in
-  # May, and the scraper APIs that fronted them were pulled off GitHub in the
-  # same window. Seanime's sources are community JavaScript extensions installed
-  # at runtime, so replacing a dead one is a click in ITS admin UI rather than a
-  # change and a redeploy here. Nothing in this repo scrapes anything.
-  #
-  # One-time setup, on the LAN port below:
-  #   1. Open http://<nas>:43211, enter the same SEANIME_PASSWORD.
-  #   2. Settings → Library → enable "Online streaming".
-  #   3. Extensions → add the marketplace, install AnimePahe and AllManga.
-  # Then close the LAN port if you like; the app only needs the internal one.
   seanime:
     image: umagistr/seanime:latest
     restart: unless-stopped
-    # --password does double duty. It is real auth, AND it is what makes the API
-    # reachable at all: Seanime's request boundary rejects /api/ calls whose Host
-    # is a service name ("seanime:43211") rather than localhost or an IP, and
-    # that check short-circuits to allowed once a password is configured.
-    # Passed via the environment rather than as a literal arg so the secret
-    # stays in .env with everything else.
     entrypoint: ["/bin/sh", "-c"]
     command: ['exec /app/seanime --datadir /data --password "$$SEANIME_PASSWORD"']
     environment:
       SEANIME_PASSWORD: ${SEANIME_PASSWORD:?set SEANIME_PASSWORD in .env — Seanime rejects API calls without one}
-      # Seanime binds 127.0.0.1 by default. In a container that is loopback
-      # INSIDE the container: the published port answers nothing and `web`
-      # cannot reach it either. Nothing about this is visible in the logs —
-      # Seanime starts normally and reports itself running — so it presents as
-      # "the page never loads".
       SEANIME_SERVER_HOST: 0.0.0.0
       SEANIME_SERVER_PORT: "43211"
     volumes:
-      # Config, installed extensions and its own caches. Small — it stores no
-      # video; playback bytes flow straight from the source CDN through our
-      # /proxy, never through Seanime.
       - ${DATA_DIR:-./data}/seanime:/data
     expose:
-      - "43211"                   # how `web` reaches it
+      - "43211"
     ports:
-      # Setup/administration only (installing extensions, toggling sources).
-      # Not needed for playback — comment it out once you're set up.
       - "${SEANIME_SETUP_PORT:-43211}:43211"
 
   cloudflared:
@@ -142,15 +59,6 @@ services:
     depends_on:
       - web
 
-  # The other half of the deploy. CI publishes to GHCR; this polls it.
-  #
-  # --label-enable is the important flag: without it Watchtower would take over
-  # EVERY container on the NAS, including ones that have nothing to do with this
-  # stack. Only `web` carries the enabling label.
-  #
-  # --cleanup matters on a NAS. Each deploy leaves the previous image behind,
-  # and this one is a Debian base with the whole ffmpeg/VA-API stack — roughly a
-  # gigabyte a release, on a disk that is also budgeted for 2 TB of cache.
   watchtower:
     image: containrrr/watchtower:latest
     restart: unless-stopped
@@ -158,7 +66,4 @@ services:
     environment:
       TZ: ${TZ:-Europe/Amsterdam}
     volumes:
-      # Read/write: it has to be able to stop, recreate and start the container.
-      # This is root on the host by any other name — which is the price of an
-      # unattended deploy onto a box nothing can reach from outside.
       - /var/run/docker.sock:/var/run/docker.sock
