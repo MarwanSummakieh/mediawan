@@ -988,9 +988,22 @@ const Player = {
         const j = await res.json();
         if (j.downloading?.torrentId) { this.watchDebridDownload(j.downloading); return; }
       }
-      if (!res.ok) { const j = await res.json().catch(() => ({})); throw new Error(j.detail || j.error || "no source"); }
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        const e = new Error(j.detail || j.error || "no source");
+        e.code = j.error || null; // 402/debrid-account is a different KIND of failure
+        throw e;
+      }
       data = await res.json();
     } catch (e) {
+      // A lapsed subscription is not a release problem, and offering "choose a
+      // server" for it sends the viewer to hunt through a hundred rows that
+      // will every one of them fail the same way. Say what is actually wrong
+      // and offer nothing, because nothing in this app can fix it.
+      if (e.code === "debrid-account") {
+        this.showStatus(String(e.message || "The debrid account can't play anything right now."), false);
+        return;
+      }
       // Not a dead end any more: every other release is one tap away, so say so.
       this.showStatusAction(
         `No cached release played automatically. ${String(e.message || "")}`.trim(),
@@ -1516,7 +1529,14 @@ const Player = {
         const isLive = !!live?.serverId && live.serverId === s.id;
         return {
           kind: "rd", id: s.id, key: s.sig, label: s.name, title: s.name,
-          detail: [s.quality ? `${s.quality}p` : null, s.tag, s.group,
+          // Resolution leads the row instead of sitting in the detail line.
+          // Half a film's releases are "1080p BluRay" and the names are long
+          // dotted strings, so deciding "4K or 1080p?" meant reading every
+          // headline down to its middle. As its own column it is scannable,
+          // and being outside .srv-name it survives the truncation that eats
+          // the end of a long release name.
+          res: /^\d{3,4}$/.test(String(s.quality || "")) ? `${s.quality}p` : null,
+          detail: [s.tag, s.group,
             // Language, which is why this row exists at all: without it the
             // only way to find out whether a release spoke English was to play
             // it. The PLAYING row gets ffprobe's real track list instead of
@@ -1534,6 +1554,7 @@ const Player = {
         // playing stream may be a floor-tier one, which is precisely the case
         // where "this is not the best picture available" needs saying.
         rows.unshift({ kind: "rd", id: live.serverId, key: live.sig, live: true, stream: live,
+          res: /^\d{3,4}$/.test(String(live.quality || "")) ? `${live.quality}p` : null,
           label: live.serverName || live.serverLabel || live.source || "Playing now",
           title: live.serverName || "",
           detail: [live.serverLabel, probedLangLabel(live) || live.langLabel].filter(Boolean).join(" · ") || "Playing now" });
@@ -1542,7 +1563,8 @@ const Player = {
         kind: "anime", stream: s, key: srvAnimeKey(s), label: s.source || "Source",
         // The "p" is appended here, so only a bare resolution earns one — a
         // source that already said "1080p" would otherwise read "1080pp".
-        detail: [/^\d{3,4}$/.test(String(s.quality || "")) ? `${s.quality}p` : (s.quality && s.quality !== "auto" ? s.quality : "Auto quality"),
+        res: /^\d{3,4}$/.test(String(s.quality || "")) ? `${s.quality}p` : null,
+        detail: [/^\d{3,4}$/.test(String(s.quality || "")) ? null : (s.quality && s.quality !== "auto" ? s.quality : "Auto quality"),
           // Same rule as films: probed truth for what's playing, the release
           // name's claim for everything else.
           (s === this.quality ? probedLangLabel(s) : null) || s.langLabel,
@@ -1561,7 +1583,10 @@ const Player = {
     // the root menu's "Server" row shows what's playing at a glance
     const live = rows.find((r) => r.live);
     const val = $("#valServer");
-    if (val) val.textContent = live ? (live.label.length > 26 ? live.label.slice(0, 25) + "…" : live.label) : "Auto";
+    if (val) {
+      const name = live ? (live.label.length > 26 ? live.label.slice(0, 25) + "…" : live.label) : "Auto";
+      val.textContent = live?.res ? `${live.res} · ${name}` : name;
+    }
     $("#srvCount").textContent = !rows.length && this._srvBusy
       ? "Looking for sources…"
       : `${rows.length} server${rows.length === 1 ? "" : "s"}${this._srvBusy ? " · searching…" : ""}`;
@@ -1571,7 +1596,7 @@ const Player = {
           const busy = this._srvBusyId && r.id === this._srvBusyId;
           return `<div class="srv-row ${r.live ? "live" : ""} ${on ? "fav" : ""}" data-i="${i}" title="${esc(r.title || r.label)}">
             <div class="srv-body">
-              <div class="srv-t"><span class="srv-name">${esc(r.label)}</span>${r.stream ? srcBadge(r.stream) : ""}</div>
+              <div class="srv-t">${r.res ? `<span class="srv-res">${esc(r.res)}</span>` : ""}<span class="srv-name">${esc(r.label)}</span>${r.stream ? srcBadge(r.stream) : ""}</div>
               <div class="srv-s">${busy ? "Starting…" : esc(r.detail)}</div>
             </div>
             <button class="srv-fav ${on ? "on" : ""}" data-fav="${i}"
@@ -1668,18 +1693,51 @@ const Player = {
     this._srvBusy = true; this._srvBusyId = r.id; this._srvError = "";
     this.buildServers();
     const token = this._srvToken();
-    let data = null, err = "";
+    let data = null, err = "", errCode = null;
     try {
       const res = await fetch(withQuery(this._streamBase, { server: r.id }));
-      if (!res.ok) { const j = await res.json().catch(() => ({})); throw new Error(j.detail || j.error || "unavailable"); }
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        // Every deliberate refusal downstream answers {error, detail} — "not
+        // cached", "unknown server", "auth required", even a 500. So a body
+        // carrying NEITHER did not come from this app: an edge error page, a
+        // dropped connection, a tunnel timeout. Reporting that as "unavailable"
+        // blames the release for something that was never about the release,
+        // and leaves nothing to debug from. The status is the one fact left.
+        const e = new Error(j.detail || j.error || `the server replied ${res.status}`);
+        e.code = j.error || null;
+        throw e;
+      }
       data = await res.json();
-    } catch (e) { err = String(e.message || "unavailable"); }
+      // 202 is not a refusal: the pick is good and being PREPARED — local
+      // delivery warming a file it already holds, or Real-Debrid fetching the
+      // release off the swarm. The primary play path has always understood
+      // this; the panel did not, so a release that was genuinely on its way
+      // was reported as "didn't start" and the user's choice was thrown away
+      // in favour of the release they had just rejected. Only taken when
+      // there is something to watch; anything else falls through and is
+      // reported like any other empty answer.
+      if (res.status === 202 && (data.downloading?.torrentId || data.upgrade?.key)) {
+        if (this._closing || this._srvToken() !== token) return;
+        this._srvBusy = false; this._srvBusyId = null;
+        this.closeServers();
+        if (data.downloading?.torrentId) { this.watchDebridDownload(data.downloading); return; }
+        this.showStatus("Fetching the release you picked…", true);
+        this.watchUpgrade(data.upgrade, at, { primary: true });
+        return;
+      }
+    } catch (e) { err = String(e.message || "unavailable"); errCode = e.code || null; }
     if (this._closing || this._srvToken() !== token) return;
     this._srvBusy = false; this._srvBusyId = null;
     if (!data?.streams?.length) {
       // A network blip says nothing about the release, so don't imply it does.
       this._srvError = /network unreachable/i.test(err)
         ? `Couldn't reach the debrid service — ${err.replace(/^.*network unreachable/i, "network unreachable")}. Try again.`
+        // An account fault is about the SERVICE, not this release. Naming the
+        // release here is what made a lapsed subscription look like a hundred
+        // separate bad rips, and sent people picking through the list for one
+        // that worked when none of them could.
+        : errCode === "debrid-account" ? err
         : `${r.label} didn't start — ${err}`;
       this.buildServers();
       if (prev) this.loadQuality(prev, at, true); // put the working stream back

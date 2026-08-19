@@ -6,9 +6,19 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { streamFirstCached , spreadByQuality } from "../lib/debrid/candidates.mjs";
+import { accountFault as rdAccountFault } from "../lib/debrid/realdebrid.mjs";
 
 const cand = (n, quality = 1080) => ({ magnet: `magnet:?xt=${n}`, quality });
 const rd429 = () => Object.assign(new Error("RD /torrents/addMagnet → 429 too_many_requests"), { status: 429 });
+// accountFault asks Real-Debrid's /user before it dares say "your subscription
+// died", so tests inject that answer rather than reaching the network.
+const withAccount = (account) => (e) => rdAccountFault(e, { probe: async () => {
+  if (!account) throw new Error("RD /user → 401 bad_token");
+  return account;
+} });
+const FREE = { type: "free", premium: 0 };
+const PREMIUM = { type: "premium", premium: 7779575 };
+const rd403 = () => Object.assign(new Error("RD /torrents/addMagnet → 403 permission_denied"), { status: 403, code: 9 });
 
 test("streamFirstCached: first cached candidate streams, labeled with its quality", async () => {
   const r = await streamFirstCached([cand("a", 2160)], {
@@ -134,8 +144,82 @@ test("streamFirstCached: premium/parcel account errors surface immediately", asy
     fromMagnet: async () => { calls++; throw new Error("RD /torrents/addMagnet → 403 permission_denied (premium required)"); },
   });
   assert.equal(calls, 1); // no point trying more torrents on an account problem
-  assert.equal(r.error, "debrid-error");
+  // Its own code, not the generic one: the caller answers 402 and tells the
+  // viewer to renew, instead of sending them to pick a different release.
+  assert.equal(r.error, "debrid-account");
   assert.match(r.detail, /premium required/);
+});
+
+// The failure that actually took the app down on 2026-08-19: Real-Debrid
+// premium lapsed, and every addMagnet answered a bare "403 permission_denied".
+// No "premium" in the text, so the prose test above could not see it — each of
+// the hundred discovered releases was attempted and the last one got the blame.
+test("streamFirstCached: a bare 403 permission_denied is an ACCOUNT fault, not a bad release", async () => {
+  let calls = 0;
+  const rd = mkBackend("rd", async () => { calls++; throw rd403(); }, { accountFault: withAccount(FREE) });
+  const r = await streamFirstCached([cand("a"), cand("b"), cand("c")], { backends: [rd] });
+  assert.equal(calls, 1);                      // stop at the first one — the rest cannot differ
+  assert.equal(r.error, "debrid-account");      // NOT "no cached release": nothing was ever looked up
+  assert.match(r.detail, /premium has lapsed/);
+  assert.doesNotMatch(r.detail, /none cached/); // never blame the catalogue for an unpaid account
+});
+
+test("streamFirstCached: a dead token is named as a token problem", async () => {
+  const rd = mkBackend("rd", async () => {
+    throw Object.assign(new Error("RD /torrents/info → 401 bad_token"), { status: 401, code: 8 });
+  }, { accountFault: withAccount(null) });
+  const r = await streamFirstCached([cand("a")], { backends: [rd] });
+  assert.match(r.detail, /token/i);
+});
+
+// An account fault on ONE service must not condemn the others — that is the
+// whole point of the registry.
+test("streamFirstCached: a lapsed account on one backend still falls through to the next", async () => {
+  const rd = mkBackend("rd", async () => { throw rd403(); }, { accountFault: withAccount(FREE) });
+  const pm = mkBackend("pm", async () => ({ url: "http://pm/x.mp4", type: "mp4" }));
+  const r = await streamFirstCached([cand("a")], { backends: [rd, pm] });
+  assert.equal(r.stream.url, "http://pm/x.mp4");
+});
+
+// Observed live on 2026-08-19, minutes after the subscription was renewed: a
+// 403 permission_denied arrived while /user reported premium with 90 days left.
+// Believing the error would have aborted the search after ONE release and told
+// the viewer to renew something they had just paid for — strictly worse than
+// the misfiling this whole change set out to fix. The account is the authority.
+test("streamFirstCached: a 403 with premium ALIVE is an ordinary error, not a lapse", async () => {
+  let calls = 0;
+  const rd = mkBackend("rd", async () => { calls++; throw rd403(); }, { accountFault: withAccount(PREMIUM) });
+  const r = await streamFirstCached([cand("a"), cand("b"), cand("c")], { backends: [rd] });
+  assert.equal(calls, 3);                        // keep trying — the other releases may be fine
+  assert.equal(r.error, "debrid-error");         // NOT debrid-account: nobody's subscription is dead
+  assert.doesNotMatch(r.detail, /lapsed|renew/i);
+});
+
+// A REMOTE viewer never receives more than the tunnel cap, so movies.stream
+// reorders the pool to put transcode-friendly 1080p ahead of 4K. spreadByQuality
+// used to sort bands numerically and undo that on every play — the encoder was
+// handed a 71.6 Mbps HDR remux and the first segment took 29 seconds.
+test("spreadByQuality: keeps the caller's band order instead of forcing 4K first", async () => {
+  const list = [
+    { quality: 1080, name: "a" }, { quality: 1080, name: "b" },
+    { quality: 2160, name: "c" }, { quality: 2160, name: "d" },
+  ];
+  const out = spreadByQuality(list).map((c) => c.name);
+  assert.equal(out[0], "a");                    // the band the caller led with
+  assert.deepEqual(out, ["a", "c", "b", "d"]);  // still interleaved, just not re-sorted
+});
+
+// The original reason spreadByQuality exists must survive: an ordinary ranked
+// list leads with the best release, so the top pick is still tried first and
+// the SECOND attempt still drops a band rather than burning on more 4K.
+test("spreadByQuality: an ordinary ranked list still tries the best release first", async () => {
+  const list = [
+    { quality: 2160, name: "remux1" }, { quality: 2160, name: "remux2" },
+    { quality: 1080, name: "web1" },
+  ];
+  const out = spreadByQuality(list).map((c) => c.name);
+  assert.equal(out[0], "remux1");
+  assert.equal(out[1], "web1");   // not remux2 — the whole point
 });
 
 // ---- multi-backend behaviour ----

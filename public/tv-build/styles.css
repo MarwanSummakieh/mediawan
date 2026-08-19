@@ -2136,6 +2136,7 @@ video::cue {
   align-items: center;
   gap: 10px;
   cursor: pointer;
+  flex: 0 0 auto;
   padding: 13px 12px 13px 18px;
   background: var(--card);
   border: 1px solid transparent;
@@ -2182,6 +2183,19 @@ video::cue {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.srv-res {
+  flex: 0 0 auto;
+  min-width: 46px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .2px;
+}
+.srv-row.live .srv-res,
+.srv-row:hover .srv-res {
+  color: var(--accent);
 }
 .srv-s {
   font-size: 12px;
@@ -2687,6 +2701,10 @@ html.tv .p-drawer-meta .t {
 }
 html.tv .srv-s {
   font-size: 14px;
+}
+html.tv .srv-res {
+  font-size: 15px;
+  min-width: 58px;
 }
 html.tv .p-menu-item,
 html.tv .p-menu-row,

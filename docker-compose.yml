@@ -65,5 +65,6 @@ services:
     command: --label-enable --cleanup --interval ${DEPLOY_POLL_SECONDS:-300}
     environment:
       TZ: ${TZ:-Europe/Amsterdam}
+      DOCKER_API_VERSION: "${DOCKER_API_VERSION:-1.40}"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock

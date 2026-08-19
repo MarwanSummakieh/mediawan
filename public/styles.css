@@ -643,7 +643,14 @@ video::cue { background: rgba(8,8,12,.75); color: #fff; font-size: 1.05em; }
 /* release names need more room than the default menu width gives them
    (:has is progressive — older TV webviews just keep the normal width) */
 .settings-menu:has([data-sub="servers"]:not([hidden])) { min-width: 340px; max-width: 460px; }
+/* #srvList is BOTH the flex column and the scroll box (.p-menu-section caps it
+   at 46vh). A flex item is normally protected from shrinking below its content
+   by min-height:auto — but that protection only applies while overflow is
+   visible, and these rows clip on purpose. So with a hundred releases the rows
+   were squashed to 27px and the second line (resolution · seeders) was sliced
+   in half instead of the list simply scrolling. Never shrink; let it scroll. */
 .srv-row { position: relative; display: flex; align-items: center; gap: 10px; cursor: pointer;
+  flex: 0 0 auto;
   padding: 13px 12px 13px 18px; background: var(--card); border: 1px solid transparent;
   border-radius: var(--radius-lg); overflow: hidden; transition: border-color .15s, background .15s; }
 /* the left rail: muted by default, accent on the live/hovered row */
@@ -658,6 +665,13 @@ video::cue { background: rgba(8,8,12,.75); color: #fff; font-size: 1.05em; }
    shrink below its content) and the pill holds its size. */
 .srv-t { font-size: 14px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
 .srv-name { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* The resolution, promoted out of the detail line to lead the row. Fixed width
+   so the numbers form a column the eye can run down, and flex:none so a long
+   release name is what gets ellipsed — never the one field you are scanning
+   for. Tabular figures keep 2160p and 720p the same width. */
+.srv-res { flex: 0 0 auto; min-width: 46px; font-size: 12px; font-weight: 700;
+  color: var(--accent); font-variant-numeric: tabular-nums; letter-spacing: .2px; }
+.srv-row.live .srv-res, .srv-row:hover .srv-res { color: var(--accent); }
 .srv-s { font-size: 12px; color: var(--muted); margin-top: 3px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .srv-fav { flex: 0 0 auto; width: 30px; height: 30px; padding: 0; background: transparent;
@@ -822,6 +836,7 @@ html.tv .player-overlay.tv-controls .p-bottom { opacity: 1; pointer-events: auto
 /* 10-foot legibility for the panels the remote can now open */
 html.tv .srv-t, html.tv .p-drawer-meta .t { font-size: 16px; }
 html.tv .srv-s { font-size: 14px; }
+html.tv .srv-res { font-size: 15px; min-width: 58px; }
 html.tv .p-menu-item, html.tv .p-menu-row, html.tv .p-menu-back { font-size: 16px; padding: 14px 14px; }
 html.tv .p-menu { min-width: 340px; max-width: 460px; }
 html.tv .p-drawer { width: 560px; }
