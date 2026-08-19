@@ -140,6 +140,8 @@
     <div class="p-center" id="pCenter">
       <div class="spinner" id="pSpinner"></div>
       <div class="p-status" id="pStatus" hidden></div>
+      <!-- brief "-10s / +10s" flash so a D-pad seek is legible from the sofa -->
+      <div class="p-seek-osd" id="pSeekOsd" hidden></div>
     </div>
 
     <!-- top bar (title, back) -->
@@ -173,7 +175,9 @@
         <div class="scrub-tip" id="scrubTip" hidden></div>
       </div>
       <div class="p-controls">
+        <button class="p-icon" id="pBack10" title="Back 10 seconds"></button>
         <button class="p-icon" id="pPlay" title="Play/Pause (k)">▶</button>
+        <button class="p-icon" id="pFwd10" title="Forward 10 seconds"></button>
         <button class="p-icon" id="pPrev" title="Previous episode">⏮</button>
         <button class="p-icon" id="pNext" title="Next episode (n)">⏭</button>
         <div class="p-vol">

@@ -108,6 +108,7 @@
     ".season-select",
     ".season-item",
     ".p-icon",
+    ".p-bottom .scrub",
     ".up-next .btn",
     ".col-row input",
     "#search",
@@ -429,15 +430,39 @@
     (_b = (_a = window.Player) == null ? void 0 : _a.poke) == null ? void 0 : _b.call(_a);
     const bar = [...p.querySelectorAll(".p-bottom .p-icon")].filter(visible);
     setFocus(bar.find((b) => b.id === "pPlay") || bar[0]);
+    armIdle();
   }
-  function exitControls() {
-    var _a, _b, _c;
+  function exitControls(idle) {
+    var _a, _b, _c, _d;
     inControls = false;
+    clearTimeout(idleTimer);
     (_a = $("#player")) == null ? void 0 : _a.classList.remove("tv-controls");
     document.querySelectorAll(".tv-focus").forEach((e) => e.classList.remove("tv-focus"));
     cur = null;
-    (_c = (_b = window.Player) == null ? void 0 : _b.poke) == null ? void 0 : _c.call(_b);
+    if (idle) (_b = $("#player")) == null ? void 0 : _b.classList.add("controls-hidden", "hide-cursor");
+    else (_d = (_c = window.Player) == null ? void 0 : _c.poke) == null ? void 0 : _d.call(_c);
   }
+  const IDLE_MS = 5e3;
+  let idleTimer = null;
+  function armIdle() {
+    clearTimeout(idleTimer);
+    if (!inControls) return;
+    idleTimer = setTimeout(() => {
+      var _a, _b;
+      if (!inControls) return;
+      if (playerLayer() || ((_b = (_a = window.Player) == null ? void 0 : _a.video) == null ? void 0 : _b.paused)) {
+        armIdle();
+        return;
+      }
+      exitControls(true);
+    }, IDLE_MS);
+  }
+  const onScrub = () => !!(cur && cur.id === "scrub");
+  const seekBy = (secs) => {
+    var _a, _b, _c, _d;
+    (_b = (_a = window.Player) == null ? void 0 : _a.nudge) == null ? void 0 : _b.call(_a, secs);
+    (_d = (_c = window.Player) == null ? void 0 : _c.poke) == null ? void 0 : _d.call(_c);
+  };
   function back() {
     var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k;
     if (isShown("#player")) {
@@ -487,7 +512,7 @@
     }
   }
   document.addEventListener("keydown", (e) => {
-    var _a, _b, _c, _d;
+    var _a, _b, _c, _d, _e, _f;
     const player2 = isShown("#player");
     const k = e.keyCode;
     if (k === 10009) {
@@ -528,26 +553,32 @@
       }
       if (inControls) {
         (_b = (_a = window.Player) == null ? void 0 : _a.poke) == null ? void 0 : _b.call(_a);
+        armIdle();
         switch (k) {
           case 37:
             own();
-            move("left");
+            onScrub() ? seekBy(-10) : move("left");
             return;
           case 39:
             own();
-            move("right");
+            onScrub() ? seekBy(10) : move("right");
             return;
-          // The bar is a single row at the bottom of the screen (the on-screen
-          // ‹ is hidden on TV — the remote's Back button IS that control), so
-          // vertical presses have nowhere real to go. Swallow them: a stray
-          // Up/Down must not silently drop the highlight or change the volume.
+          // Two rows: the scrubber sits above the buttons. Up reaches for it,
+          // Down comes back — and Down from the buttons leaves the bar
+          // altogether, which is the way in reversed.
           case 38:
+            own();
+            if (!onScrub()) move("up");
+            return;
           case 40:
             own();
+            onScrub() ? move("down") : exitControls();
             return;
+          // OK on the scrubber has no "activate" of its own — play/pause is
+          // what a remote's centre button means over a progress bar.
           case 13:
             own();
-            activate();
+            onScrub() ? (_d = (_c = window.Player) == null ? void 0 : _c.togglePlay) == null ? void 0 : _d.call(_c) : activate();
             return;
         }
         return;
@@ -559,7 +590,18 @@
       }
       if (k === 13) {
         e.preventDefault();
-        (_d = (_c = window.Player) == null ? void 0 : _c.togglePlay) == null ? void 0 : _d.call(_c);
+        (_f = (_e = window.Player) == null ? void 0 : _e.togglePlay) == null ? void 0 : _f.call(_e);
+        return;
+      }
+      if (k === 37) {
+        own();
+        seekBy(-10);
+        return;
+      }
+      if (k === 39) {
+        own();
+        seekBy(10);
+        return;
       }
       return;
     }

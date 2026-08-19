@@ -292,6 +292,25 @@ html.tv .p-status { font-size: 26px; padding: 20px 32px; }
 html.tv .scrub-track { height: 8px; }
 html.tv .scrub-knob { width: 24px; height: 24px; }
 html.tv .scrub { padding-bottom: 10px; }
+/* The progress bar is a landing spot on a remote, so it has to LOOK like one.
+   TV focus is a FILL rather than a ring (§3 below), and neither language works
+   on a 4px strip that spans the screen: a ring reads as nothing and the 1.04
+   scale would push both ends off the panel. So the bar GROWS instead — thicker
+   track, knob pushed out, accent wash behind the whole strip. Without some
+   version of this the scrubber is scenery and there is no way to tell that
+   Left/Right are about to seek. */
+html.tv .scrub.tv-focus {
+  transform: none;
+  background: var(--accent-dim);
+  border-radius: var(--radius);
+  box-shadow: 0 0 0 4px var(--accent-dim);
+}
+html.tv .scrub.tv-focus .scrub-track { height: 18px; background: rgba(255,255,255,.32); }
+html.tv .scrub.tv-focus .scrub-knob {
+  transform: translate(-50%, -50%) scale(1);
+  width: 32px; height: 32px; box-shadow: 0 0 0 8px var(--accent-dim);
+}
+html.tv .p-seek-osd { font-size: 34px; padding: 20px 36px; }
 /* subtitle sync: `gap` is inert on Chromium 69, and the nudge buttons are
    D-pad targets like anything else, so they need thumb-sized hit areas */
 html.tv .sub-sync { gap: 0; padding: 8px 14px 12px; }

@@ -36,6 +36,10 @@ const ICON_PLAY = svg('<path d="M8 5v14l11-7z"/>');
 const ICON_PAUSE = svg('<path d="M6 5h4v14H6zM14 5h4v14h-4z"/>');
 const ICON_PREV = svg('<path d="M18 6l-8.5 6 8.5 6V6zM7 6h2v12H7z"/>');
 const ICON_NEXT = svg('<path d="M6 6l8.5 6L6 18V6zM15 6h2v12h-2z"/>');
+// Material replay_10 / forward_10. A remote has no scrubber to grab and no
+// keyboard shortcut, so +/-10s has to be a BUTTON the D-pad can land on.
+const ICON_BACK10 = svg('<path d="M12.5 8V5l-4 4 4 4V10c2.76 0 5 2.24 5 5s-2.24 5-5 5-5-2.24-5-5h-2c0 3.87 3.13 7 7 7s7-3.13 7-7-3.13-7-7-7z"/><text x="12.5" y="18" font-size="7" font-weight="700" text-anchor="middle" fill="currentColor">10</text>');
+const ICON_FWD10 = svg('<path d="M11.5 8V5l4 4-4 4V10c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5h2c0 3.87-3.13 7-7 7s-7-3.13-7-7 3.13-7 7-7z"/><text x="11.5" y="18" font-size="7" font-weight="700" text-anchor="middle" fill="currentColor">10</text>');
 const ICON_VOL_HIGH = svg('<path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 0 0-2.5-4.03v8.06A4.5 4.5 0 0 0 16.5 12zM14 3.23v2.06a7 7 0 0 1 0 13.42v2.06A9 9 0 0 0 21 12 9 9 0 0 0 14 3.23z"/>');
 const ICON_VOL_LOW = svg('<path d="M7 9v6h4l5 5V4l-5 5H7zm9.5 3A4.5 4.5 0 0 0 14 7.97v8.05A4.5 4.5 0 0 0 16.5 12z"/>');
 const ICON_VOL_MUTE = svg('<path d="M16.5 12A4.5 4.5 0 0 0 14 7.97v2.21l2.45 2.45c.03-.2.05-.42.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51A8.8 8.8 0 0 0 21 12a9 9 0 0 0-7-8.77v2.06A7 7 0 0 1 19 12zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06a8.9 8.9 0 0 0 3.69-1.81L19.73 21 21 19.73 4.27 3zM12 4l-2.09 2.09L12 8.18V4z"/>');
@@ -891,7 +895,8 @@ const Player = {
     // nothing to land on, so the highlight stuck on whatever hidden row it had
     // last, and the D-pad went dead until Back. A control that can't answer
     // yet must not be reachable yet.
-    if (isMovie) { $("#pAud").style.display = "none"; $("#pSkip").hidden = true; }
+    $("#pAud").style.display = isMovie ? "none" : "";
+    if (isMovie) $("#pSkip").hidden = true;
   },
   // Generic Real-Debrid stream player, shared by Movies and TV. `endpoint` is a
   // /api/…/stream URL, `subsUrl` its sibling subtitle listing (optional),
@@ -1346,6 +1351,12 @@ const Player = {
       this.hls.loadSource(media(stream.playUrl));
       this.hls.attachMedia(v);
       this.hls.on(Hls.Events.MANIFEST_PARSED, () => this._onStreamReady(at, wasPlaying));
+      // Alternate audio renditions arrive with (and can be updated after) the
+      // manifest. The menu is built from whatever the source actually offers.
+      const rebuildAudio = () => this.buildAudMenu();
+      this.hls.on(Hls.Events.MANIFEST_PARSED, rebuildAudio);
+      if (Hls.Events.AUDIO_TRACKS_UPDATED) this.hls.on(Hls.Events.AUDIO_TRACKS_UPDATED, rebuildAudio);
+      if (Hls.Events.AUDIO_TRACK_SWITCHED) this.hls.on(Hls.Events.AUDIO_TRACK_SWITCHED, rebuildAudio);
       this.hls.on(Hls.Events.ERROR, (_e, d) => {
         if (!d.fatal) return;              // non-fatal errors are hls.js's own business
         // Even a FATAL error is usually recoverable, and abandoning the source
@@ -1368,7 +1379,7 @@ const Player = {
       });
     } else {
       v.src = media(stream.playUrl);
-      v.addEventListener("loadedmetadata", () => this._onStreamReady(at, wasPlaying), { once: true });
+      v.addEventListener("loadedmetadata", () => { this._onStreamReady(at, wasPlaying); this.buildAudMenu(); }, { once: true });
     }
     this.startProgress();
   },
@@ -1722,6 +1733,13 @@ const Player = {
     $("#audList").querySelectorAll("[data-m]").forEach((b) =>
       b.onclick = () => { if (b.disabled) return; this.switchMode(b.dataset.m); });
     $("#audNote").textContent = "Japanese audio shows the release’s English subtitles when it carries them; English audio needs none.";
+    const extra = this._audioChoices();
+    if (extra.items.length > 1) {
+      $("#audList").insertAdjacentHTML("beforeend",
+        `<div class="p-menu-title">This release</div>` + extra.items.map((t) =>
+          `<button class="p-menu-item ${t.active ? "active" : ""}" data-x="${esc(String(t.key))}">${esc(t.label)}</button>`).join(""));
+      $("#audList").querySelectorAll("[data-x]").forEach((b) => b.onclick = () => extra.pick(b.dataset.x));
+    }
   },
 
   // Films and TV: the file's own audio streams. Only meaningful once the
@@ -1729,17 +1747,68 @@ const Player = {
   // stream rather than offered up front — a release's languages aren't
   // knowable from its name.
   buildTrackMenu() {
-    const tracks = this.quality?.audioTracks || [];
-    const cur = this.quality?.audioIndex ?? null;
-    // Nothing to choose (one track, or a source that isn't locally delivered
-    // and so was never probed) → no button. An empty menu is worse than none.
-    $("#pAud").style.display = tracks.length > 1 ? "" : "none";
-    if (tracks.length < 2) { $("#audList").innerHTML = ""; return; }
-    $("#audList").innerHTML = tracks.map((t, i) =>
-      `<button class="p-menu-item ${t.index === cur ? "active" : ""}" data-t="${t.index}">${esc(audTrackLabel(t, i))}</button>`).join("");
+    const list = this._audioChoices();
+    // Nothing to choose (one track, or a source that offers no alternates at
+    // all) → no button. An empty menu is worse than none.
+    $("#pAud").style.display = list.items.length > 1 ? "" : "none";
+    if (list.items.length < 2) { $("#audList").innerHTML = ""; $("#audNote").textContent = ""; return; }
+    $("#audList").innerHTML = list.items.map((t) =>
+      `<button class="p-menu-item ${t.active ? "active" : ""}" data-t="${esc(String(t.key))}">${esc(t.label)}</button>`).join("");
     $("#audList").querySelectorAll("[data-t]").forEach((b) =>
-      b.onclick = () => this.switchAudioTrack(+b.dataset.t));
-    $("#audNote").textContent = "Tracks come from this release. Subtitles are under the CC button.";
+      b.onclick = () => list.pick(b.dataset.t));
+    $("#audNote").textContent = list.note;
+  },
+
+  // Where a "different audio track" can come from, in order of preference.
+  // Only the first of these used to exist, which is why a Spanish-only-sounding
+  // stream had no way out on the TV: the release wasn't locally probed, so the
+  // menu was empty and the button hid itself, and a remote has no other route
+  // to the source list.
+  //
+  //   probed  — ffprobe's track list for a release we deliver ourselves.
+  //             Switching re-delivers the file with a different track mapped.
+  //   hls     — alternate audio renditions declared by the playing manifest.
+  //             Switching is client-side and instant (hls.js owns it).
+  //   native  — HTMLMediaElement.audioTracks, when the webview plays the
+  //             stream itself rather than through hls.js. Tizen has this.
+  _audioChoices() {
+    const probed = this.quality?.audioTracks || [];
+    if (probed.length > 1) {
+      const cur = this.quality?.audioIndex ?? null;
+      return {
+        items: probed.map((t, i) => ({ key: t.index, label: audTrackLabel(t, i), active: t.index === cur })),
+        pick: (k) => this.switchAudioTrack(+k),
+        note: "Tracks come from this release. Subtitles are under the CC button.",
+      };
+    }
+    const hlsTracks = this.hls?.audioTracks || [];
+    if (hlsTracks.length > 1) {
+      const cur = this.hls.audioTrack;
+      return {
+        items: hlsTracks.map((t, i) => ({
+          key: i,
+          label: langName(t.lang) || t.name || `Track ${i + 1}`,
+          active: i === cur,
+        })),
+        pick: (k) => { this.hls.audioTrack = +k; this.hideMenus(); setTimeout(() => this.buildAudMenu(), 200); },
+        note: "Audio tracks offered by this source. Try another server if the language you want isn't here.",
+      };
+    }
+    const nat = this.video?.audioTracks;
+    if (nat && nat.length > 1) {
+      const items = [];
+      for (let i = 0; i < nat.length; i++)
+        items.push({ key: i, label: langName(nat[i].language) || nat[i].label || `Track ${i + 1}`, active: nat[i].enabled });
+      return {
+        items,
+        pick: (k) => {
+          for (let i = 0; i < nat.length; i++) nat[i].enabled = i === +k;
+          this.hideMenus(); setTimeout(() => this.buildAudMenu(), 200);
+        },
+        note: "Audio tracks offered by this source. Try another server if the language you want isn't here.",
+      };
+    }
+    return { items: [], pick: () => {}, note: "" };
   },
 
   // Re-deliver the SAME release with a different audio track, resuming where
@@ -2490,6 +2559,8 @@ const Player = {
 
     // clean SVG icons for every control
     $("#pPlay").innerHTML = ICON_PLAY;
+    $("#pBack10").innerHTML = ICON_BACK10;
+    $("#pFwd10").innerHTML = ICON_FWD10;
     $("#pPrev").innerHTML = ICON_PREV;
     $("#pNext").innerHTML = ICON_NEXT;
     $("#pBack").innerHTML = ICON_BACK;
@@ -2501,6 +2572,8 @@ const Player = {
     $("#pFs").innerHTML = ICON_FS;
 
     $("#pPlay").onclick = () => this.togglePlay();
+    $("#pBack10").onclick = () => this.nudge(-10);
+    $("#pFwd10").onclick = () => this.nudge(10);
     $("#pPrev").onclick = () => this.prev();
     $("#pNext").onclick = () => this.next();
     $("#pBack").onclick = () => this.close();
@@ -2629,8 +2702,8 @@ const Player = {
       if (["INPUT","TEXTAREA"].includes(document.activeElement.tagName)) return;
       switch (e.key) {
         case " ": case "k": e.preventDefault(); this.togglePlay(); break;
-        case "ArrowRight": case "l": this.seekTo(Math.min(this.durT() || 0, this.curT() + 5)); this.poke(); break;
-        case "ArrowLeft": case "j": this.seekTo(Math.max(0, this.curT() - 5)); this.poke(); break;
+        case "ArrowRight": case "l": this.nudge(10); break;
+        case "ArrowLeft": case "j": this.nudge(-10); break;
         case "ArrowUp": e.preventDefault(); v.muted = false; v.volume = Math.min(1, v.volume + .1); this.syncVol(); this.poke(); break;
         case "ArrowDown": e.preventDefault(); v.volume = Math.max(0, v.volume - .1); this.syncVol(); this.poke(); break;
         case "f": this.toggleFs(); break;
@@ -2655,6 +2728,30 @@ const Player = {
     const v = this.video;
     if (v.paused) this._attemptPlay();
     else { v.pause(); this.syncPlayIcon(); }
+  },
+  // Relative seek with a readable confirmation. On a TV the scrubber is metres
+  // away and four pixels tall, so a jump that only moves the played bar reads
+  // as "nothing happened" — the flash is what makes the seek land.
+  nudge(delta) {
+    const dur = this.durT() || 0;
+    const to = Math.max(0, dur ? Math.min(dur - 1, this.curT() + delta) : this.curT() + delta);
+    this.seekTo(to);
+    this.poke();
+    const osd = $("#pSeekOsd");
+    if (osd) {
+      osd.textContent = `${delta < 0 ? "◀◀" : "▶▶"} ${delta > 0 ? "+" : "−"}${Math.abs(delta)}s · ${fmt(to)}`;
+      osd.hidden = false;
+      clearTimeout(this._seekOsdTimer);
+      this._seekOsdTimer = setTimeout(() => { osd.hidden = true; }, 900);
+    }
+    // The scrubber only repaints on timeupdate, which a restarting transcode
+    // session can be a second or more away from. Paint the target now.
+    if (dur) {
+      const pct = to / dur * 100;
+      $("#scrubPlayed").style.width = pct + "%";
+      $("#scrubKnob").style.left = pct + "%";
+      $("#pCur").textContent = fmt(to);
+    }
   },
   toggleFs() { if (document.fullscreenElement) document.exitFullscreen(); else this.el.requestFullscreen?.().catch(()=>{}); },
   syncVol() {
