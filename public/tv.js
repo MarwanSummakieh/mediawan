@@ -131,7 +131,7 @@
   const SEL = [
     ".card", ".fr-card", ".ep-row", ".sched-item", ".sched-day",
     ".hero-btn", ".hero-pg-btn", ".mode-pill", ".act-btn", ".detail-play", ".sheet-back",
-    ".season-select", ".season-item", ".p-icon", ".up-next .btn", ".col-row input", "#search",
+    ".season-select", ".season-item", ".p-icon", ".p-bottom .scrub", ".up-next .btn", ".col-row input", "#search",
     ".filter-bar .btn", ".grid-empty .btn", "#catMore",
     ".nav .btn", "#navBurger", "#randomBtn", ".drawer-link", ".drawer-genre", ".tv-rail-btn",
     // (.row-arrow is deliberately absent: moving between cards scrolls the row,
@@ -455,14 +455,43 @@
     window.Player?.poke?.();
     const bar = [...p.querySelectorAll(".p-bottom .p-icon")].filter(visible);
     setFocus(bar.find((b) => b.id === "pPlay") || bar[0]);
+    armIdle();
   }
-  function exitControls() {
+  function exitControls(idle) {
     inControls = false;
+    clearTimeout(idleTimer);
     $("#player")?.classList.remove("tv-controls");
     document.querySelectorAll(".tv-focus").forEach((e) => e.classList.remove("tv-focus"));
     cur = null;
-    window.Player?.poke?.();
+    // Leaving on purpose (Down / Back) restarts the normal fade. Leaving
+    // because nobody touched the remote must NOT: poke() would pull the bar
+    // straight back up for another three seconds, which is the stuck-open
+    // behaviour with an extra step.
+    if (idle) $("#player")?.classList.add("controls-hidden", "hide-cursor");
+    else window.Player?.poke?.();
   }
+  // The control bar used to be PINNED for as long as the remote was on it, so
+  // walking into it and then just watching left the chrome burnt across the
+  // bottom of the picture forever. It stays up while the remote is being used
+  // and steps back out on its own once it isn't — the highlight goes with it,
+  // because chrome that fades out from under a highlight is worse than either.
+  const IDLE_MS = 5000;
+  let idleTimer = null;
+  function armIdle() {
+    clearTimeout(idleTimer);
+    if (!inControls) return;
+    idleTimer = setTimeout(() => {
+      // An open menu/drawer is a deliberate act, and a paused film is someone
+      // who walked away — neither is idleness the chrome should punish.
+      if (!inControls) return;
+      if (playerLayer() || window.Player?.video?.paused) { armIdle(); return; }
+      exitControls(true);
+    }, IDLE_MS);
+  }
+  // The scrubber is a control like any other: standing on it makes Left/Right
+  // seek instead of walking the row, which is the whole reason it is landable.
+  const onScrub = () => !!(cur && cur.id === "scrub");
+  const seekBy = (secs) => { window.Player?.nudge?.(secs); window.Player?.poke?.(); };
 
   // Back button: unwind the most specific open thing.
   function back() {
@@ -525,15 +554,18 @@
       }
       if (inControls) {
         window.Player?.poke?.(); // keep the chrome up while the remote is on it
+        armIdle();
         switch (k) {
-          case 37: own(); move("left"); return;
-          case 39: own(); move("right"); return;
-          // The bar is a single row at the bottom of the screen (the on-screen
-          // ‹ is hidden on TV — the remote's Back button IS that control), so
-          // vertical presses have nowhere real to go. Swallow them: a stray
-          // Up/Down must not silently drop the highlight or change the volume.
-          case 38: case 40: own(); return;
-          case 13: own(); activate(); return;
+          case 37: own(); onScrub() ? seekBy(-10) : move("left"); return;
+          case 39: own(); onScrub() ? seekBy(10) : move("right"); return;
+          // Two rows: the scrubber sits above the buttons. Up reaches for it,
+          // Down comes back — and Down from the buttons leaves the bar
+          // altogether, which is the way in reversed.
+          case 38: own(); if (!onScrub()) move("up"); return;
+          case 40: own(); onScrub() ? move("down") : exitControls(); return;
+          // OK on the scrubber has no "activate" of its own — play/pause is
+          // what a remote's centre button means over a progress bar.
+          case 13: own(); onScrub() ? window.Player?.togglePlay?.() : activate(); return;
         }
         return;
       }
@@ -541,8 +573,10 @@
       // that reaches for them. Up is accepted too — nobody should have to
       // learn which one is right while the film is running.
       if (k === 40 || k === 38) { own(); enterControls(); return; }
-      if (k === 13) { e.preventDefault(); window.Player?.togglePlay?.(); }
-      return;                                                          // else: Left/Right seek
+      if (k === 13) { e.preventDefault(); window.Player?.togglePlay?.(); return; }
+      if (k === 37) { own(); seekBy(-10); return; }
+      if (k === 39) { own(); seekBy(10); return; }
+      return;
     }
     const typing = document.activeElement && document.activeElement.tagName === "INPUT";
     const inSearch = typing && document.activeElement.id === "search";

@@ -568,6 +568,26 @@ html.tv .scrub-knob {
 html.tv .scrub {
   padding-bottom: 10px;
 }
+html.tv .scrub.tv-focus {
+  transform: none;
+  background: var(--accent-dim);
+  border-radius: var(--radius);
+  box-shadow: 0 0 0 4px var(--accent-dim);
+}
+html.tv .scrub.tv-focus .scrub-track {
+  height: 18px;
+  background: rgba(255, 255, 255, .32);
+}
+html.tv .scrub.tv-focus .scrub-knob {
+  transform: translate(-50%, -50%) scale(1);
+  width: 32px;
+  height: 32px;
+  box-shadow: 0 0 0 8px var(--accent-dim);
+}
+html.tv .p-seek-osd {
+  font-size: 34px;
+  padding: 20px 36px;
+}
 html.tv .sub-sync {
   gap: 0;
   padding: 8px 14px 12px;
