@@ -77,17 +77,60 @@ jobs:
             type=raw,value=latest
             type=sha,prefix=,format=short
 
+      # Built locally FIRST so it can be booted before anyone sees it. The push
+      # below reuses this exact cache, so it costs one build, not two.
       - uses: docker/build-push-action@v6
         with:
           context: .
           # The NAS is an N100. Building arm64 as well would roughly double the
           # run for an image nothing pulls.
           platforms: linux/amd64
+          load: true
+          push: false
+          tags: mediawan:smoke
+          # The apt layer (ffmpeg + the Intel VA-API stack) is minutes of the
+          # build and changes about never. Cache it across runs.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Does it actually start? A deploy nobody watches needs this: the image
+      # can build perfectly and still die on boot, and the way that happens here
+      # is a missing module — .gitignore kept lib/transcode/ and lib/cache/ out
+      # of the repo entirely, and nothing noticed until CI could not load the
+      # tests. `docker build` succeeding proves the layers assembled, not that
+      # the module graph resolves.
+      - name: Smoke test — the image boots and answers /healthz
+        run: |
+          set -euo pipefail
+          docker run -d --name smoke -p 8787:8787 \
+            -e ADMIN_EMAIL=smoke@example.invalid \
+            -e ADMIN_PASSWORD=smoke-password-long-enough \
+            -e DB_PATH=/tmp/smoke.sqlite \
+            -e CACHE_DIR=/tmp/smoke-cache \
+            mediawan:smoke
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:8787/healthz >/dev/null 2>&1; then
+              echo "healthy after ${i}s"
+              docker rm -f smoke >/dev/null
+              exit 0
+            fi
+            # A container that has already exited will never become healthy.
+            if [ "$(docker inspect -f '{{.State.Running}}' smoke)" != "true" ]; then
+              break
+            fi
+            sleep 1
+          done
+          echo "::error::image did not answer /healthz — not publishing"
+          docker logs smoke
+          exit 1
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          # The apt layer (ffmpeg + the Intel VA-API stack) is minutes of the
-          # build and changes about never. Cache it across runs.
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
