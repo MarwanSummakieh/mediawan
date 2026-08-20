@@ -352,6 +352,31 @@ test("ffmpegArgs: a seek applies to BOTH inputs so cues share the session origin
   assert.equal(args.split("-ss 120").length - 1, 2, "-ss must precede each -i, or subtitles drift by the seek offset");
 });
 
+// Regression, observed as constant audio desync on every remote resume once
+// 1080p picks started coming in under budget. Input -ss lands on the keyframe
+// at-or-before the target; a COPIED video stream keeps everything from that
+// keyframe, while accurate_seek trims the decoded audio to the exact target —
+// so the tracks left the muxer offset by up to a GOP (measured: 3s on a 4s
+// GOP). -noaccurate_seek starts every stream at the keyframe instead.
+test("ffmpegArgs: a copy-video seek starts EVERY stream at the keyframe", () => {
+  const probe = probeOf({ acodec: "eac3", mbps: 4 }); // safe video under budget, audio converts
+  const plan = planDelivery(probe, { local: false, targetMbps: 6 });
+  assert.equal(plan.copyVideo, true);
+  assert.match(argsOf(plan, probe, { seekSec: 47 }), /-noaccurate_seek -ss 47/,
+    "copied video cannot be trimmed to the target, so audio must not be either");
+  assert.doesNotMatch(argsOf(plan, probe), /-noaccurate_seek/,
+    "no seek, nothing to align");
+});
+
+test("ffmpegArgs: a full encode keeps the seek accurate — the resume point is exact", () => {
+  const probe = probeOf({ mbps: 25 }); // over budget → video re-encodes
+  const plan = planDelivery(probe, { local: false, targetMbps: 6 });
+  assert.equal(plan.copyVideo, false);
+  const args = argsOf(plan, probe, { seekSec: 47 });
+  assert.doesNotMatch(args, /-noaccurate_seek/, "both streams decode and trim to the same instant");
+  assert.match(args, /-ss 47/);
+});
+
 test("ffmpegArgs: no text subs → the command is exactly the old shape", () => {
   const probe = subProbe([{ index: 2, codec: "hdmv_pgs_subtitle", language: "eng" }]);
   const plan = planDelivery(probe, { local: false, targetMbps: 6 });
