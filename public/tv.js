@@ -216,6 +216,21 @@
     // (browse) or the first control.
     const marked = f.find((e) => e.matches(".srv-row.live, .p-menu-item.active, .p-drawer-ep.active, .drawer-link.active"));
     if (marked) { setFocus(marked); return; }
+    // The bare player — no menu open, bar not entered — has no destination for
+    // a highlight: the arrows seek and Up/Down is the deliberate way into the
+    // bar. Auto-landing one anyway used to put a ring on a fading control;
+    // once the scrubber became landable it put a grown, accent-washed progress
+    // bar over the film's opening seconds. A status action or the up-next
+    // toast is the exception: those exist to be pressed, so they take the
+    // highlight — otherwise leave the picture alone.
+    if (isShown("#player") && !playerLayer() && !inControls) {
+      const act = f.find((e) => e.closest(".p-status, .up-next"));
+      if (act) { setFocus(act); return; }
+      // no highlight at all — and none left behind on the page under the overlay
+      document.querySelectorAll(".tv-focus").forEach((e) => e.classList.remove("tv-focus"));
+      document.querySelectorAll(".tv-focus-within").forEach((e) => e.classList.remove("tv-focus-within"));
+      return;
+    }
     // A panel closed (picked a server, chose a quality) while the remote was on
     // the control bar — put the highlight back where it came from, not on the
     // first control in the DOM, which is the ‹ back button at the top.
@@ -492,6 +507,32 @@
   // seek instead of walking the row, which is the whole reason it is landable.
   const onScrub = () => !!(cur && cur.id === "scrub");
   const seekBy = (secs) => { window.Player?.nudge?.(secs); window.Player?.poke?.(); };
+  // The bar is a fixed two-rung ladder, not free space. The scrubber spans the
+  // whole width one rung above the buttons, so to the spatial engine it is
+  // "nearest to the right" the moment a gap in the button row (the flex spacer
+  // before Audio/Settings) is wider than the hop up — walking toward Settings
+  // hijacked the highlight onto the scrubber, whose Left/Right mean SEEK, and
+  // the right half of the bar became unreachable. So inside the bar the
+  // D-pad walks rungs explicitly: Left/Right step through the buttons in
+  // screen order, Up/Down swap rungs, and the scrubber remembers which button
+  // to hand the highlight back to.
+  const onBar = () => !!(cur && cur.classList && cur.classList.contains("p-icon") && cur.closest(".p-bottom"));
+  const barButtons = () => [...document.querySelectorAll("#player .p-bottom .p-icon")]
+    .filter(visible)
+    .sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left);
+  let barReturn = null; // where Down from the scrubber lands
+  function barMove(dir) {
+    const btns = barButtons();
+    if (!btns.length) return;
+    const i = btns.indexOf(cur);
+    if (i < 0) { setFocus(btns.find((b) => b.id === "pPlay") || btns[0]); return; }
+    setFocus(btns[Math.max(0, Math.min(btns.length - 1, i + (dir === "right" ? 1 : -1)))]);
+  }
+  function barDown() {
+    const btns = barButtons();
+    if (!btns.length) { exitControls(); return; } // a rung with no buttons is no rung
+    setFocus(btns.includes(barReturn) ? barReturn : btns.find((b) => b.id === "pPlay") || btns[0]);
+  }
 
   // Back button: unwind the most specific open thing.
   function back() {
@@ -556,13 +597,19 @@
         window.Player?.poke?.(); // keep the chrome up while the remote is on it
         armIdle();
         switch (k) {
-          case 37: own(); onScrub() ? seekBy(-10) : move("left"); return;
-          case 39: own(); onScrub() ? seekBy(10) : move("right"); return;
-          // Two rows: the scrubber sits above the buttons. Up reaches for it,
-          // Down comes back — and Down from the buttons leaves the bar
-          // altogether, which is the way in reversed.
-          case 38: own(); if (!onScrub()) move("up"); return;
-          case 40: own(); onScrub() ? move("down") : exitControls(); return;
+          case 37: own(); onScrub() ? seekBy(-10) : onBar() ? barMove("left") : move("left"); return;
+          case 39: own(); onScrub() ? seekBy(10) : onBar() ? barMove("right") : move("right"); return;
+          // Two rungs: the scrubber sits above the buttons. Up reaches for it,
+          // Down comes back to the button it left — and Down from the buttons
+          // leaves the bar altogether, which is the way in reversed. From the
+          // scrubber, Up may continue to whatever floats above the bar (a
+          // status action, the up-next toast) when something does.
+          case 38: own();
+            if (onScrub()) move("up");
+            else if (onBar()) { barReturn = cur; const s = $("#player .p-bottom .scrub"); if (s && visible(s)) setFocus(s); }
+            else move("up");
+            return;
+          case 40: own(); onScrub() ? barDown() : onBar() ? exitControls() : move("down"); return;
           // OK on the scrubber has no "activate" of its own — play/pause is
           // what a remote's centre button means over a progress bar.
           case 13: own(); onScrub() ? window.Player?.togglePlay?.() : activate(); return;
@@ -573,7 +620,14 @@
       // that reaches for them. Up is accepted too — nobody should have to
       // learn which one is right while the film is running.
       if (k === 40 || k === 38) { own(); enterControls(); return; }
-      if (k === 13) { e.preventDefault(); window.Player?.togglePlay?.(); return; }
+      // OK over the bare video is play/pause — unless a status action or the
+      // up-next toast holds the highlight, in which case OK means THAT button.
+      if (k === 13) {
+        e.preventDefault();
+        if (cur && document.contains(cur) && visible(cur) && cur.closest(".p-status, .up-next")) activate();
+        else window.Player?.togglePlay?.();
+        return;
+      }
       if (k === 37) { own(); seekBy(-10); return; }
       if (k === 39) { own(); seekBy(10); return; }
       return;

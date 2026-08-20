@@ -193,6 +193,16 @@
       setFocus(marked);
       return;
     }
+    if (isShown("#player") && !playerLayer() && !inControls) {
+      const act = f.find((e) => e.closest(".p-status, .up-next"));
+      if (act) {
+        setFocus(act);
+        return;
+      }
+      document.querySelectorAll(".tv-focus").forEach((e) => e.classList.remove("tv-focus"));
+      document.querySelectorAll(".tv-focus-within").forEach((e) => e.classList.remove("tv-focus-within"));
+      return;
+    }
     if (inControls && isShown("#player") && !playerLayer()) {
       const bar = f.filter((e) => e.closest(".p-bottom"));
       if (bar.length) {
@@ -463,6 +473,27 @@
     (_b = (_a = window.Player) == null ? void 0 : _a.nudge) == null ? void 0 : _b.call(_a, secs);
     (_d = (_c = window.Player) == null ? void 0 : _c.poke) == null ? void 0 : _d.call(_c);
   };
+  const onBar = () => !!(cur && cur.classList && cur.classList.contains("p-icon") && cur.closest(".p-bottom"));
+  const barButtons = () => [...document.querySelectorAll("#player .p-bottom .p-icon")].filter(visible).sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left);
+  let barReturn = null;
+  function barMove(dir) {
+    const btns = barButtons();
+    if (!btns.length) return;
+    const i = btns.indexOf(cur);
+    if (i < 0) {
+      setFocus(btns.find((b) => b.id === "pPlay") || btns[0]);
+      return;
+    }
+    setFocus(btns[Math.max(0, Math.min(btns.length - 1, i + (dir === "right" ? 1 : -1)))]);
+  }
+  function barDown() {
+    const btns = barButtons();
+    if (!btns.length) {
+      exitControls();
+      return;
+    }
+    setFocus(btns.includes(barReturn) ? barReturn : btns.find((b) => b.id === "pPlay") || btns[0]);
+  }
   function back() {
     var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k;
     if (isShown("#player")) {
@@ -557,22 +588,29 @@
         switch (k) {
           case 37:
             own();
-            onScrub() ? seekBy(-10) : move("left");
+            onScrub() ? seekBy(-10) : onBar() ? barMove("left") : move("left");
             return;
           case 39:
             own();
-            onScrub() ? seekBy(10) : move("right");
+            onScrub() ? seekBy(10) : onBar() ? barMove("right") : move("right");
             return;
-          // Two rows: the scrubber sits above the buttons. Up reaches for it,
-          // Down comes back — and Down from the buttons leaves the bar
-          // altogether, which is the way in reversed.
+          // Two rungs: the scrubber sits above the buttons. Up reaches for it,
+          // Down comes back to the button it left — and Down from the buttons
+          // leaves the bar altogether, which is the way in reversed. From the
+          // scrubber, Up may continue to whatever floats above the bar (a
+          // status action, the up-next toast) when something does.
           case 38:
             own();
-            if (!onScrub()) move("up");
+            if (onScrub()) move("up");
+            else if (onBar()) {
+              barReturn = cur;
+              const s = $("#player .p-bottom .scrub");
+              if (s && visible(s)) setFocus(s);
+            } else move("up");
             return;
           case 40:
             own();
-            onScrub() ? move("down") : exitControls();
+            onScrub() ? barDown() : onBar() ? exitControls() : move("down");
             return;
           // OK on the scrubber has no "activate" of its own — play/pause is
           // what a remote's centre button means over a progress bar.
@@ -590,7 +628,8 @@
       }
       if (k === 13) {
         e.preventDefault();
-        (_f = (_e = window.Player) == null ? void 0 : _e.togglePlay) == null ? void 0 : _f.call(_e);
+        if (cur && document.contains(cur) && visible(cur) && cur.closest(".p-status, .up-next")) activate();
+        else (_f = (_e = window.Player) == null ? void 0 : _e.togglePlay) == null ? void 0 : _f.call(_e);
         return;
       }
       if (k === 37) {
