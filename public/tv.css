@@ -138,9 +138,12 @@ html.tv .row-arrow, html.tv .hero-pager { display: none; }
    to a TV from the TV is circular — the Cast SDK never even loads on Tizen.
    Hiding them also shortens the D-pad walk along the control bar. */
 html.tv #pFs, html.tv #pPip, html.tv #pCast { display: none; }
-/* the remote's Back button IS the back control — the on-screen ‹ only ever
-   collided with the title up there */
-html.tv #pBack { display: none; }
+/* The on-screen ‹ stays on TV: the remote's Back button does the same thing,
+   but nothing on the screen SAYS so — a way out you can see and walk to beats
+   a convention you have to know. It is the top rung of the player ladder
+   (bar → scrubber → ‹), and OK on it closes the player. .p-top spaces its
+   children with flex `gap`, which Chromium 69 ignores — margin instead. */
+html.tv #pBack { flex: 0 0 auto; margin-right: 12px; }
 
 /* ---------------------------------------------------------------------------
    The rail — TV navigation as a fixed icon column (built by tv.js). The top
