@@ -517,6 +517,9 @@
   // screen order, Up/Down swap rungs, and the scrubber remembers which button
   // to hand the highlight back to.
   const onBar = () => !!(cur && cur.classList && cur.classList.contains("p-icon") && cur.closest(".p-bottom"));
+  // The ‹ in the title bar is the ladder's top rung — a single-button row, so
+  // sideways presses on it go nowhere rather than leaping somewhere surprising.
+  const onTop = () => !!(cur && cur.closest && cur.closest("#player .p-top"));
   const barButtons = () => [...document.querySelectorAll("#player .p-bottom .p-icon")]
     .filter(visible)
     .sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left);
@@ -597,19 +600,24 @@
         window.Player?.poke?.(); // keep the chrome up while the remote is on it
         armIdle();
         switch (k) {
-          case 37: own(); onScrub() ? seekBy(-10) : onBar() ? barMove("left") : move("left"); return;
-          case 39: own(); onScrub() ? seekBy(10) : onBar() ? barMove("right") : move("right"); return;
-          // Two rungs: the scrubber sits above the buttons. Up reaches for it,
-          // Down comes back to the button it left — and Down from the buttons
-          // leaves the bar altogether, which is the way in reversed. From the
-          // scrubber, Up may continue to whatever floats above the bar (a
-          // status action, the up-next toast) when something does.
+          case 37: own(); if (onScrub()) seekBy(-10); else if (onBar()) barMove("left"); else if (!onTop()) move("left"); return;
+          case 39: own(); if (onScrub()) seekBy(10); else if (onBar()) barMove("right"); else if (!onTop()) move("right"); return;
+          // Three rungs: the ‹ in the title bar, the scrubber, the buttons.
+          // Up climbs, Down comes back to where it left — and Down from the
+          // buttons leaves the bar altogether, which is the way in reversed.
+          // From the scrubber, Up goes spatially so whatever floats above the
+          // bar (a status action, the up-next toast) takes precedence over
+          // the ‹ when something does.
           case 38: own();
-            if (onScrub()) move("up");
-            else if (onBar()) { barReturn = cur; const s = $("#player .p-bottom .scrub"); if (s && visible(s)) setFocus(s); }
-            else move("up");
+            if (onScrub() || !onBar()) move("up");
+            else { barReturn = cur; const s = $("#player .p-bottom .scrub"); if (s && visible(s)) setFocus(s); }
             return;
-          case 40: own(); onScrub() ? barDown() : onBar() ? exitControls() : move("down"); return;
+          case 40: own();
+            if (onScrub()) barDown();
+            else if (onBar()) exitControls();
+            else if (onTop()) { const s = $("#player .p-bottom .scrub"); if (s && visible(s)) setFocus(s); else barDown(); }
+            else move("down");
+            return;
           // OK on the scrubber has no "activate" of its own — play/pause is
           // what a remote's centre button means over a progress bar.
           case 13: own(); onScrub() ? window.Player?.togglePlay?.() : activate(); return;

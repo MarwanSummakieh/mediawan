@@ -227,7 +227,8 @@ html.tv #pCast {
   display: none;
 }
 html.tv #pBack {
-  display: none;
+  flex: 0 0 auto;
+  margin-right: 12px;
 }
 html.tv body {
   padding-left: 104px;
