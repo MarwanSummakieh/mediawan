@@ -60,6 +60,17 @@ const BANNED = [
   [/\.at\(-/, "Array.prototype.at (needs Chromium 92)"],
   [/\breplaceAll\(/, "String.replaceAll (needs Chromium 85)"],
   [/\|\|=|&&=|\?\?=/, "logical assignment (needs Chromium 85)"],
+  // esbuild only downlevels SYNTAX — a runtime API it doesn't know about
+  // passes straight through and throws on the TV instead of failing to parse.
+  [/\bObject\.fromEntries\b/, "Object.fromEntries (needs Chromium 73)"],
+  [/\.matchAll\(/, "String.matchAll (needs Chromium 73)"],
+  [/\bglobalThis\b/, "globalThis (needs Chromium 71)"],
+  [/\bPromise\.allSettled\b/, "Promise.allSettled (needs Chromium 76)"],
+  [/\bqueueMicrotask\(/, "queueMicrotask (needs Chromium 71)"],
+  [/\bstructuredClone\(/, "structuredClone (needs Chromium 98)"],
+  // flex/grid `gap` silently does NOTHING on Chromium 69 — not a crash, just
+  // collapsed spacing (the .sub-sync and #pBack margins exist because of it).
+  // CSS only: `gap` is fine as a JS identifier.
 ];
 for (const name of readdirSync(OUT)) {
   const text = readFileSync(path.join(OUT, name), "utf8");
