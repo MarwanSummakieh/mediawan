@@ -105,8 +105,6 @@
     ".act-btn",
     ".detail-play",
     ".sheet-back",
-    ".season-select",
-    ".season-item",
     ".p-icon",
     ".p-bottom .scrub",
     ".up-next .btn",
@@ -115,12 +113,16 @@
     ".filter-bar .btn",
     ".grid-empty .btn",
     "#catMore",
-    ".nav .btn",
-    "#navBurger",
-    "#randomBtn",
-    ".drawer-link",
-    ".drawer-genre",
-    ".tv-rail-btn",
+    ".searchbar-close",
+    // Genre chips: a detour mid-browse, but they are how a library gets
+    // narrowed without a keyboard, so the remote reaches them like anything else.
+    ".genres button",
+    "button.hero-chip",
+    // The picker replaced every <select> precisely so a D-pad could drive one.
+    ".picker-btn",
+    ".picker-opt",
+    // The rail is the app's own navigation now, not a TV-only column.
+    ".rail-btn",
     // (.row-arrow is deliberately absent: moving between cards scrolls the row,
     //  so the hover arrows are dead weight on a remote and tv.css hides them)
     ".auth-card input",
@@ -150,8 +152,8 @@
     return menu || null;
   }
   function surface() {
-    const menu = $("#drawer");
-    if (menu && !menu.hidden && menu.classList.contains("open")) return menu.querySelector(".drawer-panel");
+    const picker = document.querySelector('.picker[data-open="true"] .picker-menu:not([hidden])');
+    if (picker) return picker;
     if (isShown("#player")) return playerLayer() || $("#player");
     if (isShown("#detail")) return $("#detail");
     if (isShown("#mDetail")) return $("#mDetail");
@@ -167,7 +169,7 @@
     const act = document.activeElement;
     if (act && act !== el && ["INPUT", "TEXTAREA", "SELECT"].includes(act.tagName)) {
       act.blur();
-      if (act.id === "search" && !act.value.trim()) document.body.classList.remove("tv-search");
+      if (act.id === "search" && !act.value.trim()) document.body.classList.remove("search-open");
     }
     document.querySelectorAll(".tv-focus").forEach((e) => e.classList.remove("tv-focus"));
     document.querySelectorAll(".tv-focus-within").forEach((e) => e.classList.remove("tv-focus-within"));
@@ -188,7 +190,7 @@
     var _a, _b, _c, _d;
     if (cur && document.contains(cur) && visible(cur) && surface().contains(cur)) return;
     const f = focusables();
-    const marked = f.find((e) => e.matches(".srv-row.live, .p-menu-item.active, .p-drawer-ep.active, .drawer-link.active"));
+    const marked = f.find((e) => e.matches(".srv-row.live, .p-menu-item.active, .p-drawer-ep.active, .picker-opt.active"));
     if (marked) {
       setFocus(marked);
       return;
@@ -221,7 +223,8 @@
       }
     }
     const noInput = f.filter((e) => !["INPUT", "SELECT"].includes(e.tagName));
-    setFocus(noInput.find((e) => e.classList.contains("card")) || noInput[0] || f[0]);
+    const content = noInput.filter((e) => !e.closest("#rail"));
+    setFocus(content.find((e) => e.classList.contains("card")) || content[0] || noInput[0] || f[0]);
   }
   let anchorX = null;
   function move(dir) {
@@ -235,10 +238,10 @@
     else if (anchorX === null) anchorX = trueX;
     const ax = vertical ? anchorX : trueX;
     let best = null, score = Infinity;
-    const fromRail = !!(cur && cur.closest && cur.closest("#tvRail"));
+    const fromRail = !!(cur && cur.closest && cur.closest("#rail"));
     for (const el of focusables()) {
       if (el === cur) continue;
-      if (!fromRail && dir !== "left" && el.closest && el.closest("#tvRail")) continue;
+      if (!fromRail && dir !== "left" && el.closest && el.closest("#rail")) continue;
       const b = el.getBoundingClientRect();
       const bx = b.left + b.width / 2, by = b.top + b.height / 2;
       const dx = bx - (vertical ? trueX : ax), dy = by - ay;
@@ -268,7 +271,7 @@
       }
     }
     if (best) {
-      if (best.closest && best.closest("#tvRail") && cur && !cur.closest("#tvRail")) lastContent = cur;
+      if (best.closest && best.closest("#rail") && cur && !cur.closest("#rail")) lastContent = cur;
       setFocus(best);
     }
   }
@@ -277,11 +280,6 @@
     if (!cur) return;
     if (cur.tagName === "INPUT") {
       cur.focus();
-      return;
-    }
-    if (cur.tagName === "SELECT") {
-      cur.selectedIndex = (cur.selectedIndex + 1) % cur.options.length;
-      cur.dispatchEvent(new Event("change", { bubbles: true }));
       return;
     }
     cur.click();
@@ -316,7 +314,7 @@
     }
     const bar = $("#catBar");
     if (bar && !bar.hidden && bar.offsetHeight > 0) {
-      const items = [...bar.querySelectorAll("button, select")].filter(visible);
+      const items = [...bar.querySelectorAll("button")].filter((b) => !b.closest(".picker-menu")).filter(visible);
       if (items.length) groups.push({ type: "bar", el: bar, items });
     }
     for (const row of document.querySelectorAll(".row .cards")) {
@@ -326,6 +324,11 @@
     for (const grid of document.querySelectorAll(".cards-grid")) groups.push(...gridLines(grid));
     const more = $("#catMore");
     if (more && more.offsetHeight > 0) groups.push({ type: "foot", el: more.parentElement, items: [more] });
+    const strip = $("#searchbar");
+    if (groups.length && strip && strip.offsetHeight > 0) {
+      const items = [...strip.querySelectorAll("#search, .searchbar-close")].filter(visible);
+      if (items.length) groups.unshift({ type: "search", el: strip, items });
+    }
     return groups;
   }
   function findPos(groups, el) {
@@ -367,7 +370,7 @@
   function browseDefault() {
     const groups = contentGroups();
     if (!groups.length) return false;
-    const g = groups[0];
+    const g = groups.find((x) => x.type !== "search") || groups[0];
     focusItem(g, g.home != null ? g.home : g.el && g.el.__tvIdx || 0);
     return true;
   }
@@ -396,7 +399,7 @@
     focusItem(next, idx);
     return true;
   }
-  const railButtons = () => [...document.querySelectorAll("#tvRail .tv-rail-btn")].filter(visible);
+  const railButtons = () => [...document.querySelectorAll("#rail .rail-btn")].filter(visible);
   function focusRail() {
     const btns = railButtons();
     if (!btns.length) return;
@@ -430,7 +433,7 @@
     }
   }
   const onBrowse = () => surface() === document.body && !!$("#app");
-  const onRail = () => !!(cur && cur.classList && cur.classList.contains("tv-rail-btn"));
+  const onRail = () => !!(cur && cur.classList && cur.classList.contains("rail-btn"));
   function enterControls() {
     var _a, _b;
     const p = $("#player");
@@ -496,7 +499,7 @@
     setFocus(btns.includes(barReturn) ? barReturn : btns.find((b) => b.id === "pPlay") || btns[0]);
   }
   function back() {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j;
     if (isShown("#player")) {
       const layer = playerLayer();
       if (layer) {
@@ -522,18 +525,20 @@
         return;
       }
     }
-    const drawer = $("#drawer");
-    if (drawer && drawer.classList.contains("open")) {
-      (_i = $("#drawerClose")) == null ? void 0 : _i.click();
+    const openPicker = document.querySelector('.picker[data-open="true"]');
+    if (openPicker) {
+      const btn = openPicker.querySelector(".picker-btn");
+      btn.click();
+      setFocus(btn);
       return;
     }
     if (isShown("#detail")) {
-      (_j = $("#detailClose")) == null ? void 0 : _j.click();
+      (_i = $("#detailClose")) == null ? void 0 : _i.click();
       cur = null;
       return;
     }
     if (isShown("#mDetail")) {
-      (_k = $("#mDetailClose")) == null ? void 0 : _k.click();
+      (_j = $("#mDetailClose")) == null ? void 0 : _j.click();
       cur = null;
       return;
     }
@@ -541,7 +546,9 @@
     if (sheetBack && visible(sheetBack)) {
       sheetBack.click();
       cur = null;
+      return;
     }
+    if (document.body.classList.contains("search-open")) $("#searchClose").click();
   }
   document.addEventListener("keydown", (e) => {
     var _a, _b, _c, _d, _e, _f;
@@ -726,100 +733,45 @@
   }).observe(player, { attributes: true, attributeFilter: ["class"] });
   for (const el of document.querySelectorAll("#player .p-drawer, #player .p-menu, #player .p-submenu"))
     new MutationObserver(reanchor).observe(el, { attributes: true, attributeFilter: ["class", "hidden"] });
-  const navDrawer = $("#drawer");
-  if (navDrawer)
-    new MutationObserver(reanchor).observe(navDrawer, { attributes: true, attributeFilter: ["class", "hidden"] });
+  const watchPickers = () => {
+    for (const box of document.querySelectorAll(".picker")) {
+      if (box.__tvWatched) continue;
+      box.__tvWatched = true;
+      new MutationObserver(reanchor).observe(box, { attributes: true, attributeFilter: ["data-open"] });
+    }
+  };
+  watchPickers();
+  new MutationObserver(watchPickers).observe(document.body, { childList: true, subtree: true });
   if (appEl) new MutationObserver(() => {
     if (!cur || !document.contains(cur)) setTimeout(ensure, 60);
   }).observe(appEl, { childList: true, subtree: true });
+  let wasSearch = document.body.classList.contains("search-open");
+  new MutationObserver(() => {
+    const on = document.body.classList.contains("search-open");
+    if (on === wasSearch) return;
+    wasSearch = on;
+    if (!on) reanchor();
+  }).observe(document.body, { attributes: true, attributeFilter: ["class"] });
   setTimeout(ensure, 800);
-  (function buildRail() {
-    var _a;
-    if (!$("#app") || $("#tvRail")) return;
-    const ic = (d) => `<svg viewBox="0 0 24 24" width="30" height="30" fill="currentColor"><path d="${d}"/></svg>`;
-    const I = {
-      search: "M15.5 14h-.79l-.28-.27a6.5 6.5 0 1 0-.7.7l.27.28v.79l5 4.99L20.49 19zm-6 0A4.5 4.5 0 1 1 14 9.5 4.5 4.5 0 0 1 9.5 14z",
-      home: "M12 3 2 12h3v8h6v-6h2v6h6v-8h3z",
-      anime: "M12 3a9 9 0 1 0 9 9c0-.46-.04-.92-.1-1.36A5.39 5.39 0 0 1 16.5 13a5.4 5.4 0 0 1-5.4-5.4c0-1.7.79-3.22 2.02-4.22C12.75 3.13 12.38 3 12 3z",
-      movies: "M18 3v2h-2V3H8v2H6V3H4v18h2v-2h2v2h8v-2h2v2h2V3h-2zM8 17H6v-2h2v2zm0-4H6v-2h2v2zm0-4H6V7h2v2zm10 8h-2v-2h2v2zm0-4h-2v-2h2v2zm0-4h-2V7h2v2z",
-      tv: "M21 3H3a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h5v2h8v-2h5a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2zm0 14H3V5h18z",
-      sched: "M19 3h-1V1h-2v2H8V1H6v2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2zm0 16H5V9h14v10zM5 7V5h14v2H5zm2 4h5v5H7z",
-      random: "M10.59 9.17 5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z",
-      admin: "M19.14 12.94a7.5 7.5 0 0 0 0-1.88l2.03-1.58a.5.5 0 0 0 .12-.61l-1.92-3.32a.5.5 0 0 0-.59-.22l-2.39.96a7 7 0 0 0-1.62-.94l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54a7 7 0 0 0-1.62.94l-2.39-.96a.5.5 0 0 0-.59.22L2.74 8.87a.5.5 0 0 0 .12.61l2.03 1.58a7.5 7.5 0 0 0 0 1.88l-2.03 1.58a.5.5 0 0 0-.12.61l1.92 3.32a.5.5 0 0 0 .59.22l2.39-.96a7 7 0 0 0 1.62.94l.36 2.54a.5.5 0 0 0 .5.42h3.84a.5.5 0 0 0 .5-.42l.36-2.54a7 7 0 0 0 1.62-.94l2.39.96a.5.5 0 0 0 .59-.22l1.92-3.32a.5.5 0 0 0-.12-.61l-2.03-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z",
-      out: "M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8v-2H4z"
-    };
-    const rail = document.createElement("div");
-    rail.id = "tvRail";
-    rail.innerHTML = `
-      <div class="tv-rail-mark" title="Mediawan"></div>
-      <button class="tv-rail-btn" data-act="search" title="Search">${ic(I.search)}</button>
-      <button class="tv-rail-btn" data-nav="/" data-id="home" title="Home">${ic(I.home)}</button>
-      <button class="tv-rail-btn" data-nav="/browse?type=anime" data-id="anime" title="Anime">${ic(I.anime)}</button>
-      <button class="tv-rail-btn" data-nav="/browse?type=movies" data-id="movies" title="Movies">${ic(I.movies)}</button>
-      <button class="tv-rail-btn" data-nav="/browse?type=tv" data-id="tv" title="TV Shows">${ic(I.tv)}</button>
-      <button class="tv-rail-btn anime-tool" data-act="schedule" title="Schedule">${ic(I.sched)}</button>
-      <button class="tv-rail-btn anime-tool" data-act="random" title="Random">${ic(I.random)}</button>
-      <div class="tv-rail-spacer"></div>
-      <button class="tv-rail-btn" data-act="admin" id="tvRailAdmin" title="Admin" style="display:none">${ic(I.admin)}</button>
-      <button class="tv-rail-btn" data-act="logout" title="Sign out">${ic(I.out)}</button>`;
-    document.body.appendChild(rail);
-    const admin = $("#adminLink");
-    const syncAdmin = () => {
-      $("#tvRailAdmin").style.display = admin && admin.style.display !== "none" ? "" : "none";
-    };
-    if (admin) {
-      new MutationObserver(syncAdmin).observe(admin, { attributes: true, attributeFilter: ["style"] });
-      syncAdmin();
+  const railEl = $("#rail");
+  if (railEl) railEl.addEventListener("click", (e) => {
+    const b = e.target.closest(".rail-btn");
+    if (!b) return;
+    if (b.dataset.act === "search") {
+      const box = $("#search");
+      if (box) setFocus(box);
+      return;
     }
-    (_a = $("#search")) == null ? void 0 : _a.addEventListener("blur", () => {
-      if (!$("#search").value.trim()) document.body.classList.remove("tv-search");
-    });
-    rail.addEventListener("click", (e) => {
-      var _a2, _b, _c;
-      const b = e.target.closest(".tv-rail-btn");
-      if (!b) return;
-      if (b.dataset.nav || ["schedule", "random"].includes(b.dataset.act))
-        document.body.classList.remove("tv-search");
-      if (b.dataset.nav) {
-        if (window.nav) window.nav(b.dataset.nav);
-        else location.href = b.dataset.nav;
-        let tries = 0;
-        const seek = setInterval(() => {
-          const ready = document.querySelector("#heroCar .hero.active .hero-btn") || document.querySelector("#app .card");
-          if (ready && visible(ready)) {
-            clearInterval(seek);
-            cur = null;
-            browseDefault();
-          } else if (++tries > 25) clearInterval(seek);
-        }, 120);
-        return;
-      }
-      switch (b.dataset.act) {
-        case "search": {
-          const s = $("#search");
-          if (!s) break;
-          document.body.classList.add("tv-search");
-          setFocus(s);
-          try {
-            s.focus();
-          } catch {
-          }
-          break;
-        }
-        case "schedule":
-          (_a2 = $("#drawerSchedule")) == null ? void 0 : _a2.click();
-          break;
-        case "random":
-          (_b = $("#randomBtn")) == null ? void 0 : _b.click();
-          break;
-        case "admin":
-          location.href = "/admin.html";
-          break;
-        case "logout":
-          (_c = $("#logout")) == null ? void 0 : _c.click();
-          break;
-      }
-    });
-  })();
+    if (!b.dataset.nav) return;
+    let tries = 0;
+    const seek = setInterval(() => {
+      const ready = document.querySelector("#heroCar .hero.active .hero-btn") || document.querySelector("#app .card");
+      if (ready && visible(ready)) {
+        clearInterval(seek);
+        cur = null;
+        browseDefault();
+      } else if (++tries > 25) clearInterval(seek);
+    }, 120);
+  });
   window.TVNav = { ensure, setFocus };
 })();

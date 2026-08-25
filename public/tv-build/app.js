@@ -155,12 +155,8 @@ async function boot() {
   }
   ME = await meRes.json();
   SRV_FAVS = new Set(ME.serverFavs || []);
-  $("#who").textContent = ME.name;
-  $("#drawerWho").textContent = ME.name;
-  if (ME.role === "admin") {
-    $("#adminLink").style.display = "";
-    $("#drawerAdmin").style.display = "";
-  }
+  $("#railWho").textContent = ME.name;
+  if (ME.role === "admin") $("#railAdmin").hidden = false;
   initRouter();
 }
 const TITLE_CACHE = /* @__PURE__ */ new Map();
@@ -169,7 +165,7 @@ let APP_VIEW = null;
 function initRouter() {
   history.replaceState({ d: 0 }, "", location.href);
   window.addEventListener("popstate", () => route());
-  document.querySelector(".brand").addEventListener("click", (e) => {
+  document.querySelector(".rail-mark").addEventListener("click", (e) => {
     e.preventDefault();
     nav("/");
   });
@@ -199,12 +195,16 @@ const appName = () => APP_NAME;
 function setActiveTab(tab) {
   document.body.dataset.tab = tab;
   if (tab !== "browse") delete document.body.dataset.lib;
-  document.querySelectorAll(".drawer-link[data-tab]").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
+  syncRail();
+}
+function syncRail() {
+  const here = document.body.dataset.tab === "browse" ? document.body.dataset.lib : "home";
+  document.querySelectorAll("#rail .rail-btn[data-id]").forEach((b) => b.classList.toggle("active", b.dataset.id === here));
 }
 async function route() {
   const qs = new URLSearchParams(location.search);
   setActiveTab(activeTabFor(location.pathname));
-  if (document.activeElement !== $("#search")) document.body.classList.remove("search-open");
+  if (!qs.get("q") && document.activeElement !== $("#search")) closeSearch();
   let m;
   if (m = location.pathname.match(/^\/title\/(\d+)/)) {
     Player.hide();
@@ -246,6 +246,7 @@ async function route() {
   const q = (qs.get("q") || "").trim();
   if (q.length >= 2) {
     $("#search").value = q;
+    document.body.classList.add("search-open");
     return runSearch(q);
   }
   return renderHome();
@@ -605,22 +606,17 @@ async function loadEpisodeMeta(anilistId) {
 }
 function renderSeasonSelect() {
   var _a;
-  const sel = $("#d-season");
   const seasons = ((_a = detail.franchise) == null ? void 0 : _a.seasons) || [];
-  if (seasons.length < 2) {
-    sel.hidden = true;
-    sel.innerHTML = "";
-    return;
-  }
-  const cur = detail.meta.anilistId;
-  sel.innerHTML = seasons.map(
-    (s, i) => `<option value="${s.anilistId}" ${s.anilistId === cur ? "selected" : ""}>Season ${i + 1} \xB7 ${esc(s.title)}${s.year ? ` (${s.year})` : ""}</option>`
-  ).join("");
-  sel.hidden = false;
-  sel.onchange = () => {
-    const id = Number(sel.value);
-    if (id !== detail.meta.anilistId) openTitle(id);
-  };
+  renderPicker("d-season", {
+    label: "Season",
+    value: detail.meta.anilistId,
+    // A single season is not a choice; an empty list hides the control.
+    options: seasons.length < 2 ? [] : seasons.map((s, i) => ({ value: s.anilistId, label: `Season ${i + 1} \xB7 ${s.title}${s.year ? ` (${s.year})` : ""}` })),
+    onPick: (v) => {
+      const id = Number(v);
+      if (id !== detail.meta.anilistId) openTitle(id);
+    }
+  });
 }
 function renderFranchise() {
   const f = detail.franchise;
@@ -2956,14 +2952,100 @@ function gridView(heading, items) {
   const body = items.length ? `<div class="cards-grid">${items.map(cardHtml).join("")}</div>` : `<div class="grid-empty">Nothing here.</div>`;
   return `<div class="rows"><div class="row"><h2>${heading}</h2>${body}</div></div>`;
 }
-document.querySelector(".nav-search-wrap").addEventListener("click", () => {
-  if (document.body.classList.contains("search-open")) return;
-  if (!matchMedia("(max-width: 720px)").matches) return;
+const PICKERS = /* @__PURE__ */ new Map();
+function renderPicker(id, opts) {
+  const box = $("#" + id);
+  if (!box) return;
+  const options = opts.options || [];
+  if (!options.length) {
+    box.hidden = true;
+    box.innerHTML = "";
+    PICKERS.delete(id);
+    return;
+  }
+  const cur = options.find((o) => String(o.value) === String(opts.value)) || options[0];
+  box.hidden = false;
+  box.dataset.open = "false";
+  box.innerHTML = `
+    <button class="picker-btn" type="button" aria-haspopup="listbox" aria-expanded="false"${opts.label ? ` aria-label="${esc(opts.label)}"` : ""}>
+      <span class="picker-val">${esc(cur.label)}</span><span class="picker-caret">\u25BE</span>
+    </button>
+    <div class="picker-menu" role="listbox" hidden>
+      ${options.map((o) => `<button class="picker-opt ${String(o.value) === String(cur.value) ? "active" : ""}" type="button"
+        role="option" data-value="${esc(String(o.value))}">${esc(o.label)}</button>`).join("")}
+    </div>`;
+  PICKERS.set(id, opts.onPick);
+}
+function setPickerValue(id, value) {
+  const box = $("#" + id);
+  if (!box || box.hidden) return;
+  let label = null;
+  box.querySelectorAll(".picker-opt").forEach((o) => {
+    const on = String(o.dataset.value) === String(value);
+    o.classList.toggle("active", on);
+    if (on) label = o.textContent;
+  });
+  if (label !== null) box.querySelector(".picker-val").textContent = label;
+}
+function closePickers(except) {
+  document.querySelectorAll('.picker[data-open="true"]').forEach((box) => {
+    if (box === except) return;
+    box.dataset.open = "false";
+    box.querySelector(".picker-menu").hidden = true;
+    box.querySelector(".picker-btn").setAttribute("aria-expanded", "false");
+  });
+}
+document.addEventListener("click", (e) => {
+  const opt = e.target.closest(".picker-opt");
+  if (opt) {
+    const box2 = opt.closest(".picker");
+    closePickers();
+    const pick = PICKERS.get(box2.id);
+    if (pick) pick(opt.dataset.value);
+    return;
+  }
+  const btn = e.target.closest(".picker-btn");
+  if (!btn) {
+    closePickers();
+    return;
+  }
+  const box = btn.closest(".picker");
+  const open = box.dataset.open !== "true";
+  closePickers(box);
+  box.dataset.open = String(open);
+  box.querySelector(".picker-menu").hidden = !open;
+  btn.setAttribute("aria-expanded", String(open));
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape" || !document.querySelector('.picker[data-open="true"]')) return;
+  closePickers();
+  e.stopImmediatePropagation();
+}, true);
+function openSearch() {
   document.body.classList.add("search-open");
   $("#search").focus();
+}
+function closeSearch() {
+  document.body.classList.remove("search-open");
+  const box = $("#search");
+  box.value = "";
+  if (document.activeElement === box) box.blur();
+}
+$("#searchClose").addEventListener("click", () => {
+  const had = $("#search").value.trim();
+  closeSearch();
+  if (had && APP_VIEW === "search") nav("/");
 });
 $("#search").addEventListener("blur", () => {
   if (!$("#search").value.trim()) document.body.classList.remove("search-open");
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "/" || e.ctrlKey || e.metaKey || e.altKey) return;
+  const t = e.target;
+  if (t && (t.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName))) return;
+  if ($("#player").classList.contains("show")) return;
+  e.preventDefault();
+  openSearch();
 });
 let searchTimer = null;
 $("#search").addEventListener("input", (e) => {
@@ -3127,6 +3209,7 @@ async function renderBrowse(filters) {
   $("#search").value = "";
   BR.filters = filters;
   document.body.dataset.lib = filters.type;
+  syncRail();
   if (!wasHere || !$("#catGrid")) {
     app.innerHTML = `<div class="rows"><div class="row">
       <h2>Browse</h2>
@@ -3205,18 +3288,22 @@ function renderCatBar() {
       ${meta.sorts.map((s) => `<button class="mode-pill ${sort === s.id ? "active" : ""}"
         aria-pressed="${sort === s.id}" onclick="setBrowseSort('${s.id}')">${s.label}</button>`).join("")}
     </div>
-    <select class="season-select" id="catGenre" aria-label="Genre">
-      <option value="">All genres</option>
-      ${genres.map((g) => `<option value="${esc(g)}" ${f.genre === g ? "selected" : ""}>${esc(g)}</option>`).join("")}
-    </select>
-    <select class="season-select" id="catYear" aria-label="Year">
-      <option value="">Any year</option>
-      ${meta.years.map((y) => `<option value="${y}" ${f.year === y ? "selected" : ""}>${y}</option>`).join("")}
-    </select>
+    <div class="picker" id="catGenre"></div>
+    <div class="picker" id="catYear"></div>
     ${active ? `<button class="btn ghost mini" onclick="resetBrowseFilters()">Reset</button>` : ""}
     ${f.year ? `<span class="filter-note">A year always shows newest first</span>` : ""}`;
-  $("#catGenre").onchange = (e) => setBrowseFilters({ genre: e.target.value || null });
-  $("#catYear").onchange = (e) => setBrowseFilters({ year: Number(e.target.value) || null });
+  renderPicker("catGenre", {
+    label: "Genre",
+    value: f.genre || "",
+    options: [{ value: "", label: "All genres" }].concat(genres.map((g) => ({ value: g, label: g }))),
+    onPick: (v) => setBrowseFilters({ genre: v || null })
+  });
+  renderPicker("catYear", {
+    label: "Year",
+    value: f.year || "",
+    options: [{ value: "", label: "Any year" }].concat(meta.years.map((y) => ({ value: y, label: String(y) }))),
+    onPick: (v) => setBrowseFilters({ year: Number(v) || null })
+  });
 }
 function interleave(lists) {
   const out = [];
@@ -3351,9 +3438,8 @@ async function showMediaDetail(kind, id) {
     $("#m-facts").innerHTML = "";
     $("#m-eps").innerHTML = "";
     $("#m-note").textContent = "";
-    $("#m-seasonList").innerHTML = "";
+    renderPicker("m-season", { options: [] });
     $("#m-epsHead").hidden = true;
-    $("#m-season").hidden = true;
     $("#mHeroBg").style.backgroundImage = "";
     $("#mHeroArt").style.backgroundImage = "";
     mDetail = null;
@@ -3410,20 +3496,17 @@ function paintMediaDetail() {
   if (kind !== "tv" || !seasons.length) {
     $("#m-epsHead").hidden = true;
     $("#m-eps").innerHTML = "";
-    $("#m-seasonList").innerHTML = "";
+    renderPicker("m-season", { options: [] });
   }
   if (kind === "tv" && seasons.length) {
     $("#m-epsHead").hidden = false;
-    const sel = $("#m-season");
-    sel.innerHTML = seasons.map((s) => `<option value="${s.season}">${esc(s.name)} \xB7 ${s.episodes} ep</option>`).join("");
-    sel.hidden = seasons.length < 2;
-    sel.value = String(mDetail.season);
-    sel.onchange = () => loadSeasonEps(id, +sel.value);
-    const list = $("#m-seasonList");
-    list.innerHTML = seasons.length < 2 ? "" : seasons.map((s) => `<button class="season-item" data-season="${s.season}">
-        <span class="t">${esc(s.name)}</span><span class="s">${s.episodes} episodes</span>
-      </button>`).join("");
-    list.querySelectorAll(".season-item").forEach((b) => b.onclick = () => loadSeasonEps(id, +b.dataset.season));
+    renderPicker("m-season", {
+      label: "Season",
+      value: mDetail.season,
+      // one season needs no chooser
+      options: seasons.length < 2 ? [] : seasons.map((s) => ({ value: s.season, label: `${s.name} \xB7 ${s.episodes} ep` })),
+      onPick: (v) => loadSeasonEps(id, Number(v))
+    });
     loadSeasonEps(id, mDetail.season);
   }
 }
@@ -3431,9 +3514,7 @@ async function loadSeasonEps(id, season) {
   const key = MDETAIL_KEY;
   if (mDetail) mDetail.season = season;
   $("#mPlay").textContent = `\u25B6 Play S${season} E1`;
-  const sel = $("#m-season");
-  if (sel && +sel.value !== season) sel.value = String(season);
-  document.querySelectorAll("#m-seasonList .season-item").forEach((b) => b.classList.toggle("active", +b.dataset.season === season));
+  setPickerValue("m-season", season);
   $("#m-eps").innerHTML = `<div class="grid-empty">Loading episodes\u2026</div>`;
   let eps = [];
   try {
@@ -3526,7 +3607,7 @@ async function armTvPlayerNav(id, season, ep) {
   if (here() && Player.movieMode) Player.setStreamNav({ prev, next });
 }
 function openCategory(genre) {
-  closeMenu();
+  closeRailMore();
   nav("/category/" + encodeURIComponent(genre));
 }
 async function renderCategory(genre) {
@@ -3550,7 +3631,7 @@ const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
 let schedByDay = null;
 function openSchedule() {
-  closeMenu();
+  closeRailMore();
   nav("/schedule");
 }
 async function renderSchedule() {
@@ -3594,9 +3675,10 @@ function selectSchedDay(day) {
         </div>
       </div>`).join("") : `<div class="grid-empty">No episodes scheduled for this day.</div>`;
 }
-$("#randomBtn").addEventListener("click", async () => {
-  const btn = $("#randomBtn");
-  btn.disabled = true;
+let randomBusy = false;
+async function surpriseMe() {
+  if (randomBusy) return;
+  randomBusy = true;
   try {
     const res = await fetch("/api/random");
     if (res.ok) {
@@ -3604,13 +3686,13 @@ $("#randomBtn").addEventListener("click", async () => {
       openTitle(item.anilistId);
     }
   } finally {
-    btn.disabled = false;
+    randomBusy = false;
   }
-});
-$("#logout").addEventListener("click", async () => {
+}
+async function logout() {
   await fetch("/api/logout", { method: "POST" });
   location.href = "/login.html";
-});
+}
 function fmt(s) {
   s = Math.floor(s || 0);
   const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), sec = s % 60;
@@ -3647,47 +3729,37 @@ window.setBrowseSort = setBrowseSort;
 window.resetBrowseFilters = resetBrowseFilters;
 window.loadMoreBrowse = loadMoreBrowse;
 window.nav = nav;
-function closeMenu() {
-  const d = $("#drawer");
-  d.classList.remove("open");
-  if (!$("#detail").classList.contains("show") && !$("#player").classList.contains("show"))
-    document.body.style.overflow = "";
-  setTimeout(() => {
-    if (!d.classList.contains("open")) d.hidden = true;
-  }, 300);
+function closeRailMore() {
+  document.body.classList.remove("rail-more-open");
+  const more = $("#rail .rail-more-btn");
+  if (more) more.setAttribute("aria-expanded", "false");
 }
-async function openMenu() {
-  const d = $("#drawer");
-  d.hidden = false;
-  void d.offsetWidth;
-  d.classList.add("open");
-  document.body.style.overflow = "hidden";
-  const box = $("#drawerGenres");
-  if (box && !box.dataset.loaded) {
-    try {
-      const { genres } = await (await fetch("/api/genres")).json();
-      box.innerHTML = genres.map((g) => `<button class="drawer-genre" onclick="openCategory('${esc(g)}')">${esc(g)}</button>`).join("");
-      box.dataset.loaded = "1";
-    } catch {
-    }
+$("#rail").addEventListener("click", (e) => {
+  const b = e.target.closest(".rail-btn");
+  if (!b) return;
+  if (b.dataset.act === "more") {
+    const open = !document.body.classList.contains("rail-more-open");
+    document.body.classList.toggle("rail-more-open", open);
+    b.setAttribute("aria-expanded", String(open));
+    return;
   }
-}
-$("#navBurger").addEventListener("click", openMenu);
-$("#drawerClose").addEventListener("click", closeMenu);
-$("#drawerBackdrop").addEventListener("click", closeMenu);
+  closeRailMore();
+  if (b.dataset.nav) return nav(b.dataset.nav);
+  if (b.dataset.act === "search") return openSearch();
+  if (b.dataset.act === "schedule") return openSchedule();
+  if (b.dataset.act === "random") return surpriseMe();
+  if (b.dataset.act === "admin") {
+    location.href = "/admin.html";
+    return;
+  }
+  if (b.dataset.act === "logout") logout();
+});
+document.addEventListener("click", (e) => {
+  if (document.body.classList.contains("rail-more-open") && !e.target.closest("#rail")) closeRailMore();
+});
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && !$("#drawer").hidden) closeMenu();
+  if (e.key === "Escape") closeRailMore();
 });
-document.querySelectorAll(".drawer-link[data-tab]").forEach((b) => b.addEventListener("click", () => {
-  nav(b.dataset.tab === "browse" ? "/browse" : "/");
-  closeMenu();
-}));
-$("#drawerSchedule").addEventListener("click", openSchedule);
-$("#drawerRandom").addEventListener("click", () => {
-  closeMenu();
-  $("#randomBtn").click();
-});
-$("#drawerLogout").addEventListener("click", () => $("#logout").click());
 window.Player = Player;
 window.epThumbFallback = epThumbFallback;
 window.__onGCastApiAvailable = (ok) => {

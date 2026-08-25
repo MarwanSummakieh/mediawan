@@ -28,6 +28,9 @@ html.tv {
   --tv-grid-card-h: 375px;
   --tv-gap: 26px;
   --tv-row-title: 36px;
+  /* The rail is styles.css's, on every device. TV does not re-implement it —
+     it restates the width, and styles.css does the rest. */
+  --rail-w: 148px;
 }
 
 /* ---------------------------------------------------------------------------
@@ -38,15 +41,18 @@ html.tv {
 /* Zero the gaps first. Chromium 69 ignores them anyway, but a modern browser in
    TV mode (?tv=1 on a desktop, which is how this gets tested) would otherwise
    add gap AND margin and lay out differently from the actual television. */
-html.tv .nav, html.tv .brand, html.tv .cards, html.tv .filter-bar, html.tv .genres,
+html.tv .rail, html.tv .rail-tail, html.tv .rail-btn, html.tv .searchbar,
+html.tv .picker-btn, html.tv .cards, html.tv .filter-bar, html.tv .genres,
 html.tv .card-actions, html.tv .sheet-actions, html.tv .p-controls, html.tv .p-titles,
 html.tv .up-next-actions, html.tv .srv-row, html.tv .p-drawer-ep, html.tv .p-drawer-head,
-html.tv .drawer-link, html.tv .eps, html.tv .p-drawer-list, html.tv .srv-foot,
-html.tv .card-scrim, html.tv .drawer-panel, html.tv .drawer-nav, html.tv .drawer-genres,
-html.tv .drawer-foot { gap: 0; }
+html.tv .eps, html.tv .p-drawer-list, html.tv .srv-foot,
+html.tv .card-scrim { gap: 0; }
 
-html.tv .nav > * + * { margin-left: 20px; }
-html.tv .brand > * + * { margin-left: 10px; }
+html.tv .rail > * + * { margin-top: 10px; }
+html.tv .rail-tail > * + * { margin-top: 10px; }
+html.tv .rail-btn > * + * { margin-top: 8px; }   /* icon over label */
+html.tv .searchbar > * + * { margin-left: 16px; }
+html.tv .picker-btn > * + * { margin-left: 14px; }
 html.tv .p-top > * + * { margin-left: 22px; } /* back button ⟷ title (gap:14px upstream) */
 html.tv .cards > * + * { margin-left: var(--tv-gap); }
 html.tv .filter-bar > * + * { margin-left: 10px; }
@@ -59,11 +65,6 @@ html.tv .up-next-actions > * + * { margin-left: 8px; }
 html.tv .srv-row > * + * { margin-left: 12px; }
 html.tv .p-drawer-ep > * + * { margin-left: 14px; }
 html.tv .p-drawer-head > * + * { margin-left: 12px; }
-html.tv .drawer-link > * + * { margin-left: 16px; }
-html.tv .drawer-panel > * + * { margin-top: 10px; }
-html.tv .drawer-nav > * + * { margin-top: 8px; }
-html.tv .drawer-foot > * + * { margin-left: 12px; }
-html.tv .drawer-genre { margin: 5px; } /* wrapping row — per-child margin stands in for gap */
 /* column-direction containers */
 html.tv .eps > * + * { margin-top: 10px; }
 html.tv .p-drawer-list > * + * { margin-top: 8px; }
@@ -76,21 +77,28 @@ html.tv .rows > * + * { margin-top: 0; } /* .row already carries its own margin 
    ------------------------------------------------------------------------ */
 html.tv body { font-size: 26px; }
 
-html.tv .nav { padding: 28px var(--tv-pad); }
-html.tv .brand { font-size: 40px; }
-html.tv .brand::before { width: 19px; height: 24px; }
-/* left padding must keep clearing the magnifier icon at this scale — the icon
-   sits absolutely at left:16px inside the wrap and is sized up below */
-html.tv .nav .search { font-size: 26px; padding: 18px 22px 18px 68px; }
-html.tv .nav-search-wrap { max-width: 760px; }
-html.tv .nav-search-ic { width: 28px; height: 28px; left: 22px; }
-html.tv .nav-icon-btn { width: 68px; height: 68px; }
-html.tv .nav-icon-btn svg { width: 34px; height: 34px; }
-html.tv .nav .btn { font-size: 22px; padding: 14px 24px; }
-/* The search wrap stops growing at its max-width and nothing else in the nav
-   flexes, so the account cluster was stranded mid-screen. Send it to the edge. */
-html.tv .nav .who { margin-left: auto; }
-html.tv .who, html.tv #who { font-size: 22px; }
+/* The rail at 10-foot scale. Same element, same order, same behaviour as the
+   phone's bottom bar and the desktop's column — only bigger. */
+html.tv .rail { padding: 40px 0 34px; }
+html.tv .rail-mark { width: 26px; height: 32px; margin-bottom: 26px; }
+html.tv .rail-btn { width: calc(var(--rail-w) - 26px); padding: 16px 4px; font-size: 17px; }
+html.tv .rail-btn svg { width: 40px; height: 40px; }
+html.tv .rail-who { font-size: 15px; padding: 12px 6px 0; }
+
+/* The search strip. It is summoned rather than resident on every device now,
+   so there is nothing TV-specific left here but the size of it. */
+html.tv .searchbar { padding: 24px var(--tv-pad); }
+html.tv .searchbar-ic { width: 30px; height: 30px; }
+html.tv .searchbar .search { font-size: 26px; padding: 18px 26px; max-width: 900px; }
+html.tv .searchbar-close { width: 68px; height: 68px; }
+html.tv .searchbar-close svg { width: 30px; height: 30px; }
+
+/* The picker replaced every native dropdown, so this is a first-class control
+   on a remote rather than something to hide. */
+html.tv .picker-btn { font-size: 21px; padding: 15px 22px; }
+html.tv .picker-caret { font-size: 16px; }
+html.tv .picker-menu { min-width: 420px; max-width: 620px; max-height: 620px; padding: 10px; }
+html.tv .picker-opt { font-size: 21px; padding: 15px 18px; }
 
 html.tv .rows { padding: 0 var(--tv-pad) 80px; }
 html.tv .row { margin: 40px 0; }
@@ -146,39 +154,12 @@ html.tv #pFs, html.tv #pPip, html.tv #pCast { display: none; }
 html.tv #pBack { flex: 0 0 auto; margin-right: 12px; }
 
 /* ---------------------------------------------------------------------------
-   The rail — TV navigation as a fixed icon column (built by tv.js). The top
-   bar keeps only the search field; everything else lives here, one Left away.
-   Overlays (detail, player) sit above it, so playback stays edge to edge.
+   The rail used to be built here, by tv.js, because the web had a top bar and
+   a hamburger drawer that a remote could not use. Both are gone: the rail IS
+   the app's navigation now, on every device, and lives in index.html and
+   styles.css like any other component. What remains TV-specific is the
+   "you are here" tint, which follows the library rather than the section.
    ------------------------------------------------------------------------ */
-html.tv body { padding-left: 104px; }
-html.tv #tvRail { position: fixed; left: 0; top: 0; bottom: 0; width: 104px; z-index: 40;
-  background: var(--bg2); border-right: 1px solid var(--line);
-  display: flex; flex-direction: column; align-items: center; padding: 26px 0; }
-html.tv #tvRail > * + * { margin-top: 12px; }
-html.tv .tv-rail-mark { flex: 0 0 auto; width: 20px; height: 24px; background: var(--accent);
-  clip-path: polygon(0 0, 100% 50%, 0 100%); margin-bottom: 14px; }
-html.tv .tv-rail-btn { flex: 0 0 auto; width: 68px; height: 68px; border: 0; cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-  background: transparent; color: var(--muted); border-radius: var(--radius); }
-html.tv .tv-rail-spacer { flex: 1 1 auto; }
-html.tv .tv-rail-btn.tv-focus { background: var(--accent); color: var(--on-accent); transform: scale(1.08); }
-/* The current destination stays tinted so the column doubles as a "you are
-   here". The rail lists the libraries separately — one press each, rather than
-   the web's Browse-then-pick-a-pill — so it tints by library, not by tab. */
-html.tv body[data-tab="home"] #tvRail [data-id="home"]:not(.tv-focus),
-html.tv body[data-lib="anime"] #tvRail [data-id="anime"]:not(.tv-focus),
-html.tv body[data-lib="movies"] #tvRail [data-id="movies"]:not(.tv-focus),
-html.tv body[data-lib="tv"] #tvRail [data-id="tv"]:not(.tv-focus) { color: var(--accent); }
-
-/* The rail replaces the top bar outright. The bar (now just the search field —
-   its other children are hidden, the rail clicks them by proxy) only appears
-   while a search is actually happening: summoned by the rail's search icon,
-   dismissed when the field is left empty. */
-html.tv .nav { display: none; }
-html.tv body.tv-search .nav { display: flex; }
-html.tv #navBurger, html.tv .nav .brand, html.tv .nav #randomBtn,
-html.tv .nav .who, html.tv .nav #adminLink, html.tv .nav #logout { display: none; }
-html.tv .nav-search-wrap { max-width: none; }
 
 /* Films and shows share the anime detail sheet now (one full-screen page for
    all three), so the old side-list season picker is gone with the in-page TV
@@ -192,63 +173,39 @@ html.tv .fact dd { font-size: 20px; }
    opens a list the D-pad cannot drive, so the remote gets real buttons and the
    dropdown is hidden — only THIS one, the catalog filter selects keep theirs. */
 /* ---------------------------------------------------------------------------
-   No lists, no genres on the TV.
-   Both are curation rather than watching, and both cost D-pad presses on the
-   way to something playable: the list rows sit between the hero and the
-   discovery rows, the heart/+ overlays add two stops to every card, and a
-   genre chip is a detour into a different page mid-browse. The <select>
-   filters go for a harder reason — a native dropdown opens a list the remote
-   cannot drive at all, which is why seasons got their own column (below).
-   All of it is display:none rather than deleted: the web keeps every one of
-   these, and the same markup serves both.
+   Curation on a remote.
+   My List, Favorites, collections and genre chips used to be display:none here:
+   each one costs D-pad presses on the way to something playable, and the
+   catalog's genre/year filters were native dropdowns a remote could not open
+   at all. The filters are .picker now, which a D-pad drives like any list, so
+   the whole lot is reachable and the TV shows what the web shows.
+
+   One exception stays hidden, and it is not a feature: the heart / + overlays
+   on artwork. They are a HOVER shortcut — invisible until a pointer is over
+   the card — and the browse ladder walks between cards, not into them, so they
+   could never be landed on anyway. Favorite and My List have real buttons on
+   every detail page (#detailActions), which is where the remote uses them.
    ------------------------------------------------------------------------ */
-html.tv .list-row { display: none; }                 /* My List, Favorites, collections */
-html.tv .card-actions { display: none; }             /* the heart / + overlays on artwork */
-html.tv #detailActions { display: none; }            /* Favorite / My List / Collections */
-html.tv .hero-genres { display: none; }              /* genre chips under the hero title */
-html.tv .genres { display: none; }                   /* genre chips on every detail page */
-html.tv .drawer-genres-wrap { display: none; }       /* the drawer's genre chip cloud */
-html.tv #catGenre, html.tv #catYear { display: none; } /* undrivable native dropdowns */
+html.tv .card-actions { display: none; }
 
-html.tv .eps-split { display: flex; align-items: flex-start; }
-html.tv .eps-split > * + * { margin-left: 34px; } /* flex gap is inert on Chromium 69 */
-html.tv .season-list { display: block; flex: 0 0 300px; }
-html.tv .season-list > * + * { margin-top: 10px; }
-html.tv .eps-split .eps { flex: 1 1 auto; min-width: 0; }
-html.tv #m-season { display: none; }
-html.tv .season-item { display: block; width: 100%; text-align: left; cursor: pointer;
-  background: var(--card); border: 1px solid transparent; border-radius: var(--radius);
-  color: var(--text); padding: 16px 18px; scroll-margin-top: 170px; scroll-margin-bottom: 60px; }
-html.tv .season-item .t { display: block; font-size: 22px; font-weight: 700; }
-html.tv .season-item .s { display: block; font-size: 16px; color: var(--muted); margin-top: 3px; }
-html.tv .season-item.active { border-color: var(--accent); color: var(--accent); }
-html.tv .season-item.active .t { color: var(--accent); }
-html.tv .season-item.tv-focus { background: var(--accent); border-color: var(--accent); }
-html.tv .season-item.tv-focus .t, html.tv .season-item.tv-focus .s { color: var(--on-accent); }
+/* The seasons used to stand in their own column here, beside the episode list,
+   because the web's <select> opened a list no remote could enter. Both are now
+   one .picker, sized above with the other controls. */
 
-/* Hamburger drawer at 10-foot scale — unreachable now the burger is hidden,
-   kept styled in case a future surface reopens it. */
-html.tv .drawer-panel { width: 520px; max-width: 40vw; padding: 34px 26px; }
-html.tv .drawer-link { font-size: 26px; padding: 18px 22px; }
-html.tv .drawer-link svg { width: 28px; height: 28px; }
-html.tv .drawer-section-t { font-size: 17px; }
-html.tv .drawer-genre { font-size: 20px; padding: 12px 20px; }
-html.tv .drawer-who { font-size: 19px; }
-html.tv .drawer-foot .btn { font-size: 20px; padding: 12px 20px; }
+/* (The hamburger drawer's 10-foot sizing lived here. There is no drawer.) */
 
-/* The nav is sticky, so a focused card scrolled to the viewport's top edge
-   lands UNDERNEATH it — the highlight vanishes and the D-pad feels broken.
-   Focus targets keep their clearance from both edges instead. */
+/* Scrolling a focused card to the very top edge of the viewport leaves it
+   flush against the panel bezel, which reads as clipped from across a room —
+   and the search strip is sticky when it is up. Keep clearance at both ends. */
 html.tv .card, html.tv .fr-card, html.tv .ep-row, html.tv .sched-item,
-html.tv .mode-pill, html.tv .act-btn, html.tv .detail-play, html.tv .season-select,
-html.tv .sheet-back, html.tv .filter-bar .btn, html.tv #catMore {
+html.tv .mode-pill, html.tv .act-btn, html.tv .detail-play, html.tv .picker-btn,
+html.tv .genres button, html.tv .sheet-back, html.tv .filter-bar .btn, html.tv #catMore {
   scroll-margin-top: 170px; scroll-margin-bottom: 60px;
 }
 
-/* Hero. The -76px pull-up exists to slide under the translucent desktop nav —
-   with the nav gone on TV it just decapitates the artwork, so it goes. The
-   badge/pager offsets assumed that nav too. */
-html.tv .hero-car { margin-top: 0; height: 44vh; min-height: 420px; max-height: 560px; }
+/* Hero. The pull-up that slid it under a translucent top bar is gone from
+   styles.css itself now — there is no bar on any device to slide under. */
+html.tv .hero-car { height: 44vh; min-height: 420px; max-height: 560px; }
 html.tv .hero-badge { top: 34px; left: var(--tv-pad); font-size: 19px; padding: 12px 22px; }
 html.tv .hero-title { font-size: 58px; }
 html.tv .hero-btn { font-size: 22px; padding: 16px 34px; background: rgba(14,14,14,.78); }
@@ -278,7 +235,6 @@ html.tv .detail-play { font-size: 22px; padding: 16px 32px; }
 html.tv .ep-row { padding: 16px; }
 html.tv .ep-row-t { font-size: 21px; }
 html.tv .ep-row-date { font-size: 17px; }
-html.tv .season-select { font-size: 20px; padding: 12px 16px; }
 html.tv .mode-pill { font-size: 19px; padding: 12px 22px; }
 
 /* Player chrome. The control bar sits inside the safe area too — on the photo
@@ -345,13 +301,13 @@ html.tv .auth-card .btn { font-size: 22px; padding: 16px 28px; }
    ------------------------------------------------------------------------ */
 html.tv .player-overlay.show { animation: none; }
 html.tv .overlay.show .sheet { animation: none; }
-html.tv .nav, html.tv .p-menu, html.tv .up-next, html.tv .card .badge, html.tv .card-act,
+html.tv .searchbar, html.tv .p-menu, html.tv .up-next, html.tv .card .badge, html.tv .card-act,
 html.tv .row-arrow, html.tv .scrub-tip, html.tv .hero-badge, html.tv .hero-chip,
 html.tv .hero-btn, html.tv .hero-count, html.tv .hero-pg-btn { backdrop-filter: none; }
-/* Fully opaque, not a fade-to-transparent: the nav is sticky, so rows scroll
-   underneath it, and without blur a translucent tail just reads as the movie
-   grid crashing into the top bar. */
-html.tv .nav { background: var(--bg); border-bottom: 1px solid var(--line); }
+/* Fully opaque, not a fade-to-transparent: the search strip is sticky, so rows
+   scroll underneath it, and without blur a translucent tail just reads as the
+   grid crashing into the strip. */
+html.tv .searchbar { background: var(--bg); border-bottom: 1px solid var(--line); }
 html.tv .p-menu { background: #171a20; }
 html.tv .up-next { background: #171a20; }
 /* give the video its own solid backdrop so a missed repaint shows black, not
@@ -377,7 +333,7 @@ html.tv .tv-focus {
    accent fill washes it out. */
 html.tv .p-menu-item.tv-focus, html.tv .p-menu-row.tv-focus, html.tv .p-menu-back.tv-focus,
 html.tv .srv-row.tv-focus, html.tv .p-drawer-ep.tv-focus, html.tv .ep-row.tv-focus,
-html.tv .drawer-link.tv-focus, html.tv .drawer-genre.tv-focus, html.tv .col-row.tv-focus,
+html.tv .picker-opt.tv-focus, html.tv .col-row.tv-focus,
 html.tv .sched-item.tv-focus, html.tv .fr-card.tv-focus {
   background: var(--accent);
   color: var(--on-accent);
@@ -398,17 +354,22 @@ html.tv .srv-row.tv-focus .srv-live { background: rgba(0,0,0,.35); color: #fff; 
 
 /* Buttons and pills: same idea, a solid accent fill. */
 html.tv .btn.tv-focus, html.tv .act-btn.tv-focus, html.tv .mode-pill.tv-focus,
-html.tv .hero-btn.tv-focus, html.tv .p-icon.tv-focus, html.tv .nav-icon-btn.tv-focus,
-html.tv .sheet-back.tv-focus, html.tv .season-select.tv-focus, html.tv .detail-play.tv-focus,
-html.tv .card-act.tv-focus, html.tv .srv-fav.tv-focus {
+html.tv .hero-btn.tv-focus, html.tv .p-icon.tv-focus, html.tv .rail-btn.tv-focus,
+html.tv .sheet-back.tv-focus, html.tv .picker-btn.tv-focus, html.tv .detail-play.tv-focus,
+html.tv .searchbar-close.tv-focus, html.tv .genres button.tv-focus,
+html.tv button.hero-chip.tv-focus, html.tv .srv-fav.tv-focus {
   background: var(--accent);
   color: var(--on-accent);
   border-color: var(--accent);
   transform: scale(1.08);
 }
-html.tv .p-icon.tv-focus svg, html.tv .card-act.tv-focus svg, html.tv .srv-fav.tv-focus svg {
+html.tv .p-icon.tv-focus svg, html.tv .rail-btn.tv-focus svg,
+html.tv .searchbar-close.tv-focus svg, html.tv .srv-fav.tv-focus svg {
   color: var(--on-accent);
 }
+/* "You are here" on the rail, when the highlight is somewhere else. The focus
+   fill above must still win over it, hence :not(.tv-focus). */
+html.tv .rail-btn.active:not(.tv-focus) { background: transparent; color: var(--accent); }
 html.tv #search.tv-focus { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-dim); transform: none; }
 
 /* Posters carry their own picture, so a colour fill would fight the artwork.
@@ -437,6 +398,7 @@ html.tv .card-actions { opacity: 0; }
    ------------------------------------------------------------------------ */
 @media (min-width: 2400px) {
   html.tv {
+    --rail-w: 240px;
     --tv-pad: 120px;
     --tv-card-w: 520px;
     --tv-card-h: 760px;
@@ -446,7 +408,6 @@ html.tv .card-actions { opacity: 0; }
     --tv-row-title: 54px;
   }
   html.tv body { font-size: 40px; }
-  html.tv .brand { font-size: 62px; }
   html.tv .hero-title { font-size: 130px; }
   html.tv .p-icon { width: 96px; height: 96px; }
   html.tv .p-icon svg { width: 48px; height: 48px; }
@@ -456,6 +417,7 @@ html.tv .card-actions { opacity: 0; }
 /* Narrow webview (some older sets report 1280) — keep it usable. */
 @media (max-width: 1400px) {
   html.tv {
+    --rail-w: 104px;
     --tv-pad: 40px;
     --tv-card-w: 200px;
     --tv-card-h: 290px;
@@ -465,6 +427,5 @@ html.tv .card-actions { opacity: 0; }
     --tv-row-title: 24px;
   }
   html.tv body { font-size: 18px; }
-  html.tv .brand { font-size: 26px; }
   html.tv .hero-title { font-size: 48px; }
 }

@@ -179,9 +179,8 @@ async function boot() {
   }
   ME = await meRes.json();
   SRV_FAVS = new Set(ME.serverFavs || []);
-  $("#who").textContent = ME.name;
-  $("#drawerWho").textContent = ME.name;
-  if (ME.role === "admin") { $("#adminLink").style.display = ""; $("#drawerAdmin").style.display = ""; }
+  $("#railWho").textContent = ME.name;
+  if (ME.role === "admin") $("#railAdmin").hidden = false;
   initRouter();
 }
 
@@ -199,8 +198,8 @@ let APP_VIEW = null; // what #app currently shows: home | search | schedule | ca
 function initRouter() {
   history.replaceState({ d: 0 }, "", location.href);
   window.addEventListener("popstate", () => route());
-  // brand link navigates in-app instead of a full page reload
-  document.querySelector(".brand").addEventListener("click", (e) => { e.preventDefault(); nav("/"); });
+  // brand mark navigates in-app instead of a full page reload
+  document.querySelector(".rail-mark").addEventListener("click", (e) => { e.preventDefault(); nav("/"); });
   route();
   // deep link straight into detail/player: warm the home layer behind it so back is instant
   if (/^\/(title|watch)\//.test(location.pathname)) renderHome();
@@ -220,7 +219,7 @@ function goBack(fallback) {
   else nav(fallback, true);
 }
 
-// Which primary section a path belongs to (drives the drawer highlight + the
+// Which primary section a path belongs to (drives the rail highlight + the
 // home-only tools). "home" hosts everything that isn't the Movies or TV
 // catalog: the unified front page, anime detail/watch, categories, schedule.
 function activeTabFor(path) {
@@ -235,18 +234,27 @@ const APP_NAME = "Mediawan";
 const appName = () => APP_NAME;
 function setActiveTab(tab) {
   document.body.dataset.tab = tab;
-  // Which LIBRARY is on screen, when one is. The web drawer doesn't need this
-  // (it has a single Browse entry), but the TV rail lists the libraries
-  // individually and tints the one you are in — see tv.css.
+  // Which LIBRARY is on screen, when one is. The rail lists Anime, Movies and
+  // TV Shows as peers rather than folding them behind a single Browse entry,
+  // so the highlight follows the library whenever there is one.
   if (tab !== "browse") delete document.body.dataset.lib;
-  document.querySelectorAll(".drawer-link[data-tab]").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
+  syncRail();
+}
+// Light the rail button for wherever we are. `data-id` is a library or "home";
+// browsing everything at once ("all") matches no single button, and lighting
+// one anyway would point at a library the grid isn't showing.
+function syncRail() {
+  const here = document.body.dataset.tab === "browse" ? document.body.dataset.lib : "home";
+  document.querySelectorAll("#rail .rail-btn[data-id]").forEach((b) =>
+    b.classList.toggle("active", b.dataset.id === here));
 }
 
 async function route() {
   const qs = new URLSearchParams(location.search);
   setActiveTab(activeTabFor(location.pathname));
-  // navigating collapses the mobile search unless the user is mid-typing
-  if (document.activeElement !== $("#search")) document.body.classList.remove("search-open");
+  // The strip is part of the search view, so leaving that view puts it away —
+  // unless the user is still typing in it.
+  if (!qs.get("q") && document.activeElement !== $("#search")) closeSearch();
   let m;
   if ((m = location.pathname.match(/^\/title\/(\d+)/))) { Player.hide(); hideMDetail(); return showDetail(+m[1]); }
   if ((m = location.pathname.match(/^\/watch\/(\d+)\/([^/?]+)/)))
@@ -271,7 +279,9 @@ async function route() {
   if (location.pathname.startsWith("/schedule")) return renderSchedule();
   document.title = appName();
   const q = (qs.get("q") || "").trim();
-  if (q.length >= 2) { $("#search").value = q; return runSearch(q); }
+  // A ?q= URL (a reload, a shared link) arrives with the strip closed; the
+  // query it is about to run has to be visible and editable.
+  if (q.length >= 2) { $("#search").value = q; document.body.classList.add("search-open"); return runSearch(q); }
   return renderHome();
 }
 
@@ -345,9 +355,8 @@ function paintHome(data) {
 
   html += `<div class="rows">`;
   if (continueWatching?.length) html += continueRowHtml(continueWatching);
-  // The personal lists carry `list-row`, which is what tv.css hides: on a
-  // remote these are curation, not watching, and the D-pad has to walk past
-  // every one of them to reach something to play.
+  // `list-row` groups the personal rows. The TV used to hide them outright to
+  // save D-pad presses; they are landable there now like anything else.
   if (watchlist?.length) html += rowHtml("My List", watchlist, { cls: "list-row" });
   if (favorites?.length) html += rowHtml("Favorites", favorites, { cls: "list-row" });
   for (const c of collections || []) {
@@ -682,19 +691,19 @@ async function loadEpisodeMeta(anilistId) {
 // Season dropdown above the episode list. Each season is its own AniList
 // title — picking one reopens the modal on that entry.
 function renderSeasonSelect() {
-  const sel = $("#d-season");
   const seasons = detail.franchise?.seasons || [];
-  if (seasons.length < 2) { sel.hidden = true; sel.innerHTML = ""; return; }
-  const cur = detail.meta.anilistId;
-  sel.innerHTML = seasons.map((s, i) =>
-    `<option value="${s.anilistId}" ${s.anilistId === cur ? "selected" : ""}>Season ${i + 1} · ${esc(s.title)}${s.year ? ` (${s.year})` : ""}</option>`
-  ).join("");
-  sel.hidden = false;
-  sel.onchange = () => { const id = Number(sel.value); if (id !== detail.meta.anilistId) openTitle(id); };
+  renderPicker("d-season", {
+    label: "Season",
+    value: detail.meta.anilistId,
+    // A single season is not a choice; an empty list hides the control.
+    options: seasons.length < 2 ? [] : seasons.map((s, i) =>
+      ({ value: s.anilistId, label: `Season ${i + 1} · ${s.title}${s.year ? ` (${s.year})` : ""}` })),
+    onPick: (v) => { const id = Number(v); if (id !== detail.meta.anilistId) openTitle(id); },
+  });
 }
 
 // Movies / specials / related entries of the same series (seasons live in the
-// dropdown). Clicking a card reopens the modal on that title.
+// picker). Clicking a card reopens the modal on that title.
 function renderFranchise() {
   const f = detail.franchise;
   const box = $("#d-franchise");
@@ -2892,18 +2901,118 @@ function gridView(heading, items) {
   return `<div class="rows"><div class="row"><h2>${heading}</h2>${body}</div></div>`;
 }
 
+// ---------------- picker: the app's one dropdown ----------------
+// A native <select> opens a list drawn by the platform, and a D-pad cannot
+// enter that list at all — which is why seasons used to need a second, TV-only
+// chooser rendered beside the episodes. This is plain markup, so one control
+// answers a mouse, a thumb and a remote, and there is one code path behind it.
+const PICKERS = new Map(); // picker element id -> its onPick callback
+
+// `options` is [{ value, label }] — raw text, escaped here. Values are compared
+// as strings, so a number from a payload matches one read back off the DOM. An
+// empty list means "no choice to make" and hides the control outright.
+function renderPicker(id, opts) {
+  const box = $("#" + id);
+  if (!box) return;
+  const options = opts.options || [];
+  if (!options.length) { box.hidden = true; box.innerHTML = ""; PICKERS.delete(id); return; }
+  const cur = options.find((o) => String(o.value) === String(opts.value)) || options[0];
+  box.hidden = false;
+  box.dataset.open = "false";
+  box.innerHTML = `
+    <button class="picker-btn" type="button" aria-haspopup="listbox" aria-expanded="false"${opts.label ? ` aria-label="${esc(opts.label)}"` : ""}>
+      <span class="picker-val">${esc(cur.label)}</span><span class="picker-caret">▾</span>
+    </button>
+    <div class="picker-menu" role="listbox" hidden>
+      ${options.map((o) => `<button class="picker-opt ${String(o.value) === String(cur.value) ? "active" : ""}" type="button"
+        role="option" data-value="${esc(String(o.value))}">${esc(o.label)}</button>`).join("")}
+    </div>`;
+  PICKERS.set(id, opts.onPick);
+}
+
+// Reflect a value the page changed by some other route — a season picked from
+// the picker itself, or restored from a deep link — without rebuilding the list.
+function setPickerValue(id, value) {
+  const box = $("#" + id);
+  if (!box || box.hidden) return;
+  let label = null;
+  box.querySelectorAll(".picker-opt").forEach((o) => {
+    const on = String(o.dataset.value) === String(value);
+    o.classList.toggle("active", on);
+    if (on) label = o.textContent;
+  });
+  if (label !== null) box.querySelector(".picker-val").textContent = label;
+}
+
+function closePickers(except) {
+  document.querySelectorAll('.picker[data-open="true"]').forEach((box) => {
+    if (box === except) return;
+    box.dataset.open = "false";
+    box.querySelector(".picker-menu").hidden = true;
+    box.querySelector(".picker-btn").setAttribute("aria-expanded", "false");
+  });
+}
+
+// One delegated listener covers every picker on the page, including ones that
+// do not exist yet — the filter bar and the season choosers are re-rendered
+// constantly, and re-binding each time is how listeners get lost.
+document.addEventListener("click", (e) => {
+  const opt = e.target.closest(".picker-opt");
+  if (opt) {
+    const box = opt.closest(".picker");
+    closePickers();
+    const pick = PICKERS.get(box.id);
+    if (pick) pick(opt.dataset.value);
+    return;
+  }
+  const btn = e.target.closest(".picker-btn");
+  if (!btn) { closePickers(); return; }   // a click anywhere else dismisses them
+  const box = btn.closest(".picker");
+  const open = box.dataset.open !== "true";
+  closePickers(box);
+  box.dataset.open = String(open);
+  box.querySelector(".picker-menu").hidden = !open;
+  btn.setAttribute("aria-expanded", String(open));
+});
+// Capture phase: Escape dismisses ONE layer, and an open menu is the innermost
+// one. Without this the same press would also close the sheet behind it.
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape" || !document.querySelector('.picker[data-open="true"]')) return;
+  closePickers();
+  e.stopImmediatePropagation();
+}, true);
+
 // ---------------- search (one box, one query, every catalog) ----------------
-// On phones the box is collapsed to a magnifier button (see styles.css ≤720px);
-// tapping expands it onto its own row and focuses it, losing focus while empty
-// folds it back up. Desktop ignores the class entirely.
-document.querySelector(".nav-search-wrap").addEventListener("click", () => {
-  if (document.body.classList.contains("search-open")) return;
-  if (!matchMedia("(max-width: 720px)").matches) return;
+// Summoned from the rail or with "/", dismissed when it is left empty. The same
+// behaviour on a phone, a laptop and a television — a field that is always
+// mounted costs a row of the page and, on a remote, a D-pad stop above
+// everything worth watching.
+function openSearch() {
   document.body.classList.add("search-open");
   $("#search").focus();
+}
+function closeSearch() {
+  document.body.classList.remove("search-open");
+  const box = $("#search");
+  box.value = "";
+  if (document.activeElement === box) box.blur();
+}
+$("#searchClose").addEventListener("click", () => {
+  const had = $("#search").value.trim();
+  closeSearch();
+  // The results were the page — closing the box has to leave somewhere to be.
+  if (had && APP_VIEW === "search") nav("/");
 });
 $("#search").addEventListener("blur", () => {
   if (!$("#search").value.trim()) document.body.classList.remove("search-open");
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "/" || e.ctrlKey || e.metaKey || e.altKey) return;
+  const t = e.target;
+  if (t && (t.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName))) return;
+  if ($("#player").classList.contains("show")) return; // the player owns the keyboard
+  e.preventDefault();
+  openSearch();
 });
 let searchTimer = null;
 $("#search").addEventListener("input", (e) => {
@@ -3067,7 +3176,8 @@ async function renderBrowse(filters) {
   document.title = `Browse · ${appName()}`;
   $("#search").value = "";
   BR.filters = filters;
-  document.body.dataset.lib = filters.type; // the TV rail's "you are here"
+  document.body.dataset.lib = filters.type;
+  syncRail(); // setActiveTab ran before the library was known
   if (!wasHere || !$("#catGrid")) {
     app.innerHTML = `<div class="rows"><div class="row">
       <h2>Browse</h2>
@@ -3124,7 +3234,8 @@ function renderBrowseTypes() {
 }
 
 // The filter bar reuses the app's existing controls: mode-pills for sort,
-// season-selects for genre/year — same geometry everywhere.
+// pickers for genre and year — same geometry everywhere, and drivable by a
+// remote, which a native dropdown never was.
 function renderCatBar() {
   const f = BR.filters;
   const bar = $("#catBar");
@@ -3141,18 +3252,20 @@ function renderCatBar() {
       ${meta.sorts.map((s) => `<button class="mode-pill ${sort === s.id ? "active" : ""}"
         aria-pressed="${sort === s.id}" onclick="setBrowseSort('${s.id}')">${s.label}</button>`).join("")}
     </div>
-    <select class="season-select" id="catGenre" aria-label="Genre">
-      <option value="">All genres</option>
-      ${genres.map((g) => `<option value="${esc(g)}" ${f.genre === g ? "selected" : ""}>${esc(g)}</option>`).join("")}
-    </select>
-    <select class="season-select" id="catYear" aria-label="Year">
-      <option value="">Any year</option>
-      ${meta.years.map((y) => `<option value="${y}" ${f.year === y ? "selected" : ""}>${y}</option>`).join("")}
-    </select>
+    <div class="picker" id="catGenre"></div>
+    <div class="picker" id="catYear"></div>
     ${active ? `<button class="btn ghost mini" onclick="resetBrowseFilters()">Reset</button>` : ""}
     ${f.year ? `<span class="filter-note">A year always shows newest first</span>` : ""}`;
-  $("#catGenre").onchange = (e) => setBrowseFilters({ genre: e.target.value || null });
-  $("#catYear").onchange = (e) => setBrowseFilters({ year: Number(e.target.value) || null });
+  renderPicker("catGenre", {
+    label: "Genre", value: f.genre || "",
+    options: [{ value: "", label: "All genres" }].concat(genres.map((g) => ({ value: g, label: g }))),
+    onPick: (v) => setBrowseFilters({ genre: v || null }),
+  });
+  renderPicker("catYear", {
+    label: "Year", value: f.year || "",
+    options: [{ value: "", label: "Any year" }].concat(meta.years.map((y) => ({ value: y, label: String(y) }))),
+    onPick: (v) => setBrowseFilters({ year: Number(v) || null }),
+  });
 }
 
 // Round-robin rather than concatenation: three sources stacked in blocks would
@@ -3295,12 +3408,10 @@ async function showMediaDetail(kind, id) {
     $("#m-title").textContent = "Loading…";
     $("#m-meta").textContent = ""; $("#m-genres").innerHTML = ""; $("#m-desc").textContent = "";
     $("#m-facts").innerHTML = ""; $("#m-eps").innerHTML = ""; $("#m-note").textContent = "";
-    // The season column too. It is display:none on pointer devices, so a
-    // leftover here was invisible on the web and very visible on the TV, where
-    // tv.css shows it: open a show, then a film, and the show's seasons sat
-    // under the film's hero.
-    $("#m-seasonList").innerHTML = "";
-    $("#m-epsHead").hidden = true; $("#m-season").hidden = true;
+    // The season chooser too: open a show, then a film, and the show's
+    // seasons were still sitting there under the film's hero.
+    renderPicker("m-season", { options: [] });
+    $("#m-epsHead").hidden = true;
     $("#mHeroBg").style.backgroundImage = ""; $("#mHeroArt").style.backgroundImage = "";
     mDetail = null;
   }
@@ -3373,29 +3484,19 @@ function paintMediaDetail() {
   if (kind !== "tv" || !seasons.length) {
     $("#m-epsHead").hidden = true;
     $("#m-eps").innerHTML = "";
-    $("#m-seasonList").innerHTML = "";
+    renderPicker("m-season", { options: [] });
   }
 
   if (kind === "tv" && seasons.length) {
     $("#m-epsHead").hidden = false;
-    const sel = $("#m-season");
-    sel.innerHTML = seasons.map((s) =>
-      `<option value="${s.season}">${esc(s.name)} · ${s.episodes} ep</option>`).join("");
-    sel.hidden = seasons.length < 2; // one season needs no chooser
-    sel.value = String(mDetail.season);
-    sel.onchange = () => loadSeasonEps(id, +sel.value);
-
-    // The TV's chooser. A native <select> opens a list the D-pad can't drive,
-    // so on a remote the seasons stand as their own column instead — the same
-    // arrangement Netflix uses. Hidden on pointer devices by tv.css.
-    const list = $("#m-seasonList");
-    list.innerHTML = seasons.length < 2 ? "" : seasons.map((s) =>
-      `<button class="season-item" data-season="${s.season}">
-        <span class="t">${esc(s.name)}</span><span class="s">${s.episodes} episodes</span>
-      </button>`).join("");
-    list.querySelectorAll(".season-item").forEach((b) =>
-      b.onclick = () => loadSeasonEps(id, +b.dataset.season));
-
+    renderPicker("m-season", {
+      label: "Season",
+      value: mDetail.season,
+      // one season needs no chooser
+      options: seasons.length < 2 ? [] : seasons.map((s) =>
+        ({ value: s.season, label: `${s.name} · ${s.episodes} ep` })),
+      onPick: (v) => loadSeasonEps(id, Number(v)),
+    });
     loadSeasonEps(id, mDetail.season);
   }
 }
@@ -3406,11 +3507,7 @@ async function loadSeasonEps(id, season) {
   const key = MDETAIL_KEY;
   if (mDetail) mDetail.season = season;
   $("#mPlay").textContent = `▶ Play S${season} E1`;
-  // Both choosers track the season, whichever one made the change.
-  const sel = $("#m-season");
-  if (sel && +sel.value !== season) sel.value = String(season);
-  document.querySelectorAll("#m-seasonList .season-item").forEach((b) =>
-    b.classList.toggle("active", +b.dataset.season === season));
+  setPickerValue("m-season", season); // however the season got chosen
   $("#m-eps").innerHTML = `<div class="grid-empty">Loading episodes…</div>`;
   let eps = [];
   try { eps = (await (await fetch(`/api/tv/${encodeURIComponent(id)}/season/${season}`)).json()).episodes || []; } catch {}
@@ -3496,9 +3593,9 @@ async function armTvPlayerNav(id, season, ep) {
   if (here() && Player.movieMode) Player.setStreamNav({ prev, next });
 }
 
-// ---------------- categories (genres live in the drawer menu) ----------------
+// ------- categories (genres are chips on the hero and every detail page) -----
 function openCategory(genre) {
-  closeMenu();
+  closeRailMore();
   nav("/category/" + encodeURIComponent(genre));
 }
 async function renderCategory(genre) {
@@ -3522,7 +3619,7 @@ async function renderCategory(genre) {
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0]; // Mon-first
 let schedByDay = null;
-function openSchedule() { closeMenu(); nav("/schedule"); }
+function openSchedule() { closeRailMore(); nav("/schedule"); }
 async function renderSchedule() {
   APP_VIEW = "schedule";
   document.title = "Schedule · " + appName();
@@ -3565,17 +3662,18 @@ function selectSchedDay(day) {
 }
 
 // ---------------- random pick ----------------
-$("#randomBtn").addEventListener("click", async () => {
-  const btn = $("#randomBtn");
-  btn.disabled = true;
+let randomBusy = false;
+async function surpriseMe() {
+  if (randomBusy) return; // the rail button can be hammered; /api/random is not free
+  randomBusy = true;
   try {
     const res = await fetch("/api/random");
     if (res.ok) { const { item } = await res.json(); openTitle(item.anilistId); }
-  } finally { btn.disabled = false; }
-});
+  } finally { randomBusy = false; }
+}
 
 // ---------------- misc ----------------
-$("#logout").addEventListener("click", async () => { await fetch("/api/logout", { method: "POST" }); location.href = "/login.html"; });
+async function logout() { await fetch("/api/logout", { method: "POST" }); location.href = "/login.html"; }
 function fmt(s) { s = Math.floor(s || 0); const h = Math.floor(s/3600), m = Math.floor(s%3600/60), sec = s%60;
   return (h?h+":"+String(m).padStart(2,"0"):m) + ":" + String(sec).padStart(2,"0"); }
 const MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -3591,40 +3689,40 @@ window.openTvShow = openTvShow; window.openTvEpisode = openTvEpisode; window.goB
 window.setBrowseType = setBrowseType; window.setBrowseSort = setBrowseSort;
 window.resetBrowseFilters = resetBrowseFilters; window.loadMoreBrowse = loadMoreBrowse;
 window.nav = nav;
-// ---- drawer menu (hamburger) ----
-function closeMenu() {
-  const d = $("#drawer");
-  d.classList.remove("open");
-  // release the scroll lock unless a full-screen layer still needs it
-  if (!$("#detail").classList.contains("show") && !$("#player").classList.contains("show"))
-    document.body.style.overflow = "";
-  setTimeout(() => { if (!d.classList.contains("open")) d.hidden = true; }, 300);
+// ---- the rail ----
+// The app's only navigation, on every device. It replaced a top bar, a
+// hamburger drawer and a TV-only icon column that had drifted apart on what
+// they even listed. The buttons are static markup, so they survive a failed
+// boot; this binds behaviour only. data-nav goes somewhere, data-act does
+// something, and on a phone the secondary half hides behind the ⋯ button.
+function closeRailMore() {
+  document.body.classList.remove("rail-more-open");
+  const more = $("#rail .rail-more-btn");
+  if (more) more.setAttribute("aria-expanded", "false");
 }
-async function openMenu() {
-  const d = $("#drawer");
-  d.hidden = false;
-  void d.offsetWidth; // reflow so the slide-in transition runs
-  d.classList.add("open");
-  document.body.style.overflow = "hidden"; // scrolling the drawer shouldn't scroll the page behind it
-  const box = $("#drawerGenres"); // lazy-load the genre chips once
-  if (box && !box.dataset.loaded) {
-    try {
-      const { genres } = await (await fetch("/api/genres")).json();
-      box.innerHTML = genres.map((g) => `<button class="drawer-genre" onclick="openCategory('${esc(g)}')">${esc(g)}</button>`).join("");
-      box.dataset.loaded = "1";
-    } catch {}
+$("#rail").addEventListener("click", (e) => {
+  const b = e.target.closest(".rail-btn");
+  if (!b) return;
+  if (b.dataset.act === "more") {
+    const open = !document.body.classList.contains("rail-more-open");
+    document.body.classList.toggle("rail-more-open", open);
+    b.setAttribute("aria-expanded", String(open));
+    return;
   }
-}
-$("#navBurger").addEventListener("click", openMenu);
-$("#drawerClose").addEventListener("click", closeMenu);
-$("#drawerBackdrop").addEventListener("click", closeMenu);
-document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("#drawer").hidden) closeMenu(); });
-// content sections live in the drawer (Anime / Movies / TV Shows)
-document.querySelectorAll(".drawer-link[data-tab]").forEach((b) =>
-  b.addEventListener("click", () => { nav(b.dataset.tab === "browse" ? "/browse" : "/"); closeMenu(); }));
-$("#drawerSchedule").addEventListener("click", openSchedule);
-$("#drawerRandom").addEventListener("click", () => { closeMenu(); $("#randomBtn").click(); });
-$("#drawerLogout").addEventListener("click", () => $("#logout").click());
+  closeRailMore(); // anything else is a destination or an action; the popover is done
+  if (b.dataset.nav) return nav(b.dataset.nav);
+  if (b.dataset.act === "search") return openSearch();
+  if (b.dataset.act === "schedule") return openSchedule();
+  if (b.dataset.act === "random") return surpriseMe();
+  if (b.dataset.act === "admin") { location.href = "/admin.html"; return; }
+  if (b.dataset.act === "logout") logout();
+});
+document.addEventListener("click", (e) => {
+  if (document.body.classList.contains("rail-more-open") && !e.target.closest("#rail")) closeRailMore();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closeRailMore();
+});
 window.Player = Player; // for tv.js remote-control handling
 window.epThumbFallback = epThumbFallback;
 

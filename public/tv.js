@@ -131,9 +131,15 @@
   const SEL = [
     ".card", ".fr-card", ".ep-row", ".sched-item", ".sched-day",
     ".hero-btn", ".hero-pg-btn", ".mode-pill", ".act-btn", ".detail-play", ".sheet-back",
-    ".season-select", ".season-item", ".p-icon", ".p-bottom .scrub", ".up-next .btn", ".col-row input", "#search",
-    ".filter-bar .btn", ".grid-empty .btn", "#catMore",
-    ".nav .btn", "#navBurger", "#randomBtn", ".drawer-link", ".drawer-genre", ".tv-rail-btn",
+    ".p-icon", ".p-bottom .scrub", ".up-next .btn", ".col-row input", "#search",
+    ".filter-bar .btn", ".grid-empty .btn", "#catMore", ".searchbar-close",
+    // Genre chips: a detour mid-browse, but they are how a library gets
+    // narrowed without a keyboard, so the remote reaches them like anything else.
+    ".genres button", "button.hero-chip",
+    // The picker replaced every <select> precisely so a D-pad could drive one.
+    ".picker-btn", ".picker-opt",
+    // The rail is the app's own navigation now, not a TV-only column.
+    ".rail-btn",
     // (.row-arrow is deliberately absent: moving between cards scrolls the row,
     //  so the hover arrows are dead weight on a remote and tv.css hides them)
     ".auth-card input", ".auth-card .btn", // login / invite pages
@@ -156,11 +162,12 @@
     return menu || null;
   }
   function surface() {
-    // The hamburger drawer sits above everything with a backdrop; while it's
-    // open the D-pad must not wander onto the cards showing through behind it —
-    // that's how "press OK on Movies" ends up activating something invisible.
-    const menu = $("#drawer");
-    if (menu && !menu.hidden && menu.classList.contains("open")) return menu.querySelector(".drawer-panel");
+    // An open picker owns the remote while it is up, wherever it was opened
+    // from — the filter bar, a season chooser inside a detail sheet. Without
+    // this, Left/Right would walk straight out of the list and along the bar
+    // behind it, and OK would fire whatever it landed on.
+    const picker = document.querySelector('.picker[data-open="true"] .picker-menu:not([hidden])');
+    if (picker) return picker;
     if (isShown("#player")) return playerLayer() || $("#player");
     if (isShown("#detail")) return $("#detail");
     // The films/shows sheet is its own layer for the same reason the anime one
@@ -188,7 +195,7 @@
       // search strip's dismissal rides on the focus move itself: leaving the
       // field empty puts the bar away. (The blur listener still covers exits
       // that bypass the D-pad, like the IME's own Cancel.)
-      if (act.id === "search" && !act.value.trim()) document.body.classList.remove("tv-search");
+      if (act.id === "search" && !act.value.trim()) document.body.classList.remove("search-open");
     }
     document.querySelectorAll(".tv-focus").forEach((e) => e.classList.remove("tv-focus")); // never leave a stray highlight
     document.querySelectorAll(".tv-focus-within").forEach((e) => e.classList.remove("tv-focus-within"));
@@ -214,7 +221,7 @@
     // Land on whatever the layer is "currently on" — the playing server, the
     // selected quality, this episode — before falling back to the first card
     // (browse) or the first control.
-    const marked = f.find((e) => e.matches(".srv-row.live, .p-menu-item.active, .p-drawer-ep.active, .drawer-link.active"));
+    const marked = f.find((e) => e.matches(".srv-row.live, .p-menu-item.active, .p-drawer-ep.active, .picker-opt.active"));
     if (marked) { setFocus(marked); return; }
     // The bare player — no menu open, bar not entered — has no destination for
     // a highlight: the arrows seek and Up/Down is the deliberate way into the
@@ -256,7 +263,13 @@
     // which is jarring when nobody asked to type. Inputs stay reachable by an
     // explicit move; they just stop being the fallback.
     const noInput = f.filter((e) => !["INPUT", "SELECT"].includes(e.tagName));
-    setFocus(noInput.find((e) => e.classList.contains("card")) || noInput[0] || f[0]);
+    // Nor on the rail. It is a destination reached with Left, not a resting
+    // place — and it is the FIRST thing in the document now that it is the
+    // app's own navigation, so a plain "first focusable" fallback would park
+    // the highlight on Home every time a ladder-less page (the schedule)
+    // repainted, and Down would then walk the rail instead of the content.
+    const content = noInput.filter((e) => !e.closest("#rail"));
+    setFocus(content.find((e) => e.classList.contains("card")) || content[0] || noInput[0] || f[0]);
   }
 
   // Column memory. Rows scroll independently, so stepping down out of a row and
@@ -277,12 +290,12 @@
     else if (anchorX === null) anchorX = trueX;
     const ax = vertical ? anchorX : trueX;
     let best = null, score = Infinity;
-    const fromRail = !!(cur && cur.closest && cur.closest("#tvRail"));
+    const fromRail = !!(cur && cur.closest && cur.closest("#rail"));
     for (const el of focusables()) {
       if (el === cur) continue;
       // The rail is a deliberate destination, not a neighbour: only Left may
       // reach it. Otherwise "Down past the last season" lands on Sign out.
-      if (!fromRail && dir !== "left" && el.closest && el.closest("#tvRail")) continue;
+      if (!fromRail && dir !== "left" && el.closest && el.closest("#rail")) continue;
       const b = el.getBoundingClientRect();
       const bx = b.left + b.width / 2, by = b.top + b.height / 2;
       // "forward" is always measured from where we actually are; only the
@@ -299,7 +312,7 @@
     }
     if (best) {
       // hopping to the rail remembers the origin, so Right can return to it
-      if (best.closest && best.closest("#tvRail") && cur && !cur.closest("#tvRail")) lastContent = cur;
+      if (best.closest && best.closest("#rail") && cur && !cur.closest("#rail")) lastContent = cur;
       setFocus(best);
     }
   }
@@ -308,14 +321,9 @@
     ensure();
     if (!cur) return;
     if (cur.tagName === "INPUT") { cur.focus(); return; }
-    // A native <select> dropdown can't be driven from a remote, so OK cycles
-    // through its options instead (wrapping) — good enough for the catalog's
-    // genre/year/sort filters without rebuilding them.
-    if (cur.tagName === "SELECT") {
-      cur.selectedIndex = (cur.selectedIndex + 1) % cur.options.length;
-      cur.dispatchEvent(new Event("change", { bubbles: true }));
-      return;
-    }
+    // OK used to have to CYCLE a native <select>, because its dropdown was a
+    // platform-drawn list no remote could enter. Every one of them is a .picker
+    // now — a real list of real buttons — so OK just presses what it is on.
     cur.click();
   }
 
@@ -353,7 +361,10 @@
     }
     const bar = $("#catBar");
     if (bar && !bar.hidden && bar.offsetHeight > 0) {
-      const items = [...bar.querySelectorAll("button, select")].filter(visible);
+      // An open picker is its own layer (see surface()), so its options must
+      // not also count as rungs of the bar underneath it.
+      const items = [...bar.querySelectorAll("button")]
+        .filter((b) => !b.closest(".picker-menu")).filter(visible);
       if (items.length) groups.push({ type: "bar", el: bar, items });
     }
     for (const row of document.querySelectorAll(".row .cards")) {
@@ -363,6 +374,16 @@
     for (const grid of document.querySelectorAll(".cards-grid")) groups.push(...gridLines(grid));
     const more = $("#catMore");
     if (more && more.offsetHeight > 0) groups.push({ type: "foot", el: more.parentElement, items: [more] });
+    // The search strip, when it is up, is the rung above everything else — the
+    // field and the ✕ that dismisses it. Only ever an EXTRA rung, though: on a
+    // ladder-less view (the schedule) an empty group set is the signal to fall
+    // back to the spatial engine, and a lone search rung would swallow it and
+    // trap the remote on a text field.
+    const strip = $("#searchbar");
+    if (groups.length && strip && strip.offsetHeight > 0) {
+      const items = [...strip.querySelectorAll("#search, .searchbar-close")].filter(visible);
+      if (items.length) groups.unshift({ type: "search", el: strip, items });
+    }
     return groups;
   }
   function findPos(groups, el) {
@@ -402,7 +423,10 @@
   function browseDefault() {
     const groups = contentGroups();
     if (!groups.length) return false;
-    const g = groups[0];
+    // Never LAND on the search rung: focusing the field summons the TV's IME,
+    // and nobody asked to type just because a page repainted. It stays one
+    // deliberate Up away.
+    const g = groups.find((x) => x.type !== "search") || groups[0];
     focusItem(g, g.home != null ? g.home : (g.el && g.el.__tvIdx) || 0);
     return true;
   }
@@ -430,7 +454,7 @@
   }
   // The rail is its own vertical rung: Up/Down walk it, Right returns to the
   // content exactly where it was left.
-  const railButtons = () => [...document.querySelectorAll("#tvRail .tv-rail-btn")].filter(visible);
+  const railButtons = () => [...document.querySelectorAll("#rail .rail-btn")].filter(visible);
   function focusRail() {
     const btns = railButtons();
     if (!btns.length) return;
@@ -455,7 +479,7 @@
     } // left on the rail: nothing further left exists
   }
   const onBrowse = () => surface() === document.body && !!$("#app");
-  const onRail = () => !!(cur && cur.classList && cur.classList.contains("tv-rail-btn"));
+  const onRail = () => !!(cur && cur.classList && cur.classList.contains("rail-btn"));
 
   // ---- player control bar ----
   // With no menu open the arrows belong to the video (seek / volume), so the
@@ -562,15 +586,27 @@
     for (const id of ["#colMenu", "#ccMenu", "#audMenu", "#settingsMenu"]) {
       const m = $(id); if (m && !m.hidden) { m.hidden = true; return; }
     }
-    const drawer = $("#drawer");
-    if (drawer && drawer.classList.contains("open")) { $("#drawerClose")?.click(); return; }
+    // An open picker is the innermost layer — one Back closes it and hands the
+    // highlight back to the control, not to the page behind the sheet.
+    const openPicker = document.querySelector('.picker[data-open="true"]');
+    if (openPicker) {
+      const btn = openPicker.querySelector(".picker-btn");
+      btn.click(); // app.js owns open/close; this is the same press a mouse makes
+      setFocus(btn);
+      return;
+    }
     if (isShown("#detail")) { $("#detailClose")?.click(); cur = null; return; }
     // Films and shows use their own sheet (same treatment, different overlay).
     if (isShown("#mDetail")) { $("#mDetailClose")?.click(); cur = null; return; }
     // In-page views with their own ‹ (category sheets): the remote's Back
     // drives it, same contract as everywhere else.
     const sheetBack = document.querySelector("#app .sheet-back");
-    if (sheetBack && visible(sheetBack)) { sheetBack.click(); cur = null; }
+    if (sheetBack && visible(sheetBack)) { sheetBack.click(); cur = null; return; }
+    // The search strip is the outermost layer: nothing is covering it, so this
+    // is the last thing Back can unwind. Its ✕ does the same job for a pointer,
+    // but a remote never reaches it — arrow keys inside a text field move the
+    // caret, which is why the field swallows Left and Right.
+    if (document.body.classList.contains("search-open")) $("#searchClose").click();
   }
 
   document.addEventListener("keydown", (e) => {
@@ -682,8 +718,8 @@
 
   // Re-anchor focus whenever a view or layer changes (elements may be absent
   // on the login / invite / admin pages — observe only what exists).
-  // Wait out the drawer's 280ms slide before re-anchoring: focusability is
-  // decided from on-screen geometry, and a drawer caught mid-transition is
+  // Wait out the player drawer's 280ms slide before re-anchoring: focusability
+  // is decided from on-screen geometry, and a drawer caught mid-transition is
   // still parked off the right edge — we'd find nothing to highlight.
   const SETTLE_MS = 320;
   const reanchor = () => { cur = null; setTimeout(ensure, SETTLE_MS); };
@@ -705,106 +741,61 @@
   // shows up as a class change on #player itself.
   for (const el of document.querySelectorAll("#player .p-drawer, #player .p-menu, #player .p-submenu"))
     new MutationObserver(reanchor).observe(el, { attributes: true, attributeFilter: ["class", "hidden"] });
-  // Same for the hamburger drawer: opening it must pull the highlight onto the
-  // active tab link, and closing it must hand the highlight back to the page.
-  const navDrawer = $("#drawer");
-  if (navDrawer)
-    new MutationObserver(reanchor).observe(navDrawer, { attributes: true, attributeFilter: ["class", "hidden"] });
+  // Opening a picker creates a layer the same way a player menu does, and it
+  // has to take the highlight — onto the option already chosen, which ensure()
+  // finds by .picker-opt.active. data-open is what surface() reads, so that is
+  // what to watch. Pickers are re-rendered constantly, so this observes the
+  // page and re-attaches rather than binding to elements that will be replaced.
+  const watchPickers = () => {
+    for (const box of document.querySelectorAll(".picker")) {
+      if (box.__tvWatched) continue;
+      box.__tvWatched = true;
+      new MutationObserver(reanchor).observe(box, { attributes: true, attributeFilter: ["data-open"] });
+    }
+  };
+  watchPickers();
+  new MutationObserver(watchPickers).observe(document.body, { childList: true, subtree: true });
   if (appEl) new MutationObserver(() => { if (!cur || !document.contains(cur)) setTimeout(ensure, 60); })
     .observe(appEl, { childList: true, subtree: true });
+  // Dismissing the search strip hides the field and the ✕ with display:none —
+  // they stay in the document, so the check above never fires and the highlight
+  // is left on something invisible. Summoning it needs no help: the rail's own
+  // handler moves the highlight onto the field.
+  let wasSearch = document.body.classList.contains("search-open");
+  new MutationObserver(() => {
+    const on = document.body.classList.contains("search-open");
+    if (on === wasSearch) return;
+    wasSearch = on;
+    if (!on) reanchor();
+  }).observe(document.body, { attributes: true, attributeFilter: ["class"] });
   setTimeout(ensure, 800);
 
-  // ---- the rail: TV navigation as a fixed icon column on the left ----
-  // A hamburger menu is a pointer idiom — on a remote it's a detour. The rail
-  // is always there, one Left away, like every native TV app. It doesn't build
-  // new behaviour: each icon proxies a hidden original control (the drawer tab
-  // links, #randomBtn, #logout…), so routing, tab state and auth stay app.js's
-  // business. tv.css hides those originals and pads the page for the column.
-  (function buildRail() {
-    if (!$("#app") || $("#tvRail")) return; // SPA pages only (login has its own layout), once
-    const ic = (d) => `<svg viewBox="0 0 24 24" width="30" height="30" fill="currentColor"><path d="${d}"/></svg>`;
-    // Paths lifted from the app's own icon set so the language stays consistent.
-    const I = {
-      search: "M15.5 14h-.79l-.28-.27a6.5 6.5 0 1 0-.7.7l.27.28v.79l5 4.99L20.49 19zm-6 0A4.5 4.5 0 1 1 14 9.5 4.5 4.5 0 0 1 9.5 14z",
-      home: "M12 3 2 12h3v8h6v-6h2v6h6v-8h3z",
-      anime: "M12 3a9 9 0 1 0 9 9c0-.46-.04-.92-.1-1.36A5.39 5.39 0 0 1 16.5 13a5.4 5.4 0 0 1-5.4-5.4c0-1.7.79-3.22 2.02-4.22C12.75 3.13 12.38 3 12 3z",
-      movies: "M18 3v2h-2V3H8v2H6V3H4v18h2v-2h2v2h8v-2h2v2h2V3h-2zM8 17H6v-2h2v2zm0-4H6v-2h2v2zm0-4H6V7h2v2zm10 8h-2v-2h2v2zm0-4h-2v-2h2v2zm0-4h-2V7h2v2z",
-      tv: "M21 3H3a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h5v2h8v-2h5a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2zm0 14H3V5h18z",
-      sched: "M19 3h-1V1h-2v2H8V1H6v2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2zm0 16H5V9h14v10zM5 7V5h14v2H5zm2 4h5v5H7z",
-      random: "M10.59 9.17 5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z",
-      admin: "M19.14 12.94a7.5 7.5 0 0 0 0-1.88l2.03-1.58a.5.5 0 0 0 .12-.61l-1.92-3.32a.5.5 0 0 0-.59-.22l-2.39.96a7 7 0 0 0-1.62-.94l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54a7 7 0 0 0-1.62.94l-2.39-.96a.5.5 0 0 0-.59.22L2.74 8.87a.5.5 0 0 0 .12.61l2.03 1.58a7.5 7.5 0 0 0 0 1.88l-2.03 1.58a.5.5 0 0 0-.12.61l1.92 3.32a.5.5 0 0 0 .59.22l2.39-.96a7 7 0 0 0 1.62.94l.36 2.54a.5.5 0 0 0 .5.42h3.84a.5.5 0 0 0 .5-.42l.36-2.54a7 7 0 0 0 1.62-.94l2.39.96a.5.5 0 0 0 .59-.22l1.92-3.32a.5.5 0 0 0-.12-.61l-2.03-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z",
-      out: "M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8v-2H4z",
-    };
-    const rail = document.createElement("div");
-    rail.id = "tvRail";
-    rail.innerHTML = `
-      <div class="tv-rail-mark" title="Mediawan"></div>
-      <button class="tv-rail-btn" data-act="search" title="Search">${ic(I.search)}</button>
-      <button class="tv-rail-btn" data-nav="/" data-id="home" title="Home">${ic(I.home)}</button>
-      <button class="tv-rail-btn" data-nav="/browse?type=anime" data-id="anime" title="Anime">${ic(I.anime)}</button>
-      <button class="tv-rail-btn" data-nav="/browse?type=movies" data-id="movies" title="Movies">${ic(I.movies)}</button>
-      <button class="tv-rail-btn" data-nav="/browse?type=tv" data-id="tv" title="TV Shows">${ic(I.tv)}</button>
-      <button class="tv-rail-btn anime-tool" data-act="schedule" title="Schedule">${ic(I.sched)}</button>
-      <button class="tv-rail-btn anime-tool" data-act="random" title="Random">${ic(I.random)}</button>
-      <div class="tv-rail-spacer"></div>
-      <button class="tv-rail-btn" data-act="admin" id="tvRailAdmin" title="Admin" style="display:none">${ic(I.admin)}</button>
-      <button class="tv-rail-btn" data-act="logout" title="Sign out">${ic(I.out)}</button>`;
-    document.body.appendChild(rail);
-
-    // Admin visibility mirrors the hidden original, which boot() reveals for admins.
-    const admin = $("#adminLink");
-    const syncAdmin = () => { $("#tvRailAdmin").style.display = admin && admin.style.display !== "none" ? "" : "none"; };
-    if (admin) { new MutationObserver(syncAdmin).observe(admin, { attributes: true, attributeFilter: ["style"] }); syncAdmin(); }
-
-    // Abandoning the field empty puts the screen back to rail + content only;
-    // with a query still in it the strip stays, so Up from the results can
-    // return to edit it.
-    $("#search")?.addEventListener("blur", () => {
-      if (!$("#search").value.trim()) document.body.classList.remove("tv-search");
-    });
-
-    rail.addEventListener("click", (e) => {
-      const b = e.target.closest(".tv-rail-btn");
-      if (!b) return;
-      // Destination hops dismiss the search strip; the query itself is left alone.
-      if (b.dataset.nav || ["schedule", "random"].includes(b.dataset.act))
-        document.body.classList.remove("tv-search");
-      if (b.dataset.nav) {
-        // Straight to the route. The rail does NOT drive the web drawer by
-        // proxy any more: the web collapsed its libraries behind one Browse
-        // page, and inheriting that here would turn a single button press into
-        // "open Browse, walk down to the pills, pick one" on a D-pad.
-        if (window.nav) window.nav(b.dataset.nav);
-        else location.href = b.dataset.nav; // app.js never booted — still navigable
-        // Landing puts the highlight on the new page's hero button the moment
-        // it exists — the rail is a means, not a destination.
-        let tries = 0;
-        const seek = setInterval(() => {
-          const ready = document.querySelector("#heroCar .hero.active .hero-btn") ||
-                        document.querySelector("#app .card");
-          if (ready && visible(ready)) { clearInterval(seek); cur = null; browseDefault(); }
-          else if (++tries > 25) clearInterval(seek); // page never painted — stay on the rail
-        }, 120);
-        return;
-      }
-      switch (b.dataset.act) {
-        case "search": {
-          const s = $("#search");
-          if (!s) break;
-          // the strip is display:none until summoned — reveal BEFORE focusing,
-          // a hidden input can't take focus
-          document.body.classList.add("tv-search");
-          setFocus(s);
-          try { s.focus(); } catch {}
-          break;
-        }
-        case "schedule": $("#drawerSchedule")?.click(); break;
-        case "random": $("#randomBtn")?.click(); break;
-        case "admin": location.href = "/admin.html"; break;
-        case "logout": $("#logout")?.click(); break;
-      }
-    });
-  })();
-
+  // ---- the rail, on a remote ----
+  // The rail is no longer a TV invention: it is the app's only navigation on
+  // every device, static markup in index.html driven by app.js. What a D-pad
+  // still needs is somewhere to BE afterwards — the rail is a means, not a
+  // destination, so a press has to hand the highlight to what it summoned.
+  const railEl = $("#rail");
+  if (railEl) railEl.addEventListener("click", (e) => {
+    const b = e.target.closest(".rail-btn");
+    if (!b) return;
+    if (b.dataset.act === "search") {
+      // app.js has already revealed the strip and focused the field; a hidden
+      // input cannot take focus, so the highlight follows rather than leads.
+      const box = $("#search");
+      if (box) setFocus(box);
+      return;
+    }
+    if (!b.dataset.nav) return;
+    // Landing puts the highlight on the new page's hero button the moment it
+    // exists, so the rail is never where the remote is left sitting.
+    let tries = 0;
+    const seek = setInterval(() => {
+      const ready = document.querySelector("#heroCar .hero.active .hero-btn") ||
+                    document.querySelector("#app .card");
+      if (ready && visible(ready)) { clearInterval(seek); cur = null; browseDefault(); }
+      else if (++tries > 25) clearInterval(seek); // page never painted — stay on the rail
+    }, 120);
+  });
   window.TVNav = { ensure, setFocus };
 })();

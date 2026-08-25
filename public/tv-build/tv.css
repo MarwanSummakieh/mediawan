@@ -7,9 +7,13 @@ html.tv {
   --tv-grid-card-h: 375px;
   --tv-gap: 26px;
   --tv-row-title: 36px;
+  --rail-w: 148px;
 }
-html.tv .nav,
-html.tv .brand,
+html.tv .rail,
+html.tv .rail-tail,
+html.tv .rail-btn,
+html.tv .searchbar,
+html.tv .picker-btn,
 html.tv .cards,
 html.tv .filter-bar,
 html.tv .genres,
@@ -21,22 +25,26 @@ html.tv .up-next-actions,
 html.tv .srv-row,
 html.tv .p-drawer-ep,
 html.tv .p-drawer-head,
-html.tv .drawer-link,
 html.tv .eps,
 html.tv .p-drawer-list,
 html.tv .srv-foot,
-html.tv .card-scrim,
-html.tv .drawer-panel,
-html.tv .drawer-nav,
-html.tv .drawer-genres,
-html.tv .drawer-foot {
+html.tv .card-scrim {
   gap: 0;
 }
-html.tv .nav > * + * {
-  margin-left: 20px;
+html.tv .rail > * + * {
+  margin-top: 10px;
 }
-html.tv .brand > * + * {
-  margin-left: 10px;
+html.tv .rail-tail > * + * {
+  margin-top: 10px;
+}
+html.tv .rail-btn > * + * {
+  margin-top: 8px;
+}
+html.tv .searchbar > * + * {
+  margin-left: 16px;
+}
+html.tv .picker-btn > * + * {
+  margin-left: 14px;
 }
 html.tv .p-top > * + * {
   margin-left: 22px;
@@ -74,21 +82,6 @@ html.tv .p-drawer-ep > * + * {
 html.tv .p-drawer-head > * + * {
   margin-left: 12px;
 }
-html.tv .drawer-link > * + * {
-  margin-left: 16px;
-}
-html.tv .drawer-panel > * + * {
-  margin-top: 10px;
-}
-html.tv .drawer-nav > * + * {
-  margin-top: 8px;
-}
-html.tv .drawer-foot > * + * {
-  margin-left: 12px;
-}
-html.tv .drawer-genre {
-  margin: 5px;
-}
 html.tv .eps > * + * {
   margin-top: 10px;
 }
@@ -107,46 +100,63 @@ html.tv .rows > * + * {
 html.tv body {
   font-size: 26px;
 }
-html.tv .nav {
-  padding: 28px var(--tv-pad);
+html.tv .rail {
+  padding: 40px 0 34px;
 }
-html.tv .brand {
-  font-size: 40px;
+html.tv .rail-mark {
+  width: 26px;
+  height: 32px;
+  margin-bottom: 26px;
 }
-html.tv .brand::before {
-  width: 19px;
-  height: 24px;
+html.tv .rail-btn {
+  width: calc(var(--rail-w) - 26px);
+  padding: 16px 4px;
+  font-size: 17px;
 }
-html.tv .nav .search {
+html.tv .rail-btn svg {
+  width: 40px;
+  height: 40px;
+}
+html.tv .rail-who {
+  font-size: 15px;
+  padding: 12px 6px 0;
+}
+html.tv .searchbar {
+  padding: 24px var(--tv-pad);
+}
+html.tv .searchbar-ic {
+  width: 30px;
+  height: 30px;
+}
+html.tv .searchbar .search {
   font-size: 26px;
-  padding: 18px 22px 18px 68px;
+  padding: 18px 26px;
+  max-width: 900px;
 }
-html.tv .nav-search-wrap {
-  max-width: 760px;
-}
-html.tv .nav-search-ic {
-  width: 28px;
-  height: 28px;
-  left: 22px;
-}
-html.tv .nav-icon-btn {
+html.tv .searchbar-close {
   width: 68px;
   height: 68px;
 }
-html.tv .nav-icon-btn svg {
-  width: 34px;
-  height: 34px;
+html.tv .searchbar-close svg {
+  width: 30px;
+  height: 30px;
 }
-html.tv .nav .btn {
-  font-size: 22px;
-  padding: 14px 24px;
+html.tv .picker-btn {
+  font-size: 21px;
+  padding: 15px 22px;
 }
-html.tv .nav .who {
-  margin-left: auto;
+html.tv .picker-caret {
+  font-size: 16px;
 }
-html.tv .who,
-html.tv #who {
-  font-size: 22px;
+html.tv .picker-menu {
+  min-width: 420px;
+  max-width: 620px;
+  max-height: 620px;
+  padding: 10px;
+}
+html.tv .picker-opt {
+  font-size: 21px;
+  padding: 15px 18px;
 }
 html.tv .rows {
   padding: 0 var(--tv-pad) 80px;
@@ -230,78 +240,6 @@ html.tv #pBack {
   flex: 0 0 auto;
   margin-right: 12px;
 }
-html.tv body {
-  padding-left: 104px;
-}
-html.tv #tvRail {
-  position: fixed;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 104px;
-  z-index: 40;
-  background: var(--bg2);
-  border-right: 1px solid var(--line);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 26px 0;
-}
-html.tv #tvRail > * + * {
-  margin-top: 12px;
-}
-html.tv .tv-rail-mark {
-  flex: 0 0 auto;
-  width: 20px;
-  height: 24px;
-  background: var(--accent);
-  clip-path: polygon(0 0, 100% 50%, 0 100%);
-  margin-bottom: 14px;
-}
-html.tv .tv-rail-btn {
-  flex: 0 0 auto;
-  width: 68px;
-  height: 68px;
-  border: 0;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  color: var(--muted);
-  border-radius: var(--radius);
-}
-html.tv .tv-rail-spacer {
-  flex: 1 1 auto;
-}
-html.tv .tv-rail-btn.tv-focus {
-  background: var(--accent);
-  color: var(--on-accent);
-  transform: scale(1.08);
-}
-html.tv body[data-tab=home] #tvRail [data-id=home]:not(.tv-focus),
-html.tv body[data-lib=anime] #tvRail [data-id=anime]:not(.tv-focus),
-html.tv body[data-lib=movies] #tvRail [data-id=movies]:not(.tv-focus),
-html.tv body[data-lib=tv] #tvRail [data-id=tv]:not(.tv-focus) {
-  color: var(--accent);
-}
-html.tv .nav {
-  display: none;
-}
-html.tv body.tv-search .nav {
-  display: flex;
-}
-html.tv #navBurger,
-html.tv .nav .brand,
-html.tv .nav #randomBtn,
-html.tv .nav .who,
-html.tv .nav #adminLink,
-html.tv .nav #logout {
-  display: none;
-}
-html.tv .nav-search-wrap {
-  max-width: none;
-}
 html.tv .facts {
   gap: 16px 34px;
 }
@@ -311,114 +249,8 @@ html.tv .fact dt {
 html.tv .fact dd {
   font-size: 20px;
 }
-html.tv .list-row {
-  display: none;
-}
 html.tv .card-actions {
   display: none;
-}
-html.tv #detailActions {
-  display: none;
-}
-html.tv .hero-genres {
-  display: none;
-}
-html.tv .genres {
-  display: none;
-}
-html.tv .drawer-genres-wrap {
-  display: none;
-}
-html.tv #catGenre,
-html.tv #catYear {
-  display: none;
-}
-html.tv .eps-split {
-  display: flex;
-  align-items: flex-start;
-}
-html.tv .eps-split > * + * {
-  margin-left: 34px;
-}
-html.tv .season-list {
-  display: block;
-  flex: 0 0 300px;
-}
-html.tv .season-list > * + * {
-  margin-top: 10px;
-}
-html.tv .eps-split .eps {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-html.tv #m-season {
-  display: none;
-}
-html.tv .season-item {
-  display: block;
-  width: 100%;
-  text-align: left;
-  cursor: pointer;
-  background: var(--card);
-  border: 1px solid transparent;
-  border-radius: var(--radius);
-  color: var(--text);
-  padding: 16px 18px;
-  scroll-margin-top: 170px;
-  scroll-margin-bottom: 60px;
-}
-html.tv .season-item .t {
-  display: block;
-  font-size: 22px;
-  font-weight: 700;
-}
-html.tv .season-item .s {
-  display: block;
-  font-size: 16px;
-  color: var(--muted);
-  margin-top: 3px;
-}
-html.tv .season-item.active {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-html.tv .season-item.active .t {
-  color: var(--accent);
-}
-html.tv .season-item.tv-focus {
-  background: var(--accent);
-  border-color: var(--accent);
-}
-html.tv .season-item.tv-focus .t,
-html.tv .season-item.tv-focus .s {
-  color: var(--on-accent);
-}
-html.tv .drawer-panel {
-  width: 520px;
-  max-width: 40vw;
-  padding: 34px 26px;
-}
-html.tv .drawer-link {
-  font-size: 26px;
-  padding: 18px 22px;
-}
-html.tv .drawer-link svg {
-  width: 28px;
-  height: 28px;
-}
-html.tv .drawer-section-t {
-  font-size: 17px;
-}
-html.tv .drawer-genre {
-  font-size: 20px;
-  padding: 12px 20px;
-}
-html.tv .drawer-who {
-  font-size: 19px;
-}
-html.tv .drawer-foot .btn {
-  font-size: 20px;
-  padding: 12px 20px;
 }
 html.tv .card,
 html.tv .fr-card,
@@ -427,7 +259,8 @@ html.tv .sched-item,
 html.tv .mode-pill,
 html.tv .act-btn,
 html.tv .detail-play,
-html.tv .season-select,
+html.tv .picker-btn,
+html.tv .genres button,
 html.tv .sheet-back,
 html.tv .filter-bar .btn,
 html.tv #catMore {
@@ -435,7 +268,6 @@ html.tv #catMore {
   scroll-margin-bottom: 60px;
 }
 html.tv .hero-car {
-  margin-top: 0;
   height: 44vh;
   min-height: 420px;
   max-height: 560px;
@@ -518,10 +350,6 @@ html.tv .ep-row-t {
 }
 html.tv .ep-row-date {
   font-size: 17px;
-}
-html.tv .season-select {
-  font-size: 20px;
-  padding: 12px 16px;
 }
 html.tv .mode-pill {
   font-size: 19px;
@@ -625,7 +453,7 @@ html.tv .player-overlay.show {
 html.tv .overlay.show .sheet {
   animation: none;
 }
-html.tv .nav,
+html.tv .searchbar,
 html.tv .p-menu,
 html.tv .up-next,
 html.tv .card .badge,
@@ -639,7 +467,7 @@ html.tv .hero-count,
 html.tv .hero-pg-btn {
   backdrop-filter: none;
 }
-html.tv .nav {
+html.tv .searchbar {
   background: var(--bg);
   border-bottom: 1px solid var(--line);
 }
@@ -668,8 +496,7 @@ html.tv .p-menu-back.tv-focus,
 html.tv .srv-row.tv-focus,
 html.tv .p-drawer-ep.tv-focus,
 html.tv .ep-row.tv-focus,
-html.tv .drawer-link.tv-focus,
-html.tv .drawer-genre.tv-focus,
+html.tv .picker-opt.tv-focus,
 html.tv .col-row.tv-focus,
 html.tv .sched-item.tv-focus,
 html.tv .fr-card.tv-focus {
@@ -705,11 +532,13 @@ html.tv .act-btn.tv-focus,
 html.tv .mode-pill.tv-focus,
 html.tv .hero-btn.tv-focus,
 html.tv .p-icon.tv-focus,
-html.tv .nav-icon-btn.tv-focus,
+html.tv .rail-btn.tv-focus,
 html.tv .sheet-back.tv-focus,
-html.tv .season-select.tv-focus,
+html.tv .picker-btn.tv-focus,
 html.tv .detail-play.tv-focus,
-html.tv .card-act.tv-focus,
+html.tv .searchbar-close.tv-focus,
+html.tv .genres button.tv-focus,
+html.tv button.hero-chip.tv-focus,
 html.tv .srv-fav.tv-focus {
   background: var(--accent);
   color: var(--on-accent);
@@ -717,9 +546,14 @@ html.tv .srv-fav.tv-focus {
   transform: scale(1.08);
 }
 html.tv .p-icon.tv-focus svg,
-html.tv .card-act.tv-focus svg,
+html.tv .rail-btn.tv-focus svg,
+html.tv .searchbar-close.tv-focus svg,
 html.tv .srv-fav.tv-focus svg {
   color: var(--on-accent);
+}
+html.tv .rail-btn.active:not(.tv-focus) {
+  background: transparent;
+  color: var(--accent);
 }
 html.tv #search.tv-focus {
   border-color: var(--accent);
@@ -758,6 +592,7 @@ html.tv .card-actions {
 }
 @media (min-width: 2400px) {
   html.tv {
+    --rail-w: 240px;
     --tv-pad: 120px;
     --tv-card-w: 520px;
     --tv-card-h: 760px;
@@ -768,9 +603,6 @@ html.tv .card-actions {
   }
   html.tv body {
     font-size: 40px;
-  }
-  html.tv .brand {
-    font-size: 62px;
   }
   html.tv .hero-title {
     font-size: 130px;
@@ -789,6 +621,7 @@ html.tv .card-actions {
 }
 @media (max-width: 1400px) {
   html.tv {
+    --rail-w: 104px;
     --tv-pad: 40px;
     --tv-card-w: 200px;
     --tv-card-h: 290px;
@@ -799,9 +632,6 @@ html.tv .card-actions {
   }
   html.tv body {
     font-size: 18px;
-  }
-  html.tv .brand {
-    font-size: 26px;
   }
   html.tv .hero-title {
     font-size: 48px;
