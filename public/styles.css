@@ -25,6 +25,8 @@
   --radius-lg: 12px;        /* cards, menus, floating panels */
   --radius-xl: 18px;        /* sheets, drawer, auth card */
   --radius-pill: 999px;     /* chips, pills, tags */
+  --rail-w: 88px;           /* the nav column (a bottom bar on phones) */
+  --rail-h: 62px;           /* ...its height in that bottom-bar form */
   --glass: rgba(255, 255, 255, .06);
   --scrim-rgb: 9, 11, 15;   /* neutral near-black for gradients over artwork */
   --acrylic: rgba(23, 26, 32, .70);  /* translucent chrome; pair with blur */
@@ -45,93 +47,125 @@ a { color: inherit; text-decoration: none; }
 img { display: block; }
 ::selection { background: var(--accent); color: var(--on-accent); }
 
-/* ---- top bar: acrylic, Fluent-style ---- */
-.nav {
-  position: sticky; top: 0; z-index: 30;
-  display: flex; align-items: center; gap: 20px;
-  padding: 14px 40px;
-  background: var(--acrylic);
-  border-bottom: 1px solid var(--line-glass);
-  backdrop-filter: blur(24px) saturate(1.5);
-  -webkit-backdrop-filter: blur(24px) saturate(1.5);
+/* ---- the rail: one navigation, for pointer, thumb and remote ----
+   A phone, a laptop and a television get the same destinations in the same
+   order, from the same markup. Only the geometry differs: a fixed column on
+   the left, or a bottom tab bar on a phone (see the ≤720px block below). This
+   replaced a top bar plus a hamburger drawer plus a TV-only icon column —
+   three navigations that had already drifted apart on what they even listed. */
+.rail {
+  position: fixed; left: 0; top: 0; bottom: 0; width: var(--rail-w); z-index: 30;
+  display: flex; flex-direction: column; align-items: center;
+  padding: 18px 0 14px; gap: 4px;
+  background: var(--bg2); border-right: 1px solid var(--line);
 }
+/* The content column clears the rail. Padding on the body, not a margin on a
+   wrapper: #app is not the only thing in flow, the search strip is too. The
+   class keeps it off the pages that have no rail (login, invite, admin). */
+body.app-shell { padding-left: var(--rail-w); }
+
+/* Play-button brand mark. The MEDIAWAN wordmark it used to sit beside went
+   with the top bar; at rail width the triangle carries the identity alone. */
+.rail-mark { flex: 0 0 auto; width: 16px; height: 19px; background: var(--accent);
+  clip-path: polygon(0 0, 100% 50%, 0 100%); margin-bottom: 12px; }
+
+.rail-btn {
+  flex: 0 0 auto; width: calc(var(--rail-w) - 16px); padding: 8px 2px;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  background: transparent; border: 0; border-radius: var(--radius-lg);
+  color: var(--muted); font-family: inherit; font-size: 11px; font-weight: 600;
+  cursor: pointer; transition: background .15s, color .15s;
+}
+.rail-btn svg { width: 24px; height: 24px; display: block; }
+.rail-btn span { line-height: 1.1; text-align: center; }
+.rail-btn[hidden] { display: none; }
+.rail-btn:hover { background: var(--glass); color: var(--text); }
+/* "You are here". The rail lists the libraries as peers, so it tints by
+   library when one is on screen and by section otherwise — app.js's
+   setActiveTab owns the class. */
+.rail-btn.active { background: var(--accent-dim); color: var(--accent); }
+
+.rail-spacer { flex: 1 1 auto; }
+/* The secondary half — tools, admin, sign-out. Same buttons on every device;
+   only this container moves, to a popover above the bar on phones. */
+.rail-tail { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 100%; }
+.rail-who { color: var(--muted); font-size: 10px; max-width: 100%; padding: 6px 4px 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center; }
+.rail-more-btn { display: none; } /* phones only — the column has room for the lot */
+
+/* ---- search: summoned by the rail, never resident ----
+   One entry point everywhere: the rail's Search button, or "/" on a keyboard.
+   A permanently mounted field costs a row of the page on a phone and, worse, a
+   D-pad stop above everything worth watching on a remote. */
+.searchbar { display: none; position: sticky; top: 0; z-index: 25;
+  align-items: center; gap: 10px; padding: 12px 40px;
+  background: var(--acrylic); border-bottom: 1px solid var(--line-glass);
+  backdrop-filter: blur(24px) saturate(1.5);
+  -webkit-backdrop-filter: blur(24px) saturate(1.5); }
+body.search-open .searchbar { display: flex; }
+.searchbar-ic { flex: 0 0 auto; color: var(--muted); }
+.searchbar .search { flex: 1 1 auto; min-width: 0; max-width: 620px;
+  background: rgba(255,255,255,.07); border: 1px solid var(--line-glass);
+  border-radius: var(--radius-pill); color: var(--text);
+  padding: 10px 16px; font-size: 14px; font-family: inherit; }
+.searchbar .search::-webkit-search-cancel-button,
+.searchbar .search::-webkit-search-decoration { -webkit-appearance: none; display: none; }
+.searchbar .search::placeholder { color: var(--muted); }
+.searchbar .search:focus { outline: none; border-color: var(--accent);
+  background: rgba(var(--bg-rgb), .65); box-shadow: 0 0 0 3px var(--accent-dim); }
+.searchbar-close { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center;
+  width: 38px; height: 38px; border: 0; border-radius: var(--radius);
+  background: transparent; color: var(--muted); cursor: pointer; }
+.searchbar-close:hover { background: var(--glass); color: var(--text); }
+
+/* ---- picker: the app's only dropdown ----
+   Replaces every <select>. A native one opens a list drawn by the platform,
+   which a D-pad cannot enter at all — that is why seasons used to carry a
+   second, TV-only chooser beside the episode list, kept in step by hand. This
+   is ordinary markup, so one control answers a mouse, a thumb and a remote. */
+.picker { position: relative; flex: 0 1 auto; min-width: 0; max-width: 100%; }
+.picker[hidden] { display: none; }
+.picker-btn { display: flex; align-items: center; gap: 8px; max-width: 100%;
+  padding: 9px 14px; background: var(--card); border: 1px solid var(--line);
+  border-radius: var(--radius); color: var(--text);
+  font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+  white-space: nowrap; transition: border-color .15s, box-shadow .15s; }
+.picker-btn:hover { border-color: var(--accent); }
+.picker-val { overflow: hidden; text-overflow: ellipsis; }
+.picker-caret { flex: 0 0 auto; margin-left: auto; color: var(--muted); font-size: 10px; }
+.picker-menu { position: absolute; top: 100%; left: 0; margin-top: 6px; z-index: 20;
+  /* Never narrower than the longest option, never narrower than the button it
+     hangs off. width:100% resolves to the button; min-width raises it from
+     there. (max(200px, 100%) would say it in one line and need Chromium 79 —
+     the TV floor is 69.) */
+  width: 100%; min-width: 200px; max-width: 340px; max-height: 320px; overflow-y: auto;
+  background: var(--bg2); border: 1px solid var(--line); border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-16); padding: 6px; }
+.picker-menu[hidden] { display: none; }
+.picker-opt { display: block; width: 100%; text-align: left; padding: 10px 12px;
+  background: transparent; border: 0; border-radius: var(--radius); color: var(--text);
+  font-family: inherit; font-size: 13px; cursor: pointer; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; }
+.picker-opt:hover { background: var(--card2); }
+.picker-opt.active { color: var(--accent); font-weight: 700; }
+
+/* ---- admin.html's header ----
+   The admin console is a utility page outside the browsing app: no rail, no
+   library, nothing to navigate between. It keeps a plain title bar. */
+.nav { display: flex; align-items: center; gap: 20px; padding: 14px 40px;
+  background: var(--acrylic); border-bottom: 1px solid var(--line-glass); }
+.nav .spacer { flex: 1; }
 .brand { color: var(--text); font-weight: 800; font-size: 22px; letter-spacing: .5px;
   display: inline-flex; align-items: center; gap: 10px; }
-/* play-button brand mark — a solid cyan triangle (clipped, so it stays a
-   pseudo-element and survives the per-tab wordmark swap in setActiveTab) */
 .brand::before { content: ""; width: 11px; height: 13px; background: var(--accent);
   clip-path: polygon(0 0, 100% 50%, 0 100%); flex: 0 0 auto; }
 
 /* keyboard navigation: a visible accent outline, mouse clicks unaffected */
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.nav .spacer { flex: 1; }
 
 /* genre/schedule/random are anime tools — they live on the unified Home and
    hide on the Movies / TV Shows catalog sections */
 body:not([data-tab="home"]) .anime-tool { display: none; }
-
-/* ---- top banner: hamburger + logo + prominent search + icons ---- */
-.nav-icon-btn { display: inline-flex; align-items: center; justify-content: center;
-  width: 42px; height: 42px; border-radius: var(--radius); border: 1px solid transparent;
-  background: var(--glass); color: var(--text); cursor: pointer; flex: 0 0 auto;
-  transition: background .15s, border-color .15s; }
-.nav-icon-btn:hover { background: rgba(255,255,255,.12); }
-.nav-icon-btn svg { display: block; }
-.nav-search-wrap { position: relative; flex: 1 1 auto; max-width: 620px; display: flex; align-items: center; }
-.nav-search-ic { position: absolute; left: 16px; color: var(--muted); pointer-events: none; }
-
-/* ---- slide-in drawer menu (the hamburger opens this) ---- */
-.drawer { position: fixed; inset: 0; z-index: 100; }
-.drawer[hidden] { display: none; }
-.drawer-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,.55); opacity: 0; transition: opacity .25s; }
-.drawer.open .drawer-backdrop { opacity: 1; }
-.drawer-panel { position: absolute; top: 0; left: 0; bottom: 0; width: 300px; max-width: 84vw;
-  background: var(--acrylic); backdrop-filter: blur(28px) saturate(1.5);
-  -webkit-backdrop-filter: blur(28px) saturate(1.5);
-  border-right: 1px solid var(--line-glass);
-  border-radius: 0 var(--radius-xl) var(--radius-xl) 0;
-  box-shadow: var(--shadow-16); padding: 18px 14px;
-  padding-top: max(18px, env(safe-area-inset-top));
-  padding-bottom: calc(18px + env(safe-area-inset-bottom));
-  transform: translateX(-100%); transition: transform .28s cubic-bezier(.4,0,.2,1);
-  display: flex; flex-direction: column; gap: 6px; overflow-y: auto; overscroll-behavior: contain; }
-.drawer.open .drawer-panel { transform: translateX(0); }
-.drawer-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; padding: 4px; }
-.drawer-nav { display: flex; flex-direction: column; gap: 4px; }
-.drawer-link { display: flex; align-items: center; gap: 14px; width: 100%; text-align: left;
-  padding: 12px 14px; border-radius: var(--radius-lg); border: 0; background: transparent; color: var(--muted);
-  font-size: 15px; font-weight: 600; cursor: pointer; transition: background .15s, color .15s; }
-.drawer-link svg { flex: 0 0 auto; opacity: .8; }
-.drawer-link:hover { background: var(--glass); color: var(--text); }
-.drawer-link.active { background: var(--accent-dim); color: var(--accent); }
-.drawer-link.active svg { opacity: 1; }
-.drawer-sep { height: 1px; background: var(--line); margin: 8px 6px; }
-.drawer-section-t { color: var(--muted); font-size: 12px; font-weight: 700; text-transform: uppercase;
-  letter-spacing: .6px; padding: 12px 14px 8px; }
-.drawer-genres { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 8px 10px; }
-.drawer-genre { padding: 8px 14px; border-radius: var(--radius-pill); background: var(--card); color: var(--text);
-  border: 1px solid var(--line); font-size: 13px; cursor: pointer; transition: border-color .15s, color .15s; }
-.drawer-genre:hover { border-color: var(--accent); color: var(--accent); }
-/* account row pinned to the drawer's bottom (sole home of these on phones) */
-.drawer-foot { margin-top: auto; display: flex; align-items: center; gap: 8px;
-  padding: 14px 6px 4px; border-top: 1px solid var(--line); }
-.drawer-who { flex: 1; min-width: 0; color: var(--muted); font-size: 13px;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
-.nav .search { background: rgba(255,255,255,.07); border: 1px solid var(--line-glass);
-  border-radius: var(--radius-pill); color: var(--text); width: 100%;
-  padding: 10px 18px 10px 44px; /* left padding clears the magnifier icon */
-  font-size: 14px; transition: border-color .15s, box-shadow .15s, background .15s;
-  appearance: none; -webkit-appearance: none; }
-.nav .search:hover { background: rgba(255,255,255,.1); }
-/* keep the box clean — the app renders its own results, no native extras */
-.nav .search::-webkit-search-cancel-button,
-.nav .search::-webkit-search-decoration { -webkit-appearance: none; display: none; }
-.nav .search::placeholder { color: var(--muted); }
-.nav .search:focus { outline: none; border-color: var(--accent);
-  background: rgba(var(--bg-rgb), .65);
-  box-shadow: 0 0 0 3px var(--accent-dim); }
-.nav .who { color: var(--muted); font-size: 14px; }
 
 .btn { background: var(--accent); color: var(--on-accent); border: 0; border-radius: var(--radius);
   padding: 10px 20px; font-weight: 700; cursor: pointer; font-size: 14px;
@@ -170,7 +204,7 @@ body:not([data-tab="home"]) .anime-tool { display: none; }
 .sched-ep { font-size: 12px; color: var(--muted); margin-top: 2px; }
 
 /* ---- hero spotlight (centered, glass chips — Miruro-style) ---- */
-.hero-car { position: relative; height: 66vh; min-height: 440px; margin-top: -76px; overflow: hidden; }
+.hero-car { position: relative; height: 66vh; min-height: 440px; overflow: hidden; }
 .hero { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
   text-align: center; padding: 40px; opacity: 0; transition: opacity .7s ease; pointer-events: none; z-index: 0; }
 .hero.active { opacity: 1; pointer-events: auto; z-index: 1; }
@@ -204,12 +238,12 @@ button.hero-chip:hover { border-color: var(--accent); color: var(--accent); }
 .hero-btn.primary:hover { filter: brightness(1.08); background: var(--accent); }
 .hero-btn:active { transform: scale(.98); }
 /* top-left airing/label badge */
-.hero-badge { position: absolute; top: 90px; left: 40px; z-index: 3; display: inline-flex; align-items: center; gap: 7px;
+.hero-badge { position: absolute; top: 28px; left: 40px; z-index: 3; display: inline-flex; align-items: center; gap: 7px;
   background: rgba(var(--scrim-rgb),.45); backdrop-filter: blur(8px); border: 1px solid var(--line-glass);
   border-radius: var(--radius-pill); padding: 8px 16px; font-size: 13px; font-weight: 700; color: var(--text); }
 .hero-badge svg { display: block; color: var(--accent); }
 /* top-right pager */
-.hero-pager { position: absolute; top: 90px; right: 40px; z-index: 3; display: flex; align-items: center; gap: 8px;
+.hero-pager { position: absolute; top: 28px; right: 40px; z-index: 3; display: flex; align-items: center; gap: 8px;
   opacity: 0; transition: opacity .2s; }
 .hero-car:hover .hero-pager { opacity: 1; }
 .hero-pg-btn { width: 42px; height: 34px; border-radius: var(--radius); border: 1px solid var(--line-glass);
@@ -262,7 +296,7 @@ button.hero-chip:hover { border-color: var(--accent); color: var(--accent); }
 .grid-empty code { background: var(--card); padding: 1px 6px; border-radius: var(--radius); }
 
 /* ---- unified filter bar (Movies + TV Shows) ----
-   Reuses the app's own controls — mode-pills for sort, season-selects for
+   Reuses the app's own controls — mode-pills for sort, pickers for
    genre/year — so the catalog pages speak the same squared language as the
    detail pages. Hidden (attribute) while a search query owns the grid. */
 /* Which library the grid is showing. Sits above the filter bar because it
@@ -271,7 +305,7 @@ button.hero-chip:hover { border-color: var(--accent); color: var(--accent); }
 .browse-types .mode-pill { padding: 8px 20px; font-size: 14px; }
 .filter-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 4px 0 18px; }
 .filter-bar[hidden] { display: none; }
-.filter-bar .season-select { max-width: 190px; }
+.filter-bar .picker { max-width: 200px; }
 .filter-note { color: var(--muted); font-size: 12px; }
 .cat-foot { display: flex; justify-content: center; padding: 26px 0 6px; }
 .cat-foot[hidden] { display: none; }
@@ -398,24 +432,12 @@ button.hero-chip:hover { border-color: var(--accent); color: var(--accent); }
   background: var(--bg); color: var(--text); font-size: 13px; }
 .d-desc { color: #c3cad6; font-size: 14px; line-height: 1.6; margin-bottom: 22px; }
 
-/* ---- episodes: season dropdown + scrollable list ---- */
+/* ---- episodes: season picker + scrollable list ---- */
 .eps-head { display: flex; align-items: center; justify-content: space-between;
   gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
 .eps-head-left { display: flex; align-items: center; gap: 14px; flex: 1 1 auto; min-width: 0; }
 .eps-title { font-weight: 800; font-size: 17px; }
-.season-select {
-  appearance: none; -webkit-appearance: none;
-  flex: 0 1 auto; min-width: 0;
-  max-width: min(340px, 100%); padding: 9px 36px 9px 14px;
-  background: var(--card) url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%238a8a8a' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat right 13px center;
-  border: 1px solid var(--line); border-radius: var(--radius);
-  color: var(--text); font-size: 13px; font-weight: 600; cursor: pointer;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  transition: border-color .15s, box-shadow .15s; }
-.season-select:hover { border-color: var(--accent); }
-.season-select:focus { outline: none; border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-dim); }
-.season-select option { background: var(--bg2); color: var(--text); }
+
 .mode-pills { display: flex; gap: 6px; }
 .mode-pill { background: var(--card); border: 1px solid var(--line); color: var(--muted);
   padding: 6px 16px; border-radius: var(--radius-pill); font-size: 13px; cursor: pointer; font-weight: 600;
@@ -740,26 +762,38 @@ th { color: var(--muted); font-weight: 600; }
 
 /* ---- mobile ---- */
 @media (max-width: 720px) {
-  .nav { padding: 10px 14px; gap: 8px; flex-wrap: wrap;
-    padding-top: max(10px, env(safe-area-inset-top)); }
-  .brand { font-size: 17px; letter-spacing: 1.5px; flex: 1; }
-  /* account controls move into the drawer — the top bar stays one tidy row */
-  .nav .who, .nav #logout, .nav #adminLink { display: none; }
-  /* search collapses to a magnifier button so the top bar stays one row;
-     tapping it (app.js adds body.search-open) expands it onto its own line,
-     and it folds back up when it loses focus while empty */
-  .nav-search-wrap { flex: 0 0 auto; width: 42px; height: 42px; justify-content: center;
-    background: var(--glass); border-radius: var(--radius); cursor: pointer;
-    transition: background .15s; }
-  .nav-search-wrap:hover { background: rgba(255,255,255,.12); }
-  .nav-search-wrap .search { display: none; }
-  .nav-search-ic { position: static; }
-  body.search-open .nav-search-wrap { order: 10; flex: 1 0 100%; width: auto; height: auto;
-    background: transparent; cursor: default; max-width: none; }
-  body.search-open .nav-search-wrap .search { display: block; }
-  body.search-open .nav-search-ic { position: absolute; left: 16px; }
+  /* The rail lies on its side: same buttons, same order, now a bottom tab
+     bar. Everything past TV Shows folds behind the ⋯ button, which lifts
+     .rail-tail off the bar as a popover — the buttons themselves are the
+     ones already in the DOM, so nothing is duplicated or kept in step. */
+  .rail { top: auto; right: 0; width: auto; height: var(--rail-h);
+    flex-direction: row; align-items: stretch; gap: 0; padding: 0;
+    padding-bottom: env(safe-area-inset-bottom);
+    border-right: 0; border-top: 1px solid var(--line); }
+  body.app-shell { padding-left: 0;
+    padding-bottom: calc(var(--rail-h) + env(safe-area-inset-bottom)); }
+  .rail-mark, .rail-spacer { display: none; }
+  .rail-btn { flex: 1 1 0; width: auto; min-width: 0; gap: 3px;
+    padding: 8px 2px 6px; border-radius: 0; font-size: 10px; }
+  .rail-btn svg { width: 22px; height: 22px; }
+  /* a filled pill would collide with the bar edge — mark the tab with a rule */
+  .rail-btn.active { background: transparent; box-shadow: inset 0 2px 0 var(--accent); }
+  .rail-more-btn { display: flex; }
+  .rail-tail { position: absolute; right: 8px; bottom: 100%; margin-bottom: 8px;
+    display: none; width: auto; min-width: 200px; padding: 6px;
+    background: var(--bg2); border: 1px solid var(--line);
+    border-radius: var(--radius-lg); box-shadow: var(--shadow-16); }
+  body.rail-more-open .rail-tail { display: flex; }
+  .rail-tail .rail-btn { flex: 0 0 auto; width: 100%; flex-direction: row;
+    justify-content: flex-start; gap: 12px; padding: 11px 12px;
+    border-radius: var(--radius); font-size: 14px; box-shadow: none; }
+  .rail-tail .rail-btn span { text-align: left; }
+  .rail-who { text-align: left; padding: 8px 12px 4px; font-size: 12px; }
 
-  .hero-car { height: 60vh; min-height: 380px; margin-top: -58px; }
+  /* the search strip spans the content column, which is the full width here */
+  .searchbar { padding: 10px 14px; padding-top: max(10px, env(safe-area-inset-top)); }
+
+  .hero-car { height: 60vh; min-height: 380px; margin-top: 0; }
   .hero { padding: 24px 16px 30px; }
   .hero-title { font-size: 28px; }
   .hero-badge { top: 14px; left: 16px; padding: 6px 12px; font-size: 12px; }
@@ -779,7 +813,7 @@ th { color: var(--muted); font-weight: 600; }
   .filter-bar { gap: 8px; }
   .filter-bar .mode-pills { flex: 1 0 100%; }
   .filter-bar .mode-pills .mode-pill { flex: 1; }
-  .filter-bar .season-select { flex: 1 1 0; min-width: 0; max-width: none; }
+  .filter-bar .picker { flex: 1 1 0; min-width: 0; max-width: none; }
 
   /* minmax(0,…): a plain 1fr's auto minimum would let a long nowrap title
      force the column (and the page) wider than the phone screen */
