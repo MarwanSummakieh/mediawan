@@ -706,7 +706,7 @@ app.get("/api/stream/:anilistId/:ep", requireAuth, ah(async (req, res) => {
       if (s.type !== "file") { delivered.push(s); continue; }
       if (deliveredOne) continue; // runner-up releases: listed on demand, not acquired now
       deliveredOne = true;
-      const out = await deliver(s, { local: req.isLocalClient, title: meta.title, mode, seekSec, maxHeight })
+      const out = await deliver(s, { local: req.isLocalClient, title: meta.title, mode, seekSec, maxHeight, replaces: replacesParam(req.query) })
         .catch((e) => ({ kind: "unavailable", error: e.message }));
       if (out.kind === "hls" || out.kind === "file") {
         delivered.push({
@@ -881,6 +881,16 @@ const resParam = (q) => {
   const n = Math.floor(Number(q?.res) || 0);
   return n >= 144 && n <= 4320 ? n : null;
 };
+// The session the player is ABANDONING, when a settings change re-requests the
+// same title (?replaces=<id>&replacesT=<token>). Authorised the same way the
+// seek route is: the signed token that came with that session's playUrl. A
+// bare id would let any signed-in client stop any encoder by guessing, and the
+// player already has the token — it is in the URL it has been reading.
+const replacesParam = (q) => {
+  const id = String(q?.replaces || "");
+  if (!/^[0-9a-f]{6,64}$/.test(id)) return null;
+  return verifyMediaToken(id, q.replacesT) ? id : null;
+};
 // One release file → one playable stream for THIS client.
 //
 // Movies and TV take the same path anime does: the debrid layer now hands back
@@ -890,14 +900,26 @@ const resParam = (q) => {
 // links) still goes out through the proxy exactly as before.
 async function deliverOrProxy(stream, req, title = null, seekSec = 0, audioIndex = null) {
   if (stream?.type !== "file") return { stream: toPlayable(stream, { local: req.isLocalClient }) };
-  const out = await deliver(stream, { local: req.isLocalClient, title, seekSec, audioIndex, maxHeight: resParam(req.query) })
-    .catch((e) => ({ kind: "unavailable", error: e.message }));
+  const out = await deliver(stream, {
+    local: req.isLocalClient, title, seekSec, audioIndex,
+    maxHeight: resParam(req.query), replaces: replacesParam(req.query),
+  }).catch((e) => ({ kind: "unavailable", error: e.message }));
   if (out.kind === "pending") return { pending: true, upgrade: { key: out.key, progress: out.progress } };
   if (out.kind === "unavailable") {
     // Local delivery failed (transcoder busy, cache full). The raw debrid URL
-    // still plays for anything the client can decode, so fall back to it rather
-    // than failing the request outright.
-    return { stream: toPlayable({ ...stream, type: "mp4" }, { local: req.isLocalClient }) };
+    // still plays for anything the client can decode, so fall back to it —
+    // but ONLY for that.
+    //
+    // This used to hand the file over unconditionally, and for the shape a
+    // release usually has (MKV, AC-3 or DTS) the result was a picture with no
+    // sound and no explanation. It surfaced as "changing the resolution stops
+    // the audio", because a resolution change is exactly what asks for a second
+    // encoder while the first is still running, and this was the silent landing
+    // place when the box said no.
+    if (transcodeSessions.rawFileIsPlayable(out.probe)) {
+      return { stream: toPlayable({ ...stream, type: "mp4" }, { local: req.isLocalClient }) };
+    }
+    return { unavailable: true, error: out.error };
   }
   return {
     stream: {
@@ -955,6 +977,10 @@ app.get("/api/movie/:id/stream", requireAuth, ah(async (req, res) => {
   const play = await deliverOrProxy(r.stream, req, r.title,
     Math.max(0, Math.floor(Number(req.query.seek) || 0)), audioParam(req.query));
   if (play.pending) return res.status(202).json({ streams: [], upgrade: play.upgrade, title: r.title });
+  // The transcoder had nothing to give and the raw file is not something a
+  // browser can play. Say so: the alternative is a stream that renders picture
+  // and silence, which reads as the app being broken rather than busy.
+  if (play.unavailable) return res.status(503).json({ error: "transcode-busy", detail: play.error });
   res.json({ streams: [play.stream], best: play.stream, source: r.stream.source, title: r.title });
 }));
 // Every release the player could switch to — no Real-Debrid calls, so opening
@@ -1017,6 +1043,10 @@ app.get("/api/tvshow/:id/:season/:ep/stream", requireAuth, ah(async (req, res) =
   const play = await deliverOrProxy(r.stream, req, r.title,
     Math.max(0, Math.floor(Number(req.query.seek) || 0)), audioParam(req.query));
   if (play.pending) return res.status(202).json({ streams: [], upgrade: play.upgrade, title: r.title });
+  // The transcoder had nothing to give and the raw file is not something a
+  // browser can play. Say so: the alternative is a stream that renders picture
+  // and silence, which reads as the app being broken rather than busy.
+  if (play.unavailable) return res.status(503).json({ error: "transcode-busy", detail: play.error });
   res.json({ streams: [play.stream], best: play.stream, source: r.stream.source, title: r.title });
 }));
 
@@ -1344,6 +1374,7 @@ app.get("/api/debrid/progress/:torrentId", requireAuth, ah(async (req, res) => {
   }
   const play = await deliverOrProxy(st.stream, req, st.filename);
   if (play.pending) return res.json({ ready: false, status: "preparing", progress: 100 });
+  if (play.unavailable) return res.status(503).json({ error: "transcode-busy", detail: play.error });
   res.json({ ready: true, streams: [play.stream], best: play.stream, source: play.stream.source });
 }));
 

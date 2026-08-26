@@ -1249,12 +1249,15 @@ const Player = {
       this.hls.destroy();
       this.hls = null;
     }
+    const leaving = this._sessRef(this.quality);
     let data;
     try {
       const res = await fetch(withQuery(this._streamEndpoint, {
         audio: this._audioIndex,
         seek: seek > 6 ? Math.floor(seek) : null,
-        res: resParam()
+        res: resParam(),
+        replaces: (leaving == null ? void 0 : leaving[1]) || null,
+        replacesT: (leaving == null ? void 0 : leaving[2]) || null
       }));
       if (res.status === 202) {
         const j = await res.json();
@@ -1271,6 +1274,14 @@ const Player = {
       }
       data = await res.json();
     } catch (e) {
+      if (e.code === "transcode-busy") {
+        this.showStatusAction(
+          "The transcoder is busy right now \u2014 nothing else changed.",
+          "Try again",
+          () => this.playStream({ seek, resume: true })
+        );
+        return;
+      }
       if (e.code === "debrid-account") {
         this.showStatus(String(e.message || "The debrid account can't play anything right now."), false);
         return;
@@ -1346,7 +1357,9 @@ const Player = {
     try {
       const seek = resumeAt > 6 ? `&seek=${Math.floor(resumeAt)}` : "";
       const wantRes = resParam() ? `&res=${resParam()}` : "";
-      const res = await fetch(`/api/stream/${this.meta.anilistId}/${ep}?mode=${this.mode}${seek}${wantRes}`);
+      const left = this._sessRef(this.quality);
+      const leaving = left ? `&replaces=${left[1]}&replacesT=${encodeURIComponent(left[2])}` : "";
+      const res = await fetch(`/api/stream/${this.meta.anilistId}/${ep}?mode=${this.mode}${seek}${wantRes}${leaving}`);
       if (res.status === 202) {
         data = await res.json();
         if ((_a = data.downloading) == null ? void 0 : _a.torrentId) {

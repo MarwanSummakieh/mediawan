@@ -1336,11 +1336,18 @@ const Player = {
     this.resetServers();
     if (fresh) this.loadStreamSubs(); // in parallel with stream resolution
     if (this.hls) { this.hls.destroy(); this.hls = null; }
+    // The session this request REPLACES. A settings change (resolution, audio
+    // track) re-requests the same title and the server keys a new encoder off
+    // the new setting, so without saying what we are leaving, both are counted
+    // and a small box runs out of encoders after the second change. The token
+    // is the one that authorised the stream we have been reading.
+    const leaving = this._sessRef(this.quality);
     let data;
     try {
       const res = await fetch(withQuery(this._streamEndpoint, {
         audio: this._audioIndex, seek: seek > 6 ? Math.floor(seek) : null,
         res: resParam(),
+        replaces: leaving?.[1] || null, replacesT: leaving?.[2] || null,
       }));
       // 202 = nothing was cached, so Real-Debrid is fetching the best release.
       // A wait, not a failure — show progress instead of the dead end this
@@ -1357,6 +1364,17 @@ const Player = {
       }
       data = await res.json();
     } catch (e) {
+      // Busy, not broken, and it clears in seconds — so this offers the retry
+      // rather than sending the viewer off to hunt through the Servers panel
+      // for a release that was never the problem. It is also the ONLY thing
+      // standing between the viewer and a stream that plays picture and
+      // silence, which is what this used to fall through to.
+      if (e.code === "transcode-busy") {
+        this.showStatusAction(
+          "The transcoder is busy right now — nothing else changed.",
+          "Try again", () => this.playStream({ seek, resume: true }));
+        return;
+      }
       // A lapsed subscription is not a release problem, and offering "choose a
       // server" for it sends the viewer to hunt through a hundred rows that
       // will every one of them fail the same way. Say what is actually wrong
@@ -1434,7 +1452,11 @@ const Player = {
       // viewer stares at a spinner.
       const seek = resumeAt > 6 ? `&seek=${Math.floor(resumeAt)}` : "";
       const wantRes = resParam() ? `&res=${resParam()}` : "";
-      const res = await fetch(`/api/stream/${this.meta.anilistId}/${ep}?mode=${this.mode}${seek}${wantRes}`);
+      // See playStream: the session being left behind, so the server can retire
+      // it instead of counting it against the next one.
+      const left = this._sessRef(this.quality);
+      const leaving = left ? `&replaces=${left[1]}&replacesT=${encodeURIComponent(left[2])}` : "";
+      const res = await fetch(`/api/stream/${this.meta.anilistId}/${ep}?mode=${this.mode}${seek}${wantRes}${leaving}`);
       // 202 = nothing playable YET, but the quality release is on its way.
       // Two flavours: an upgrade key (local delivery is preparing a file it
       // already has) or a debrid download (nothing was cached, Real-Debrid is

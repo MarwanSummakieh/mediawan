@@ -277,6 +277,48 @@ test("a multi-track file never direct-plays — the client would pick its own tr
 // decision to channel count, where the English 5.1 beats the Japanese 2.0 on
 // the very request that asked for Japanese.
 import { pickAudio, hasLanguage } from "../lib/transcode/probe.mjs";
+import { rawFileIsPlayable } from "../lib/transcode/session.mjs";
+
+// ---------- rawFileIsPlayable: the fallback when the transcoder says no ----------
+//
+// Refusing to transcode sends the caller looking for a fallback, and the only
+// one available is the untouched release. Whether that is a fallback at all is
+// this question. It used to be assumed rather than asked, and the assumption
+// was wrong for the shape a release usually has — which is how "changing the
+// resolution stops the audio" happened: the dial asks for a second encoder, a
+// full box refuses, and the raw MKV that came back played picture and silence.
+
+test("rawFileIsPlayable: an MP4 of H.264 + AAC is genuinely playable", () => {
+  assert.equal(rawFileIsPlayable(probeOf({ container: "mov,mp4,m4a" })), true);
+});
+
+test("rawFileIsPlayable: AC-3 audio is a silent movie, not a fallback", () => {
+  const p = probeOf({ acodec: "ac3", channels: 6, container: "mov,mp4,m4a" });
+  assert.equal(p.video.browserSafe, true, "the PICTURE is fine — that is the trap");
+  assert.equal(rawFileIsPlayable(p), false);
+});
+
+test("rawFileIsPlayable: an mkv is not something a browser opens", () => {
+  assert.equal(rawFileIsPlayable(probeOf()), false, "matroska, however safe its codecs");
+});
+
+test("rawFileIsPlayable: HEVC video fails on the picture instead", () => {
+  assert.equal(rawFileIsPlayable(probeOf({ vcodec: "hevc", container: "mov,mp4,m4a" })), false);
+});
+
+test("rawFileIsPlayable: EVERY track has to be decodable, not just the chosen one", () => {
+  // Nothing maps streams on this path, so the browser plays whichever track it
+  // prefers — commonly the 5.1 one, which is commonly the undecodable one.
+  const p = probeOf({ container: "mov,mp4,m4a" });
+  p.audio.push({ index: 2, order: 1, codec: "eac3", channels: 6, layout: null,
+    language: "eng", title: null, browserSafe: false });
+  assert.equal(rawFileIsPlayable(p), false);
+});
+
+test("rawFileIsPlayable: no probe at all is not a licence to guess", () => {
+  assert.equal(rawFileIsPlayable(null), false);
+  assert.equal(rawFileIsPlayable(undefined), false);
+});
 
 const SUB = ["jpn", "ja", "jp"], DUB = ["eng", "en"];
 const at = (tracks) => ({ audio: tracks.map((t, i) => ({ order: i, index: i + 1, browserSafe: true, ...t })) });
