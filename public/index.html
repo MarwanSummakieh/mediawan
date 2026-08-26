@@ -98,13 +98,17 @@
         <div class="eps-head">
           <div class="eps-head-left">
             <div class="eps-title">Episodes</div>
-            <!-- .picker, not <select>: a native dropdown opens a list a remote
-                 cannot drive at all. One control for mouse, thumb and D-pad. -->
-            <div class="picker" id="d-season" hidden></div>
           </div>
           <div class="mode-pills" id="d-modePills"></div>
         </div>
-        <div class="eps" id="d-eps"></div>
+        <!-- Seasons as tabs beside the episodes, never a dropdown. A menu has
+             to be opened before it can be read; a column of tabs shows every
+             season at once and puts each one a single press away. Films and
+             shows use the identical block below. -->
+        <div class="eps-split">
+          <aside class="season-list" id="d-seasonList"></aside>
+          <div class="eps" id="d-eps"></div>
+        </div>
         <div class="src-note" id="d-note"></div>
         <div class="fr-wrap" id="d-franchise" hidden></div>
       </div>
@@ -136,14 +140,13 @@
         <div class="eps-head" id="m-epsHead" hidden>
           <div class="eps-head-left">
             <div class="eps-title">Episodes</div>
-            <!-- One season chooser for every device. It used to be a <select>
-                 plus a TV-only column of buttons beside the episodes, kept in
-                 step by hand; .picker is drivable by a mouse, a thumb and a
-                 D-pad alike, so the second copy is gone. -->
-            <div class="picker" id="m-season" hidden></div>
           </div>
         </div>
-        <div class="eps" id="m-eps"></div>
+        <!-- Same season tabs as the anime sheet above, same renderer. -->
+        <div class="eps-split">
+          <aside class="season-list" id="m-seasonList"></aside>
+          <div class="eps" id="m-eps"></div>
+        </div>
         <div class="src-note" id="m-note"></div>
       </div>
     </div>
@@ -152,6 +155,14 @@
   <!-- ===== immersive Netflix-style player ===== -->
   <div class="player-overlay" id="player">
     <video id="video" playsinline></video>
+    <!-- Subtitles are painted here, by us, not by the browser. `::cue` can
+         colour cue text and give it a box, but it cannot MOVE it — there is no
+         way to say "higher up" or "along the left edge" — and the Tizen
+         webview's cue renderer ignores most of what it is handed anyway. So the
+         <track> is left in "hidden" mode (cues stay live, nothing is drawn) and
+         SubStyle renders the active ones in here, where size, place and colour
+         are all ours to set. -->
+    <div class="sub-layer" id="subLayer"></div>
 
     <!-- center: spinner / status -->
     <div class="p-center" id="pCenter">
@@ -234,6 +245,7 @@
         <button class="p-menu-row" data-goto="quality"><span>Quality</span><span class="p-menu-val" id="valQuality">Auto</span></button>
         <button class="p-menu-row" data-goto="servers"><span>Server</span><span class="p-menu-val" id="valServer">Auto</span></button>
         <button class="p-menu-row" data-goto="speed"><span>Playback speed</span><span class="p-menu-val" id="valSpeed">Normal</span></button>
+        <button class="p-menu-row" data-goto="subs"><span>Subtitle style</span><span class="p-menu-val" id="valSubStyle">Medium</span></button>
       </div>
       <div class="p-submenu" data-sub="quality" hidden>
         <button class="p-menu-back" data-goto="root">‹ Quality</button>
@@ -248,6 +260,32 @@
       <div class="p-submenu" data-sub="speed" hidden>
         <button class="p-menu-back" data-goto="root">‹ Playback speed</button>
         <div id="speedList"></div>
+      </div>
+      <!-- Subtitle appearance. One page per property rather than one long
+           list: on a remote every extra row is a press, and each of these is a
+           choice you make once and then forget. A sample cue shows on the video
+           for as long as any of these pages is open, so the effect of a change
+           is visible without hunting for a line of dialogue. -->
+      <div class="p-submenu" data-sub="subs" hidden>
+        <button class="p-menu-back" data-goto="root">‹ Subtitle style</button>
+        <div class="p-menu-section" id="subStyleList"></div>
+        <div class="p-menu-note">Applies to every title, on this device.</div>
+      </div>
+      <div class="p-submenu" data-sub="subsize" hidden>
+        <button class="p-menu-back" data-goto="subs">‹ Text size</button>
+        <div id="subSizeList"></div>
+      </div>
+      <div class="p-submenu" data-sub="subpos" hidden>
+        <button class="p-menu-back" data-goto="subs">‹ Position</button>
+        <div id="subPosList"></div>
+      </div>
+      <div class="p-submenu" data-sub="subcolor" hidden>
+        <button class="p-menu-back" data-goto="subs">‹ Text colour</button>
+        <div class="p-menu-section" id="subColorList"></div>
+      </div>
+      <div class="p-submenu" data-sub="subbg" hidden>
+        <button class="p-menu-back" data-goto="subs">‹ Background</button>
+        <div class="p-menu-section" id="subBgList"></div>
       </div>
     </div>
 

@@ -136,8 +136,10 @@
     // Genre chips: a detour mid-browse, but they are how a library gets
     // narrowed without a keyboard, so the remote reaches them like anything else.
     ".genres button", "button.hero-chip",
-    // The picker replaced every <select> precisely so a D-pad could drive one.
-    ".picker-btn", ".picker-opt",
+    // The picker replaced the catalog filters (<select> drew its list in the
+    // platform, where a D-pad cannot reach). Seasons skip the menu entirely and
+    // stand as tabs beside the episodes.
+    ".picker-btn", ".picker-opt", ".season-item",
     // The rail is the app's own navigation now, not a TV-only column.
     ".rail-btn",
     // (.row-arrow is deliberately absent: moving between cards scrolls the row,
@@ -221,7 +223,7 @@
     // Land on whatever the layer is "currently on" — the playing server, the
     // selected quality, this episode — before falling back to the first card
     // (browse) or the first control.
-    const marked = f.find((e) => e.matches(".srv-row.live, .p-menu-item.active, .p-drawer-ep.active, .picker-opt.active"));
+    const marked = f.find((e) => e.matches(".srv-row.live, .p-menu-item.active, .p-drawer-ep.active, .picker-opt.active, .season-item.active"));
     if (marked) { setFocus(marked); return; }
     // The bare player — no menu open, bar not entered — has no destination for
     // a highlight: the arrows seek and Up/Down is the deliberate way into the

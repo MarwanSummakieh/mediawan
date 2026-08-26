@@ -118,9 +118,12 @@
     // narrowed without a keyboard, so the remote reaches them like anything else.
     ".genres button",
     "button.hero-chip",
-    // The picker replaced every <select> precisely so a D-pad could drive one.
+    // The picker replaced the catalog filters (<select> drew its list in the
+    // platform, where a D-pad cannot reach). Seasons skip the menu entirely and
+    // stand as tabs beside the episodes.
     ".picker-btn",
     ".picker-opt",
+    ".season-item",
     // The rail is the app's own navigation now, not a TV-only column.
     ".rail-btn",
     // (.row-arrow is deliberately absent: moving between cards scrolls the row,
@@ -190,7 +193,7 @@
     var _a, _b, _c, _d;
     if (cur && document.contains(cur) && visible(cur) && surface().contains(cur)) return;
     const f = focusables();
-    const marked = f.find((e) => e.matches(".srv-row.live, .p-menu-item.active, .p-drawer-ep.active, .picker-opt.active"));
+    const marked = f.find((e) => e.matches(".srv-row.live, .p-menu-item.active, .p-drawer-ep.active, .picker-opt.active, .season-item.active"));
     if (marked) {
       setFocus(marked);
       return;
