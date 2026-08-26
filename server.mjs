@@ -627,6 +627,7 @@ app.get("/api/stream/:anilistId/:ep", requireAuth, ah(async (req, res) => {
   // at zero. Without this, "continue watching" at 32:00 waited for 32 minutes
   // of video to be encoded before the seek could land.
   const seekSec = Math.max(0, Math.floor(Number(req.query.seek) || 0));
+  const maxHeight = resParam(req.query);
   try {
     // Fan out across every provider. Quality-tier sources (debrid-backed) lead;
     // the floor tier is appended so something always plays. Streams come back
@@ -705,7 +706,7 @@ app.get("/api/stream/:anilistId/:ep", requireAuth, ah(async (req, res) => {
       if (s.type !== "file") { delivered.push(s); continue; }
       if (deliveredOne) continue; // runner-up releases: listed on demand, not acquired now
       deliveredOne = true;
-      const out = await deliver(s, { local: req.isLocalClient, title: meta.title, mode, seekSec })
+      const out = await deliver(s, { local: req.isLocalClient, title: meta.title, mode, seekSec, maxHeight })
         .catch((e) => ({ kind: "unavailable", error: e.message }));
       if (out.kind === "hls" || out.kind === "file") {
         delivered.push({
@@ -733,6 +734,11 @@ app.get("/api/stream/:anilistId/:ep", requireAuth, ah(async (req, res) => {
           languageOk: out.plan?.languageOk !== false,
           audioTracks: out.plan?.audioTracks || [],
           audioIndex: out.plan?.audioIndex ?? null,
+          // What the resolution dial actually produced, and what the file
+          // holds. The menu shows both, so "Auto" can say what Auto chose
+          // instead of leaving the viewer to guess from the picture.
+          outputHeight: out.plan?.outputHeight ?? out.probe?.video?.height ?? null,
+          sourceHeight: out.probe?.video?.height ?? null,
         });
       } else if (out.kind === "pending") {
         upgrade = { key: out.key, progress: out.progress, source: s.source, release: s.release || null };
@@ -866,6 +872,15 @@ const audioParam = (q) => {
   const n = Number(q.audio);
   return Number.isInteger(n) && n >= 0 ? n : null;
 };
+// The viewer's RESOLUTION dial (?res=720), in output lines. Deliberately its
+// own control rather than a consequence of the bitrate budget: those are two
+// different questions ("how many pixels" and "how many bits"), and folding them
+// together is what left every remote play pinned to whatever the planner
+// thought best. Absent → the planner decides, exactly as before.
+const resParam = (q) => {
+  const n = Math.floor(Number(q?.res) || 0);
+  return n >= 144 && n <= 4320 ? n : null;
+};
 // One release file → one playable stream for THIS client.
 //
 // Movies and TV take the same path anime does: the debrid layer now hands back
@@ -875,7 +890,7 @@ const audioParam = (q) => {
 // links) still goes out through the proxy exactly as before.
 async function deliverOrProxy(stream, req, title = null, seekSec = 0, audioIndex = null) {
   if (stream?.type !== "file") return { stream: toPlayable(stream, { local: req.isLocalClient }) };
-  const out = await deliver(stream, { local: req.isLocalClient, title, seekSec, audioIndex })
+  const out = await deliver(stream, { local: req.isLocalClient, title, seekSec, audioIndex, maxHeight: resParam(req.query) })
     .catch((e) => ({ kind: "unavailable", error: e.message }));
   if (out.kind === "pending") return { pending: true, upgrade: { key: out.key, progress: out.progress } };
   if (out.kind === "unavailable") {
@@ -905,6 +920,10 @@ async function deliverOrProxy(stream, req, title = null, seekSec = 0, audioIndex
       audioTracks: out.plan?.audioTracks || [],
       audioIndex: out.plan?.audioIndex ?? null,
       embeddedSubs: out.kind === "hls" ? embeddedSubsOf(out.probe) : [], // see the anime route
+      // The resolution dial's result, and the source it came from — see the
+      // anime route.
+      outputHeight: out.plan?.outputHeight ?? out.probe?.video?.height ?? null,
+      sourceHeight: out.probe?.video?.height ?? null,
     },
   };
 }
@@ -1274,7 +1293,7 @@ app.get("/media/file/:key", mediaCors, requireMediaGrant((req) => req.params.key
 // head start. The client seeks into it at the current timestamp — instant start
 // AND remux quality, instead of choosing between them.
 app.post("/api/upgrade", requireAuth, ah(async (req, res) => {
-  const { anilistId, ep, mode = "sub" } = req.body || {};
+  const { anilistId, ep, mode = "sub", res: wantRes = null } = req.body || {};
   const meta = db.getCachedMeta(Number(anilistId));
   if (!meta) return res.status(404).json({ error: "unknown title" });
 
@@ -1282,7 +1301,14 @@ app.post("/api/upgrade", requireAuth, ah(async (req, res) => {
   const file = streams.find((s) => s.type === "file");
   if (!file) return res.json({ available: false, reason: "no quality release found" });
 
-  const out = await deliver(file, { local: req.isLocalClient, title: meta.title, mode: mode === "dub" ? "dub" : "sub" });
+  // The dial travels with the upgrade too: the swap happens mid-play, and
+  // landing on a different picture size than the one the viewer chose would
+  // read as the app overruling them.
+  const out = await deliver(file, {
+    local: req.isLocalClient, title: meta.title,
+    mode: mode === "dub" ? "dub" : "sub",
+    maxHeight: resParam({ res: wantRes }),
+  });
   if (out.kind === "pending") return res.json({ available: true, ready: false, key: out.key, progress: out.progress });
   if (out.kind === "unavailable") return res.json({ available: false, reason: out.error });
   res.json({

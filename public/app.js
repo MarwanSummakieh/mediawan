@@ -65,6 +65,31 @@ const srvIsFav = (k) => !!k && SRV_FAVS.has(k);
 // Only release signatures mean anything to the server's ranker; provider labels
 // are matched client-side against the streams it already returned.
 const srvPreferParam = () => [...SRV_FAVS].filter((k) => k.startsWith("q")).join(",");
+
+// ---- output resolution ----
+//
+// A dial of its own, and deliberately not a consequence of anything else. The
+// Quality menu picks WHICH RELEASE plays; this picks HOW BIG the picture the
+// server sends is, which for a transcoded stream is a completely separate
+// question — the server used to answer it alone (a capped remote encode was
+// always scaled to 1080p, whatever the connection could really carry) and there
+// was no way to disagree in either direction.
+//
+// Stored per device rather than per title: it describes the screen and the link
+// in front of the viewer, and both of those outlive one film.
+const RES_KEY = "mw.maxHeight";
+const RES_CHOICES = [0, 2160, 1440, 1080, 720, 480];
+const resLabel = (h) => (h ? (h === 2160 ? "2160p (4K)" : h + "p") : "Auto");
+const resGet = () => {
+  try { return RES_CHOICES.includes(Number(localStorage.getItem(RES_KEY))) ? Number(localStorage.getItem(RES_KEY)) : 0; }
+  catch (e) { return 0; }
+};
+const resSet = (h) => {
+  try { h ? localStorage.setItem(RES_KEY, String(h)) : localStorage.removeItem(RES_KEY); } catch (e) {}
+};
+// withQuery drops nulls, so "Auto" sends no parameter at all and the server
+// keeps its own judgement.
+const resParam = () => resGet() || null;
 function srvToggleFav(key) {
   if (!key) return false;
   const on = !SRV_FAVS.has(key);
@@ -1315,6 +1340,7 @@ const Player = {
     try {
       const res = await fetch(withQuery(this._streamEndpoint, {
         audio: this._audioIndex, seek: seek > 6 ? Math.floor(seek) : null,
+        res: resParam(),
       }));
       // 202 = nothing was cached, so Real-Debrid is fetching the best release.
       // A wait, not a failure — show progress instead of the dead end this
@@ -1356,7 +1382,7 @@ const Player = {
     // A session that starts mid-film reports its own start offset, so hand
     // loadQuality the ABSOLUTE position and let it place the timeline.
     this.loadQuality(this.quality, seek || 0, true);
-    this.buildQualityMenu(); this.buildSpeedMenu(); this.buildServers(); this.buildAudMenu();
+    this.buildQualityMenu(); this.buildSpeedMenu(); this.buildServers(); this.buildAudMenu(); this.buildResMenu();
     // other quality bands arrive in the background — after a breather, so the
     // probing never competes with this play's own Real-Debrid calls (429s)
     clearTimeout(this._altsTimer);
@@ -1407,7 +1433,8 @@ const Player = {
       // alternative is an encoder grinding from 0:00 toward it while the
       // viewer stares at a spinner.
       const seek = resumeAt > 6 ? `&seek=${Math.floor(resumeAt)}` : "";
-      const res = await fetch(`/api/stream/${this.meta.anilistId}/${ep}?mode=${this.mode}${seek}`);
+      const wantRes = resParam() ? `&res=${resParam()}` : "";
+      const res = await fetch(`/api/stream/${this.meta.anilistId}/${ep}?mode=${this.mode}${seek}${wantRes}`);
       // 202 = nothing playable YET, but the quality release is on its way.
       // Two flavours: an upgrade key (local delivery is preparing a file it
       // already has) or a debrid download (nothing was cached, Real-Debrid is
@@ -1442,7 +1469,7 @@ const Player = {
       || data.streams.find((s) => s.quality === (this.quality?.quality))
       || data.streams[0];
     this.loadQuality(this.quality, resumeAt, true);
-    this.buildQualityMenu(); this.buildSpeedMenu(); this.buildAudMenu(); this.buildCcMenu(); this.buildServers();
+    this.buildQualityMenu(); this.buildSpeedMenu(); this.buildAudMenu(); this.buildCcMenu(); this.buildServers(); this.buildResMenu();
     this.renderDrawer();
     this.highlightEp();
     // Playing from the floor tier while a better release is still landing:
@@ -1511,7 +1538,7 @@ const Player = {
       this.quality = st.best || this.streams[0];
       if (!this.quality) return this._noSource?.();
       this.loadQuality(this.quality, 0, true);
-      this.buildQualityMenu(); this.buildSpeedMenu(); this.buildServers();
+      this.buildQualityMenu(); this.buildSpeedMenu(); this.buildServers(); this.buildResMenu();
     };
     this._dlTimer = setTimeout(poll, 2500);
   },
@@ -1548,7 +1575,7 @@ const Player = {
       try {
         up = await (await fetch("/api/upgrade", {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ anilistId: this.meta.anilistId, ep: this.ep, mode: this.mode }),
+          body: JSON.stringify({ anilistId: this.meta.anilistId, ep: this.ep, mode: this.mode, res: resParam() }),
         })).json();
       } catch { this._upgradeTimer = setTimeout(poll, 5000); return; }
 
@@ -1576,7 +1603,7 @@ const Player = {
     // failure fallback should walk DOWN from here to the floor tier.
     this.streams = [stream, ...this.streams.filter((s) => s.url !== stream.url)];
     this.loadQuality(stream, at, true);
-    this.buildQualityMenu(); this.buildServers();
+    this.buildQualityMenu(); this.buildServers(); this.buildResMenu();
     const label = [up.release, up.mbps ? `${up.mbps.toFixed(1)} Mbps` : null].filter(Boolean).join(" · ");
     if (label) this.flashNote(`Upgraded to ${label}`);
   },
@@ -1823,6 +1850,51 @@ const Player = {
       });
     $("#qualityToServers").onclick = () => this.showServersSub();
   },
+  // The resolution page. Every choice is offered whatever is playing, because
+  // the setting outlives the stream — but the note says what it is doing to
+  // THIS one, since the answer genuinely differs: a direct-played or
+  // floor-tier stream has no encoder in the path to re-aim, and no dial can
+  // add pixels a release does not have.
+  buildResMenu() {
+    const cur = resGet();
+    const out = Number(this.quality?.outputHeight) || 0;
+    const src = Number(this.quality?.sourceHeight) || 0;
+    $("#valRes").textContent = cur ? resLabel(cur) : (out ? `Auto · ${out}p` : "Auto");
+    $("#resList").innerHTML = RES_CHOICES.map((h) => {
+      const sub = !h ? "Let the server decide"
+        : src && h > src ? `Source is ${src}p — no change`
+        : "";
+      return `<button class="p-menu-item ${h === cur ? "active" : ""}" data-r="${h}">`
+        + `<span>${resLabel(h)}</span>${sub ? `<span class="p-menu-val">${sub}</span>` : ""}</button>`;
+    }).join("");
+    $("#resNote").textContent = !this.quality?.localFile
+      ? "This source streams as-is, so the setting applies to the next release that gets transcoded."
+      : out
+        ? `Playing ${out}p${src && src !== out ? ` from a ${src}p source` : ""}. Applies to every title, on this device.`
+        : "Applies to every title, on this device.";
+    $("#resList").querySelectorAll("[data-r]").forEach((b) =>
+      b.onclick = () => this.switchRes(+b.dataset.r));
+  },
+
+  // Changing the dial re-delivers the SAME release at a new picture size. The
+  // server keys a transcode session partly on its output height, so this is a
+  // new session — a full stream request, resuming where the viewer was, exactly
+  // like an audio-track switch.
+  async switchRes(h) {
+    if (h === resGet()) { this.hideMenus(); return; }
+    resSet(h);
+    this.buildResMenu();
+    const at = this.curT();
+    this.hideMenus();
+    // Nothing transcoded is playing (a floor-tier stream, or a file the client
+    // reads directly): the preference is saved and will be honoured by the next
+    // delivery, but re-requesting this stream would only interrupt it.
+    if (!this.quality?.localFile) { this.flashNote(`${resLabel(h)} — applies to the next transcoded stream`); return; }
+    this.showStatus(h ? `Switching to ${resLabel(h)}…` : "Switching to automatic resolution…", true);
+    if (this.movieMode) await this.playStream({ seek: at });
+    else if (this.ep != null) await this.play(this.ep, at);
+  },
+
   buildSpeedMenu() {
     const speeds = [0.5, 0.75, 1, 1.25, 1.5, 2];
     $("#speedList").innerHTML = speeds.map((s) =>
@@ -2030,7 +2102,7 @@ const Player = {
     const token = this._srvToken();
     let data = null, err = "", errCode = null;
     try {
-      const res = await fetch(withQuery(this._streamBase, { server: r.id }));
+      const res = await fetch(withQuery(this._streamBase, { server: r.id, res: resParam() }));
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
         // Every deliberate refusal downstream answers {error, detail} — "not
