@@ -432,7 +432,7 @@ button.hero-chip:hover { border-color: var(--accent); color: var(--accent); }
   background: var(--bg); color: var(--text); font-size: 13px; }
 .d-desc { color: #c3cad6; font-size: 14px; line-height: 1.6; margin-bottom: 22px; }
 
-/* ---- episodes: season picker + scrollable list ---- */
+/* ---- episodes: season tabs + scrollable list ---- */
 .eps-head { display: flex; align-items: center; justify-content: space-between;
   gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
 .eps-head-left { display: flex; align-items: center; gap: 14px; flex: 1 1 auto; min-width: 0; }
@@ -446,10 +446,29 @@ button.hero-chip:hover { border-color: var(--accent); color: var(--accent); }
 .mode-pill.active { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .mode-pill:disabled { opacity: .4; cursor: not-allowed; }
 
-/* The season side list is the TV's chooser (tv.css reveals it and hides the
-   <select>); pointer platforms keep the dropdown and never see this. */
-.eps-split { display: block; }
-.season-list { display: none; }
+/* Seasons are tabs beside the episodes, on every device — the arrangement
+   Netflix uses on a television, and the reason there is no season dropdown
+   anywhere any more. A menu must be opened before it can be read, which is a
+   bad trade for a choice this small; tabs show every season at once and cost
+   one press each. Empty (one season, or a film) the column renders nothing and
+   the split collapses on its own, so the episode list is never left indented
+   past an empty gutter. */
+.eps-split { display: flex; align-items: flex-start; gap: 22px; }
+.season-list { display: flex; flex-direction: column; gap: 8px;
+  flex: 0 1 auto; max-width: 260px; max-height: min(62vh, 640px); overflow-y: auto;
+  scrollbar-width: thin; scrollbar-color: #3a4150 transparent; }
+.season-list:empty { display: none; }
+.eps-split .eps { flex: 1 1 auto; min-width: 0; }
+.season-item { display: block; width: 100%; min-width: 150px; text-align: left; cursor: pointer;
+  background: var(--card); border: 1px solid transparent; border-radius: var(--radius);
+  color: var(--text); font-family: inherit; padding: 10px 14px;
+  transition: border-color .15s, color .15s, background .15s; }
+.season-item:hover { border-color: var(--accent); }
+.season-item .t { display: block; font-size: 14px; font-weight: 700; }
+.season-item .s { display: block; font-size: 12px; color: var(--muted); margin-top: 2px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.season-item.active { border-color: var(--accent); color: var(--accent); }
+.season-item.active .t { color: var(--accent); }
 .eps { display: flex; flex-direction: column; gap: 8px;
   max-height: min(62vh, 640px); overflow-y: auto; padding-right: 6px;
   scrollbar-width: thin; scrollbar-color: #3a4150 transparent; }
@@ -602,7 +621,30 @@ button.hero-chip:hover { border-color: var(--accent); color: var(--accent); }
 .p-menu-section { max-height: 46vh; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #3a4150 transparent; }
 .p-menu-section::-webkit-scrollbar { width: 8px; display: block; }
 .p-menu-section::-webkit-scrollbar-thumb { background: #3a4150; border-radius: var(--radius-pill); }
+/* Only a safety net: tracks are attached in "hidden" mode and drawn by
+   SubStyle into .sub-layer, so the browser's own cue renderer never runs. It
+   still matters if a cue ever reaches a native surface we don't own (an
+   AirPlay receiver, a webview that forces its own fullscreen player). */
 video::cue { background: rgba(8,8,12,.75); color: #fff; font-size: 1.05em; }
+
+/* ---- subtitles, drawn by the app ----
+   The layer is sized and placed over the video's PICTURE (not the element),
+   so letterboxed content puts its subtitles inside the image rather than in
+   the black bar. app.js writes left/top/width/height in px on every render;
+   everything below is the part that doesn't move. */
+.sub-layer { position: absolute; left: 0; top: 0; width: 100%; height: 100%;
+  z-index: 5; pointer-events: none; overflow: hidden; display: none;
+  font-weight: 600; text-align: center; }
+.sub-stack { position: absolute; left: 2%; right: 2%; display: flex; flex-direction: column; }
+/* `gap` does nothing on the TV's Chromium 69, so the stacking uses margins */
+.sub-cue + .sub-cue { margin-top: .28em; }
+.sub-cue { display: inline-block; max-width: 100%; padding: .16em .5em;
+  border-radius: 4px; line-height: 1.34; white-space: pre-wrap; }
+/* a colour swatch beside its name, in the Text colour / Background pages */
+.sub-chip { display: inline-block; width: 15px; height: 15px; border-radius: 4px;
+  border: 1px solid rgba(255,255,255,.4); margin-right: 10px; vertical-align: -2px; }
+.sub-chip.none { background: repeating-linear-gradient(45deg,
+  rgba(255,255,255,.18) 0 3px, transparent 3px 6px); }
 .p-menu-note { font-size: 12px; color: var(--muted); padding: 8px 10px; line-height: 1.4; border-top: 1px solid var(--line); margin-top: 6px; }
 .p-menu-row, .p-menu-item, .p-menu-back { width: 100%; text-align: left; background: transparent;
   border: 0; color: var(--text); padding: 11px 12px; border-radius: var(--radius); cursor: pointer;
@@ -824,6 +866,12 @@ th { color: var(--muted); font-weight: 600; }
   .sheet-body h2 { font-size: 22px; }
   .detail-hero { aspect-ratio: 16/9; min-height: 220px; padding: 18px 14px; }
   .eps { max-height: 300px; }
+  /* The season column lies down into a scrolling strip above the episodes —
+     stacked full-width it would push the first episode off the screen. */
+  .eps-split { display: block; }
+  .season-list { flex-direction: row; max-width: none; max-height: none;
+    overflow-x: auto; overflow-y: hidden; margin-bottom: 14px; padding-bottom: 4px; }
+  .season-item { width: auto; flex: 0 0 auto; }
   /* collections dropdown becomes a bottom sheet — reachable and never clipped */
   .col-menu { position: fixed; left: 12px; right: 12px; top: auto; bottom: 12px;
     min-width: 0; max-width: none; }

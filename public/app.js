@@ -619,7 +619,7 @@ async function showDetail(anilistId) {
     $("#d-title").textContent = "";
     $("#d-meta").textContent = ""; $("#d-genres").innerHTML = ""; $("#d-desc").textContent = "";
     $("#detailActions").innerHTML = ""; $("#d-modePills").innerHTML = "";
-    $("#d-franchise").hidden = true; $("#d-season").hidden = true;
+    $("#d-franchise").hidden = true; $("#d-seasonList").innerHTML = "";
     $("#detailHeroBg").style.backgroundImage = ""; $("#detailHeroArt").style.backgroundImage = "";
     $("#d-eps").innerHTML = `<div style="color:var(--muted)">Loading episodes…</div>`;
     $("#d-note").textContent = "";
@@ -692,18 +692,18 @@ async function loadEpisodeMeta(anilistId) {
 // title — picking one reopens the modal on that entry.
 function renderSeasonSelect() {
   const seasons = detail.franchise?.seasons || [];
-  renderPicker("d-season", {
-    label: "Season",
+  renderSeasonTabs("d-seasonList", {
     value: detail.meta.anilistId,
-    // A single season is not a choice; an empty list hides the control.
-    options: seasons.length < 2 ? [] : seasons.map((s, i) =>
-      ({ value: s.anilistId, label: `Season ${i + 1} · ${s.title}${s.year ? ` (${s.year})` : ""}` })),
+    // AniList models a sequel as its own title, so each season carries its own
+    // name — worth showing, since "Season 2" alone rarely says which one.
+    options: seasons.map((s, i) =>
+      ({ value: s.anilistId, label: `Season ${i + 1}`, sub: s.title + (s.year ? ` (${s.year})` : "") })),
     onPick: (v) => { const id = Number(v); if (id !== detail.meta.anilistId) openTitle(id); },
   });
 }
 
-// Movies / specials / related entries of the same series (seasons live in the
-// picker). Clicking a card reopens the modal on that title.
+// Movies / specials / related entries of the same series (seasons are the tabs
+// beside the episodes). Clicking a card reopens the modal on that title.
 function renderFranchise() {
   const f = detail.franchise;
   const box = $("#d-franchise");
@@ -852,6 +852,332 @@ $("#detailPlay").addEventListener("click", () => {
   const resume = detail.progress && eps.includes(detail.progress.episode) ? detail.progress.episode : eps[0];
   if (resume) launchPlayer(resume);
 });
+
+// ---------------- subtitle appearance ----------------
+//
+// Everything about how a subtitle LOOKS lives here: size, where on the picture
+// it sits, and the colour of the text and of the box behind it.
+//
+// The app draws its own cues. `::cue` can colour text and give it a box, but it
+// cannot place it — CSS has no way to say "higher up" or "along the left edge"
+// — and the TV's Chromium 69 renderer quietly drops most of what it is given
+// besides. So the <track> is attached in "hidden" mode, which keeps its cues
+// live without painting them, and the active cues are rendered into #subLayer
+// instead. That layer is fitted to the video's PICTURE rather than the video
+// element, so a 4:3 film puts its subtitles inside the image and not down in
+// the black bar.
+//
+// The choice is one per device, not one per title: someone who needs bigger
+// text needs it for everything, so it is stored whole in localStorage and
+// applied to whatever plays next.
+const SUB_SIZES = [
+  { id: "s",   label: "Small",       f: .030 },
+  { id: "m",   label: "Medium",      f: .038 },
+  { id: "l",   label: "Large",       f: .048 },
+  { id: "xl",  label: "Extra large", f: .060 },
+  { id: "xxl", label: "Huge",        f: .075 },
+];
+const SUB_COLORS = [
+  { id: "white",   label: "White",   hex: "#ffffff" },
+  { id: "yellow",  label: "Yellow",  hex: "#ffe867" },
+  { id: "cyan",    label: "Cyan",    hex: "#7fe9ff" },
+  { id: "green",   label: "Green",   hex: "#8ef0a2" },
+  { id: "pink",    label: "Pink",    hex: "#ff9ad5" },
+  { id: "grey",    label: "Grey",    hex: "#c9ced8" },
+  { id: "black",   label: "Black",   hex: "#000000" },
+];
+const SUB_BGS = [
+  { id: "none",  label: "None",      hex: null },
+  { id: "black", label: "Black",     hex: "#000000" },
+  { id: "grey",  label: "Grey",      hex: "#3b4150" },
+  { id: "navy",  label: "Deep blue", hex: "#101a34" },
+  { id: "white", label: "White",     hex: "#ffffff" },
+  { id: "yellow",label: "Yellow",    hex: "#ffe867" },
+];
+const SUB_BG_OPACITIES = [
+  { v: .25, label: "25%" }, { v: .5, label: "50%" }, { v: .75, label: "75%" }, { v: 1, label: "Solid" },
+];
+const SUB_ALIGNS = [
+  { id: "left", label: "Left" }, { id: "center", label: "Centre" }, { id: "right", label: "Right" },
+];
+// Without a box behind it, text needs its own edge or it disappears over a
+// bright frame. Applied only when the background is off or nearly so — over a
+// solid box it just muddies the letters.
+const SUB_EDGE = "0 0 4px rgba(0,0,0,.95), 0 2px 5px rgba(0,0,0,.9)";
+const SUB_DEFAULTS = { size: "m", color: "white", bg: "black", bgOpacity: .75, pos: 6, align: "center" };
+const ICON_UP = svg('<path d="M12 7l7 8H5z"/>', 20);
+const ICON_DOWN = svg('<path d="M12 17 5 9h14z"/>', 20);
+
+const subHex = (list, id) => (list.find((c) => c.id === id) || list[0]).hex;
+const subRgba = (hex, a) => {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+};
+
+const SubStyle = {
+  KEY: "mw:substyle",
+  s: null,
+  layer: null,
+  trackEl: null,
+  _onCue: null,
+  _preview: false,
+  _picH: 0,          // height of the video's picture, the unit font size is in
+
+  init() {
+    if (this._ready) return; this._ready = true;
+    this.layer = $("#subLayer");
+    this.s = this._load();
+    // A resize changes the picture box, so both the layer's fit and the font
+    // size derived from it are stale until the next render.
+    window.addEventListener("resize", () => this.render());
+    document.addEventListener("fullscreenchange", () => this.render());
+    Player.video.addEventListener("loadedmetadata", () => this.render());
+    this.apply();
+  },
+  _load() {
+    const s = { ...SUB_DEFAULTS };
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem(this.KEY) || "null"); } catch (e) {}
+    if (!saved || typeof saved !== "object") return s;
+    // Validate rather than trust: an id that no longer exists (a colour dropped
+    // from the list) would otherwise render as `undefined` forever.
+    if (SUB_SIZES.some((x) => x.id === saved.size)) s.size = saved.size;
+    if (SUB_COLORS.some((x) => x.id === saved.color)) s.color = saved.color;
+    if (SUB_BGS.some((x) => x.id === saved.bg)) s.bg = saved.bg;
+    if (SUB_ALIGNS.some((x) => x.id === saved.align)) s.align = saved.align;
+    if (SUB_BG_OPACITIES.some((x) => x.v === saved.bgOpacity)) s.bgOpacity = saved.bgOpacity;
+    if (Number.isFinite(saved.pos)) s.pos = Math.min(80, Math.max(0, Math.round(saved.pos)));
+    return s;
+  },
+  set(key, val) {
+    this.s[key] = val;
+    try { localStorage.setItem(this.KEY, JSON.stringify(this.s)); } catch (e) {}
+    this.apply(true);
+  },
+  // Overwrites in place rather than swapping the object: the menus close over
+  // `this.s`, and a fresh object would leave every handler built before the
+  // reset reading the settings it just threw away.
+  reset() {
+    Object.keys(SUB_DEFAULTS).forEach((k) => { this.s[k] = SUB_DEFAULTS[k]; });
+    try { localStorage.removeItem(this.KEY); } catch (e) {}
+    this.apply(true);
+  },
+  // Re-read the settings everywhere they show: the cues on screen and the menus
+  // that display them.
+  //
+  // `fromClick` holds the menu rebuild back by a tick, and it is not optional
+  // for anything a viewer presses. Every pick arrives as a click on a row this
+  // rebuild REPLACES, and the player closes any menu whose click it cannot
+  // trace back up to a .p-menu — an orphaned button has no ancestors at all, so
+  // rebuilding inside the handler shuts the whole panel on every choice, which
+  // is precisely the opposite of what a live preview is for.
+  apply(fromClick) {
+    this.render();
+    const menus = () => {
+      this.buildMenus();
+      // The rebuilt list threw away the row the remote's highlight was sitting
+      // on. ensure() puts it back — onto the option now ticked, which is where
+      // it was. (No-op off a TV: tv.js only exists there.)
+      if (this._preview && window.TVNav) window.TVNav.ensure();
+    };
+    if (fromClick) setTimeout(menus, 0); else menus();
+  },
+
+  // ---- the track ----
+  attach(trackEl) {
+    this.detach();
+    this.trackEl = trackEl;
+    trackEl.track.mode = "hidden"; // live cues, no browser rendering
+    this._onCue = () => this.render();
+    trackEl.track.addEventListener("cuechange", this._onCue);
+    this.render();
+  },
+  detach() {
+    if (this.trackEl && this._onCue) {
+      try { this.trackEl.track.removeEventListener("cuechange", this._onCue); } catch (e) {}
+    }
+    this.trackEl = null; this._onCue = null;
+    this.render();
+  },
+
+  // ---- drawing ----
+  // Fit the layer to the picture inside the <video>. `object-fit: contain`
+  // letterboxes, and the bars are not part of the frame the viewer is watching.
+  _fit() {
+    const v = Player.video, layer = this.layer;
+    const r = v.getBoundingClientRect();
+    let w = r.width, h = r.height, x = 0, y = 0;
+    if (v.videoWidth && v.videoHeight && w && h) {
+      const scale = Math.min(w / v.videoWidth, h / v.videoHeight);
+      const pw = v.videoWidth * scale, ph = v.videoHeight * scale;
+      x = (w - pw) / 2; y = (h - ph) / 2; w = pw; h = ph;
+    }
+    layer.style.left = Math.round(x) + "px";
+    layer.style.top = Math.round(y) + "px";
+    layer.style.width = Math.round(w) + "px";
+    layer.style.height = Math.round(h) + "px";
+    this._picH = h || window.innerHeight;
+  },
+  _fontPx() {
+    const size = SUB_SIZES.find((x) => x.id === this.s.size) || SUB_SIZES[1];
+    return Math.max(13, Math.round((this._picH || window.innerHeight) * size.f));
+  },
+  _activeCues() {
+    const tt = this.trackEl && this.trackEl.track;
+    return tt && tt.activeCues ? Array.prototype.slice.call(tt.activeCues) : [];
+  },
+  // A VTT cue that carries its own line placement near the top is a SIGN — a
+  // sign board, a text message, a caption over a title card — and dropping it
+  // into the dialogue stack at the bottom would cover the very thing it is
+  // translating. Cues with no placement of their own (line "auto", the normal
+  // case) all go where the viewer asked for them.
+  _isTop(cue) {
+    const line = cue.line;
+    if (line === undefined || line === null || line === "auto") return false;
+    const n = Number(line);
+    if (!isFinite(n)) return false;
+    return cue.snapToLines === false ? n < 50 : (n >= 0 && n < 6);
+  },
+  _cueBox(content) {
+    const s = this.s;
+    const bgHex = subHex(SUB_BGS, s.bg);
+    const box = document.createElement("div");
+    box.className = "sub-cue";
+    box.style.fontSize = this._fontPx() + "px";
+    box.style.color = subHex(SUB_COLORS, s.color);
+    box.style.textAlign = s.align;
+    box.style.background = bgHex ? subRgba(bgHex, s.bgOpacity) : "transparent";
+    box.style.textShadow = bgHex && s.bgOpacity >= .5 ? "none" : SUB_EDGE;
+    if (typeof content === "string") box.textContent = content;
+    else box.appendChild(content);
+    return box;
+  },
+  _cueNode(cue) {
+    let frag = null;
+    // getCueAsHTML keeps the cue's own <i>/<b>/<v> markup; the fallback throws
+    // it away rather than trusting cue text to an innerHTML.
+    try { if (cue.getCueAsHTML) frag = cue.getCueAsHTML(); } catch (e) { frag = null; }
+    return this._cueBox(frag || String(cue.text || "").replace(/<[^>]*>/g, ""));
+  },
+  _stack(boxes, edge) {
+    const el = document.createElement("div");
+    el.className = "sub-stack " + edge;
+    el.style[edge] = this.s.pos + "%";
+    el.style.alignItems = this.s.align === "left" ? "flex-start"
+      : this.s.align === "right" ? "flex-end" : "center";
+    boxes.forEach((b) => el.appendChild(b));
+    return el;
+  },
+  render() {
+    const layer = this.layer;
+    if (!layer) return;
+    const cues = this._preview ? [] : this._activeCues();
+    if (!this._preview && !cues.length) { layer.innerHTML = ""; layer.style.display = "none"; return; }
+    layer.style.display = "block";
+    this._fit();
+    const top = [], bottom = [];
+    if (this._preview) bottom.push(this._cueBox("Subtitles will look like this."));
+    cues.forEach((c) => (this._isTop(c) ? top : bottom).push(this._cueNode(c)));
+    layer.innerHTML = "";
+    if (top.length) layer.appendChild(this._stack(top, "top"));
+    if (bottom.length) layer.appendChild(this._stack(bottom, "bottom"));
+  },
+  // A sample line, shown for as long as one of the subtitle-style pages is
+  // open. Without it the menu is a set of names for an effect you can only see
+  // if a character happens to be talking.
+  preview(on) {
+    if (this._preview === !!on) return;
+    this._preview = !!on;
+    this.render();
+  },
+
+  // ---- menus ----
+  _val(id, text) { const el = $(id); if (el) el.textContent = text; },
+  // One list of choices, ticked where it matches. `chip` (present only on the
+  // colour pages) draws the colour itself beside its name — "Deep blue" is a
+  // guess until you can see it.
+  _rows(host, items, onPick) {
+    const el = $(host);
+    if (!el) return;
+    const chip = (c) => c === undefined ? ""
+      : c ? `<i class="sub-chip" style="background:${c}"></i>` : `<i class="sub-chip none"></i>`;
+    el.innerHTML = items.map((it, i) =>
+      `<button class="p-menu-item ${it.on ? "active" : ""}" data-i="${i}">` +
+      `<span>${chip(it.chip)}${esc(it.label)}</span></button>`).join("");
+    el.querySelectorAll("[data-i]").forEach((b) => b.onclick = () => onPick(items[+b.dataset.i]));
+  },
+  buildMenus() {
+    const s = this.s;
+    const size = SUB_SIZES.find((x) => x.id === s.size) || SUB_SIZES[1];
+    const color = SUB_COLORS.find((x) => x.id === s.color) || SUB_COLORS[0];
+    const bg = SUB_BGS.find((x) => x.id === s.bg) || SUB_BGS[1];
+    const align = SUB_ALIGNS.find((x) => x.id === s.align) || SUB_ALIGNS[1];
+    const bgVal = bg.hex ? `${bg.label} · ${Math.round(s.bgOpacity * 100)}%` : "None";
+    this._val("#valSubStyle", size.label);
+
+    // the subtitle-style page itself: one row per property, each its own page
+    const list = $("#subStyleList");
+    if (list) {
+      list.innerHTML = [
+        ["subsize", "Text size", size.label],
+        ["subpos", "Position", `${s.pos}% · ${align.label}`],
+        ["subcolor", "Text colour", color.label],
+        ["subbg", "Background", bgVal],
+      ].map(([to, label, val]) =>
+        `<button class="p-menu-row" data-to="${to}"><span>${label}</span><span class="p-menu-val">${esc(val)}</span></button>`
+      ).join("") + `<button class="p-menu-item" data-reset="1">Reset to default</button>`;
+      list.querySelectorAll("[data-to]").forEach((b) => b.onclick = () => Player.gotoSub(b.dataset.to));
+      list.querySelector("[data-reset]").onclick = () => this.reset();
+    }
+
+    // Every page below stays put after a pick rather than stepping back: the
+    // sample cue is right there on the picture, and comparing two sizes should
+    // not mean walking into the menu twice.
+    this._rows("#subSizeList", SUB_SIZES.map((x) => ({ ...x, on: x.id === s.size })),
+      (x) => this.set("size", x.id));
+    this._rows("#subColorList", SUB_COLORS.map((x) => ({ ...x, chip: x.hex, on: x.id === s.color })),
+      (x) => this.set("color", x.id));
+
+    // Position: a nudge, not a list. "A bit higher" is the actual request, and
+    // naming five fixed heights would answer it for at most five viewers.
+    const pos = $("#subPosList");
+    if (pos) {
+      pos.innerHTML = `
+        <div class="p-menu-sec">Height above the bottom</div>
+        <div class="sub-sync">
+          <button class="p-icon" data-pos="-2" title="Lower">${ICON_DOWN}</button>
+          <span class="sub-sync-val ${s.pos === SUB_DEFAULTS.pos ? "" : "on"}">${s.pos}%</span>
+          <button class="p-icon" data-pos="2" title="Higher">${ICON_UP}</button>
+          ${s.pos === SUB_DEFAULTS.pos ? "" : `<button class="p-menu-back sub-sync-reset" data-pos="reset">Reset</button>`}
+        </div>
+        <div class="p-menu-sec sep">Alignment</div>
+        <div id="subAlignList"></div>`;
+      // reads this.s.pos, not the `s` above: two taps can land before the
+      // rebuild that would refresh the closure, and the second must count from
+      // where the first left off
+      pos.querySelectorAll("[data-pos]").forEach((b) => b.onclick = () => {
+        if (b.dataset.pos === "reset") return this.set("pos", SUB_DEFAULTS.pos);
+        this.set("pos", Math.min(80, Math.max(0, this.s.pos + +b.dataset.pos)));
+      });
+      this._rows("#subAlignList", SUB_ALIGNS.map((x) => ({ ...x, on: x.id === s.align })),
+        (x) => this.set("align", x.id));
+    }
+
+    // Background: the colour and how much of it. Opacity is meaningless with no
+    // box at all, so it only appears once one is chosen.
+    const bgList = $("#subBgList");
+    if (bgList) {
+      bgList.innerHTML = `<div id="subBgColorList"></div>` + (bg.hex ? `
+        <div class="p-menu-sec sep">Opacity</div>
+        <div id="subBgOpacityList"></div>` : "");
+      this._rows("#subBgColorList", SUB_BGS.map((x) => ({ ...x, chip: x.hex, on: x.id === s.bg })),
+        (x) => this.set("bg", x.id));
+      if (bg.hex) this._rows("#subBgOpacityList",
+        SUB_BG_OPACITIES.map((x) => ({ ...x, on: x.v === s.bgOpacity })),
+        (x) => this.set("bgOpacity", x.v));
+    }
+  },
+};
 
 // ---------------- immersive player ----------------
 const Player = {
@@ -1966,6 +2292,7 @@ const Player = {
   loadSubs(ep) {
     this._subsExternal = []; this._subsEmbedded = []; this._subsProvider = [];
     this.video.querySelectorAll("track").forEach((t) => t.remove()); // stale cues from the previous episode
+    SubStyle.detach();
     this._composeSubs();
     fetch(`/api/subs/${this.meta.anilistId}/${ep}`)
       .then((r) => (r.ok ? r.json() : { tracks: [] }))
@@ -1987,6 +2314,7 @@ const Player = {
   loadStreamSubs() {
     this._subsExternal = []; this._subsEmbedded = []; this._subsProvider = [];
     this.video.querySelectorAll("track").forEach((t) => t.remove());
+    SubStyle.detach();
     this._composeSubs();
     if (!this._subsUrl) return;
     const token = this._streamEndpoint;
@@ -2004,6 +2332,7 @@ const Player = {
   // between episodes ("keep showing English") needs no special case.
   setSubtitle(pick, silent) {
     const v = this.video;
+    SubStyle.detach();
     v.querySelectorAll("track").forEach((t) => t.remove());
     clearTimeout(this._subRefreshTimer); this._subRefreshTimer = null;
     this.subLang = null; this.subId = null; this._subEmbedded = false;
@@ -2016,7 +2345,10 @@ const Player = {
       const el = document.createElement("track");
       el.kind = "subtitles"; el.label = t.label; el.srclang = t.lang; el.src = media(t.url); el.default = true;
       v.appendChild(el);
-      el.track.mode = "showing";
+      // "hidden", not "showing": the cues stay live but the browser draws
+      // nothing, leaving SubStyle to paint them where the viewer asked for
+      // them (see the subtitle-appearance section above).
+      SubStyle.attach(el);
       this._armSubSync(el);
       // A sidecar VTT GROWS while the encode runs, and a <track> reads its file
       // once. Re-arm it periodically (no-store route, so this refetches) until
@@ -2076,6 +2408,7 @@ const Player = {
         c.endTime = Math.max(0.05, c._e + this.subOffset - shift);
       }
       tt.mode = mode;
+      SubStyle.render(); // the cue on screen is drawn by us, so redraw it
       return true;
     };
     this._applySubSync = apply;
@@ -2112,12 +2445,19 @@ const Player = {
         <button class="p-icon" data-nudge="0.5" title="Subtitles later">+</button>
         ${off ? `<button class="p-menu-back sub-sync-reset" data-nudge="reset">Reset</button>` : ""}
       </div>` : "";
-    $("#ccList").innerHTML = rows.join("") + sync +
+    // How they LOOK is a settings-menu page, but this is the menu a viewer
+    // opens when the subtitles are the thing bothering them, so it links there
+    // rather than making them go and find it.
+    const style = `
+      <div class="p-menu-sec sep">Appearance</div>
+      <button class="p-menu-row" id="ccStyle"><span>Subtitle style</span><span class="p-menu-val">Size, place, colour ›</span></button>`;
+    $("#ccList").innerHTML = rows.join("") + sync + style +
       (this.subsAvail?.length ? "" : `<div class="p-menu-empty">No subtitles found for this one yet.</div>`);
     $("#ccList").querySelectorAll("[data-s]").forEach((b) =>
       b.onclick = () => this.setSubtitle(b.dataset.s || null));
     $("#ccList").querySelectorAll("[data-nudge]").forEach((b) =>
       b.onclick = () => b.dataset.nudge === "reset" ? this.resetSubtitleSync() : this.nudgeSubtitles(+b.dataset.nudge));
+    $("#ccStyle").onclick = () => this.openSubStyle();
     $("#ccNote").textContent =
       "Tracks marked “release” come from the file itself and are timed exactly. External tracks were timed for some other release and can drift — nudge with − / +, or try another numbered variant of the same language.";
   },
@@ -2317,6 +2657,17 @@ const Player = {
   },
   gotoSub(name) {
     document.querySelectorAll("#settingsMenu .p-submenu").forEach((s) => s.hidden = s.dataset.sub !== name);
+    // The sample cue belongs to the subtitle-style pages and nowhere else —
+    // every one of them is named "sub…", and hideMenus lands on "root".
+    SubStyle.preview(!$("#settingsMenu").hidden && name.indexOf("sub") === 0);
+  },
+  // The subtitle-style pages live in the settings menu, but the viewer looking
+  // for them is usually in the Subtitles menu — so that menu links here.
+  openSubStyle() {
+    this.hideMenus(); this.closeDrawer();
+    $("#settingsMenu").hidden = false;
+    $("#pGear").classList.add("on");
+    this.gotoSub("subs");
   },
   // The episodes drawer (servers moved into the settings menu).
   openDrawer(sel = "#epsDrawer") {
@@ -2608,6 +2959,7 @@ const Player = {
     clearInterval(this.progressTimer); clearInterval(this.upNextTimer); clearTimeout(this.hideTimer);
     clearTimeout(this._altsTimer);
     this.hideUpNext(); this.hideMenus(); this.closeDrawer();
+    SubStyle.detach(); // the last cue must not outlive the player it was drawn over
     this.video.pause(); this.video.removeAttribute("src"); this.video.load();
     this.el.classList.remove("show", "controls-hidden", "hide-cursor");
     if (!$("#detail").classList.contains("show")) document.body.style.overflow = "";
@@ -2623,6 +2975,7 @@ const Player = {
     if (this._bound) return; this._bound = true;
     const v = this.video, el = this.el;
     this.armCast(); // reveal + wire the cast button (Google Cast wires itself when its SDK loads)
+    SubStyle.init();  // remembered subtitle look, and the menus that set it
 
     // clean SVG icons for every control
     $("#pPlay").innerHTML = ICON_PLAY;
@@ -2930,19 +3283,48 @@ function renderPicker(id, opts) {
   PICKERS.set(id, opts.onPick);
 }
 
-// Reflect a value the page changed by some other route — a season picked from
-// the picker itself, or restored from a deep link — without rebuilding the list.
-function setPickerValue(id, value) {
+// ---------------- season tabs ----------------
+// Seasons get tabs beside the episodes rather than a picker, on every device.
+// A menu has to be OPENED before it can be read, and that is a poor trade for
+// a choice this small and this central: the tabs show every season at once and
+// put each one a single press away, which is what a remote wants and what the
+// pointer platforms lose nothing by sharing. Anime and shows render from the
+// same call — the only difference is what picking one does (anime seasons are
+// separate titles, so they navigate; a show's seasons load in place).
+const SEASON_PICK = new Map(); // list element id -> onPick(value)
+
+// `options` is [{ value, label, sub }] — raw text, escaped here.
+function renderSeasonTabs(id, opts) {
   const box = $("#" + id);
-  if (!box || box.hidden) return;
-  let label = null;
-  box.querySelectorAll(".picker-opt").forEach((o) => {
-    const on = String(o.dataset.value) === String(value);
-    o.classList.toggle("active", on);
-    if (on) label = o.textContent;
-  });
-  if (label !== null) box.querySelector(".picker-val").textContent = label;
+  if (!box) return;
+  const options = (opts && opts.options) || [];
+  // One season is not a choice. Emptying the column also collapses the split,
+  // so a film's episode list is not left indented past an empty gutter.
+  if (options.length < 2) { box.innerHTML = ""; SEASON_PICK.delete(id); return; }
+  box.innerHTML = options.map((o) => `<button class="season-item${String(o.value) === String(opts.value) ? " active" : ""}"
+    type="button" data-value="${esc(String(o.value))}" title="${esc(o.sub || o.label)}">
+      <span class="t">${esc(o.label)}</span>${o.sub ? `<span class="s">${esc(o.sub)}</span>` : ""}
+    </button>`).join("");
+  SEASON_PICK.set(id, opts.onPick);
 }
+
+// Move the highlight when the season changed by some other route than a click
+// on the tab itself — a deep link, or the show's own default.
+function setSeasonTab(id, value) {
+  const box = $("#" + id);
+  if (!box) return;
+  box.querySelectorAll(".season-item").forEach((b) =>
+    b.classList.toggle("active", String(b.dataset.value) === String(value)));
+}
+
+// Delegated, like the picker: both lists are re-rendered constantly, and
+// re-binding on every paint is how listeners get lost.
+document.addEventListener("click", (e) => {
+  const item = e.target.closest(".season-item");
+  if (!item) return;
+  const pick = SEASON_PICK.get(item.closest(".season-list").id);
+  if (pick) pick(item.dataset.value);
+});
 
 function closePickers(except) {
   document.querySelectorAll('.picker[data-open="true"]').forEach((box) => {
@@ -3408,9 +3790,9 @@ async function showMediaDetail(kind, id) {
     $("#m-title").textContent = "Loading…";
     $("#m-meta").textContent = ""; $("#m-genres").innerHTML = ""; $("#m-desc").textContent = "";
     $("#m-facts").innerHTML = ""; $("#m-eps").innerHTML = ""; $("#m-note").textContent = "";
-    // The season chooser too: open a show, then a film, and the show's
-    // seasons were still sitting there under the film's hero.
-    renderPicker("m-season", { options: [] });
+    // The season tabs too: open a show, then a film, and the show's seasons
+    // were still sitting there under the film's hero.
+    renderSeasonTabs("m-seasonList", { options: [] });
     $("#m-epsHead").hidden = true;
     $("#mHeroBg").style.backgroundImage = ""; $("#mHeroArt").style.backgroundImage = "";
     mDetail = null;
@@ -3484,17 +3866,14 @@ function paintMediaDetail() {
   if (kind !== "tv" || !seasons.length) {
     $("#m-epsHead").hidden = true;
     $("#m-eps").innerHTML = "";
-    renderPicker("m-season", { options: [] });
+    renderSeasonTabs("m-seasonList", { options: [] });
   }
 
   if (kind === "tv" && seasons.length) {
     $("#m-epsHead").hidden = false;
-    renderPicker("m-season", {
-      label: "Season",
+    renderSeasonTabs("m-seasonList", {
       value: mDetail.season,
-      // one season needs no chooser
-      options: seasons.length < 2 ? [] : seasons.map((s) =>
-        ({ value: s.season, label: `${s.name} · ${s.episodes} ep` })),
+      options: seasons.map((s) => ({ value: s.season, label: s.name, sub: `${s.episodes} episodes` })),
       onPick: (v) => loadSeasonEps(id, Number(v)),
     });
     loadSeasonEps(id, mDetail.season);
@@ -3507,7 +3886,7 @@ async function loadSeasonEps(id, season) {
   const key = MDETAIL_KEY;
   if (mDetail) mDetail.season = season;
   $("#mPlay").textContent = `▶ Play S${season} E1`;
-  setPickerValue("m-season", season); // however the season got chosen
+  setSeasonTab("m-seasonList", season); // however the season got chosen
   $("#m-eps").innerHTML = `<div class="grid-empty">Loading episodes…</div>`;
   let eps = [];
   try { eps = (await (await fetch(`/api/tv/${encodeURIComponent(id)}/season/${season}`)).json()).episodes || []; } catch {}

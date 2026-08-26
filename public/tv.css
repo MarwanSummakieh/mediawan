@@ -45,7 +45,7 @@ html.tv .rail, html.tv .rail-tail, html.tv .rail-btn, html.tv .searchbar,
 html.tv .picker-btn, html.tv .cards, html.tv .filter-bar, html.tv .genres,
 html.tv .card-actions, html.tv .sheet-actions, html.tv .p-controls, html.tv .p-titles,
 html.tv .up-next-actions, html.tv .srv-row, html.tv .p-drawer-ep, html.tv .p-drawer-head,
-html.tv .eps, html.tv .p-drawer-list, html.tv .srv-foot,
+html.tv .eps, html.tv .p-drawer-list, html.tv .srv-foot, html.tv .eps-split, html.tv .season-list,
 html.tv .card-scrim { gap: 0; }
 
 html.tv .rail > * + * { margin-top: 10px; }
@@ -188,9 +188,17 @@ html.tv .fact dd { font-size: 20px; }
    ------------------------------------------------------------------------ */
 html.tv .card-actions { display: none; }
 
-/* The seasons used to stand in their own column here, beside the episode list,
-   because the web's <select> opened a list no remote could enter. Both are now
-   one .picker, sized above with the other controls. */
+/* Seasons at 10-foot scale. The column is styles.css's now — every device gets
+   the same tabs — so this is size only. `gap` is inert on Chromium 69, hence
+   the margins. */
+html.tv .eps-split > * + * { margin-left: 34px; }
+html.tv .season-list { flex: 0 0 340px; max-width: 340px; }
+html.tv .season-list > * + * { margin-top: 10px; }
+html.tv .season-item { padding: 16px 18px; scroll-margin-top: 170px; scroll-margin-bottom: 60px; }
+html.tv .season-item .t { font-size: 22px; }
+html.tv .season-item .s { font-size: 16px; margin-top: 3px; }
+html.tv .season-item.tv-focus { background: var(--accent); border-color: var(--accent); }
+html.tv .season-item.tv-focus .t, html.tv .season-item.tv-focus .s { color: var(--on-accent); }
 
 /* (The hamburger drawer's 10-foot sizing lived here. There is no drawer.) */
 

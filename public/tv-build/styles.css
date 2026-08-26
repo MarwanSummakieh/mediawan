@@ -1326,10 +1326,68 @@ button.hero-chip:hover {
   cursor: not-allowed;
 }
 .eps-split {
-  display: block;
+  display: flex;
+  align-items: flex-start;
+  gap: 22px;
 }
 .season-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 0 1 auto;
+  max-width: 260px;
+  max-height: min(62vh, 640px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #3a4150 transparent;
+}
+.season-list:empty {
   display: none;
+}
+.eps-split .eps {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.season-item {
+  display: block;
+  width: 100%;
+  min-width: 150px;
+  text-align: left;
+  cursor: pointer;
+  background: var(--card);
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  color: var(--text);
+  font-family: inherit;
+  padding: 10px 14px;
+  transition:
+    border-color .15s,
+    color .15s,
+    background .15s;
+}
+.season-item:hover {
+  border-color: var(--accent);
+}
+.season-item .t {
+  display: block;
+  font-size: 14px;
+  font-weight: 700;
+}
+.season-item .s {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.season-item.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.season-item.active .t {
+  color: var(--accent);
 }
 .eps {
   display: flex;
@@ -1899,6 +1957,53 @@ video::cue {
   background: rgba(8, 8, 12, .75);
   color: #fff;
   font-size: 1.05em;
+}
+.sub-layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 5;
+  pointer-events: none;
+  overflow: hidden;
+  display: none;
+  font-weight: 600;
+  text-align: center;
+}
+.sub-stack {
+  position: absolute;
+  left: 2%;
+  right: 2%;
+  display: flex;
+  flex-direction: column;
+}
+.sub-cue + .sub-cue {
+  margin-top: .28em;
+}
+.sub-cue {
+  display: inline-block;
+  max-width: 100%;
+  padding: .16em .5em;
+  border-radius: 4px;
+  line-height: 1.34;
+  white-space: pre-wrap;
+}
+.sub-chip {
+  display: inline-block;
+  width: 15px;
+  height: 15px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, .4);
+  margin-right: 10px;
+  vertical-align: -2px;
+}
+.sub-chip.none {
+  background:
+    repeating-linear-gradient(
+      45deg,
+      rgba(255, 255, 255, .18) 0 3px,
+      transparent 3px 6px);
 }
 .p-menu-note {
   font-size: 12px;
@@ -2598,6 +2703,22 @@ th {
   }
   .eps {
     max-height: 300px;
+  }
+  .eps-split {
+    display: block;
+  }
+  .season-list {
+    flex-direction: row;
+    max-width: none;
+    max-height: none;
+    overflow-x: auto;
+    overflow-y: hidden;
+    margin-bottom: 14px;
+    padding-bottom: 4px;
+  }
+  .season-item {
+    width: auto;
+    flex: 0 0 auto;
   }
   .col-menu {
     position: fixed;

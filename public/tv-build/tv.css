@@ -28,6 +28,8 @@ html.tv .p-drawer-head,
 html.tv .eps,
 html.tv .p-drawer-list,
 html.tv .srv-foot,
+html.tv .eps-split,
+html.tv .season-list,
 html.tv .card-scrim {
   gap: 0;
 }
@@ -251,6 +253,36 @@ html.tv .fact dd {
 }
 html.tv .card-actions {
   display: none;
+}
+html.tv .eps-split > * + * {
+  margin-left: 34px;
+}
+html.tv .season-list {
+  flex: 0 0 340px;
+  max-width: 340px;
+}
+html.tv .season-list > * + * {
+  margin-top: 10px;
+}
+html.tv .season-item {
+  padding: 16px 18px;
+  scroll-margin-top: 170px;
+  scroll-margin-bottom: 60px;
+}
+html.tv .season-item .t {
+  font-size: 22px;
+}
+html.tv .season-item .s {
+  font-size: 16px;
+  margin-top: 3px;
+}
+html.tv .season-item.tv-focus {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+html.tv .season-item.tv-focus .t,
+html.tv .season-item.tv-focus .s {
+  color: var(--on-accent);
 }
 html.tv .card,
 html.tv .fr-card,
