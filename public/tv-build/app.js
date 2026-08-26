@@ -44,6 +44,23 @@ const ICON_CAST_ON = svg('<path d="M1 18v3h3c0-1.66-1.34-3-3-3zm0-4v2c2.76 0 5 2
 let SRV_FAVS = /* @__PURE__ */ new Set();
 const srvIsFav = (k) => !!k && SRV_FAVS.has(k);
 const srvPreferParam = () => [...SRV_FAVS].filter((k) => k.startsWith("q")).join(",");
+const RES_KEY = "mw.maxHeight";
+const RES_CHOICES = [0, 2160, 1440, 1080, 720, 480];
+const resLabel = (h) => h ? h === 2160 ? "2160p (4K)" : h + "p" : "Auto";
+const resGet = () => {
+  try {
+    return RES_CHOICES.includes(Number(localStorage.getItem(RES_KEY))) ? Number(localStorage.getItem(RES_KEY)) : 0;
+  } catch (e) {
+    return 0;
+  }
+};
+const resSet = (h) => {
+  try {
+    h ? localStorage.setItem(RES_KEY, String(h)) : localStorage.removeItem(RES_KEY);
+  } catch (e) {
+  }
+};
+const resParam = () => resGet() || null;
 function srvToggleFav(key) {
   if (!key) return false;
   const on = !SRV_FAVS.has(key);
@@ -1236,7 +1253,8 @@ const Player = {
     try {
       const res = await fetch(withQuery(this._streamEndpoint, {
         audio: this._audioIndex,
-        seek: seek > 6 ? Math.floor(seek) : null
+        seek: seek > 6 ? Math.floor(seek) : null,
+        res: resParam()
       }));
       if (res.status === 202) {
         const j = await res.json();
@@ -1276,6 +1294,7 @@ const Player = {
     this.buildSpeedMenu();
     this.buildServers();
     this.buildAudMenu();
+    this.buildResMenu();
     clearTimeout(this._altsTimer);
     this._altsTimer = setTimeout(() => this.loadAlts(), 6e3);
   },
@@ -1326,7 +1345,8 @@ const Player = {
     let data;
     try {
       const seek = resumeAt > 6 ? `&seek=${Math.floor(resumeAt)}` : "";
-      const res = await fetch(`/api/stream/${this.meta.anilistId}/${ep}?mode=${this.mode}${seek}`);
+      const wantRes = resParam() ? `&res=${resParam()}` : "";
+      const res = await fetch(`/api/stream/${this.meta.anilistId}/${ep}?mode=${this.mode}${seek}${wantRes}`);
       if (res.status === 202) {
         data = await res.json();
         if ((_a = data.downloading) == null ? void 0 : _a.torrentId) {
@@ -1359,6 +1379,7 @@ const Player = {
     this.buildAudMenu();
     this.buildCcMenu();
     this.buildServers();
+    this.buildResMenu();
     this.renderDrawer();
     this.highlightEp();
     if (data.upgrade) this.watchUpgrade(data.upgrade, resumeAt, { primary: false });
@@ -1439,6 +1460,7 @@ const Player = {
       this.buildQualityMenu();
       this.buildSpeedMenu();
       this.buildServers();
+      this.buildResMenu();
     };
     this._dlTimer = setTimeout(poll, 2500);
   },
@@ -1475,7 +1497,7 @@ const Player = {
         up = await (await fetch("/api/upgrade", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ anilistId: this.meta.anilistId, ep: this.ep, mode: this.mode })
+          body: JSON.stringify({ anilistId: this.meta.anilistId, ep: this.ep, mode: this.mode, res: resParam() })
         })).json();
       } catch {
         this._upgradeTimer = setTimeout(poll, 5e3);
@@ -1511,6 +1533,7 @@ const Player = {
     this.loadQuality(stream, at, true);
     this.buildQualityMenu();
     this.buildServers();
+    this.buildResMenu();
     const label = [up.release, up.mbps ? `${up.mbps.toFixed(1)} Mbps` : null].filter(Boolean).join(" \xB7 ");
     if (label) this.flashNote(`Upgraded to ${label}`);
   },
@@ -1742,6 +1765,46 @@ const Player = {
     });
     $("#qualityToServers").onclick = () => this.showServersSub();
   },
+  // The resolution page. Every choice is offered whatever is playing, because
+  // the setting outlives the stream — but the note says what it is doing to
+  // THIS one, since the answer genuinely differs: a direct-played or
+  // floor-tier stream has no encoder in the path to re-aim, and no dial can
+  // add pixels a release does not have.
+  buildResMenu() {
+    var _a, _b, _c;
+    const cur = resGet();
+    const out = Number((_a = this.quality) == null ? void 0 : _a.outputHeight) || 0;
+    const src = Number((_b = this.quality) == null ? void 0 : _b.sourceHeight) || 0;
+    $("#valRes").textContent = cur ? resLabel(cur) : out ? `Auto \xB7 ${out}p` : "Auto";
+    $("#resList").innerHTML = RES_CHOICES.map((h) => {
+      const sub = !h ? "Let the server decide" : src && h > src ? `Source is ${src}p \u2014 no change` : "";
+      return `<button class="p-menu-item ${h === cur ? "active" : ""}" data-r="${h}"><span>${resLabel(h)}</span>${sub ? `<span class="p-menu-val">${sub}</span>` : ""}</button>`;
+    }).join("");
+    $("#resNote").textContent = !((_c = this.quality) == null ? void 0 : _c.localFile) ? "This source streams as-is, so the setting applies to the next release that gets transcoded." : out ? `Playing ${out}p${src && src !== out ? ` from a ${src}p source` : ""}. Applies to every title, on this device.` : "Applies to every title, on this device.";
+    $("#resList").querySelectorAll("[data-r]").forEach((b) => b.onclick = () => this.switchRes(+b.dataset.r));
+  },
+  // Changing the dial re-delivers the SAME release at a new picture size. The
+  // server keys a transcode session partly on its output height, so this is a
+  // new session — a full stream request, resuming where the viewer was, exactly
+  // like an audio-track switch.
+  async switchRes(h) {
+    var _a;
+    if (h === resGet()) {
+      this.hideMenus();
+      return;
+    }
+    resSet(h);
+    this.buildResMenu();
+    const at = this.curT();
+    this.hideMenus();
+    if (!((_a = this.quality) == null ? void 0 : _a.localFile)) {
+      this.flashNote(`${resLabel(h)} \u2014 applies to the next transcoded stream`);
+      return;
+    }
+    this.showStatus(h ? `Switching to ${resLabel(h)}\u2026` : "Switching to automatic resolution\u2026", true);
+    if (this.movieMode) await this.playStream({ seek: at });
+    else if (this.ep != null) await this.play(this.ep, at);
+  },
   buildSpeedMenu() {
     const speeds = [0.5, 0.75, 1, 1.25, 1.5, 2];
     $("#speedList").innerHTML = speeds.map((s) => `<button class="p-menu-item ${this.video.playbackRate === s ? "active" : ""}" data-s="${s}">${s === 1 ? "Normal" : s + "\xD7"}</button>`).join("");
@@ -1955,7 +2018,7 @@ const Player = {
     const token = this._srvToken();
     let data = null, err = "", errCode = null;
     try {
-      const res = await fetch(withQuery(this._streamBase, { server: r.id }));
+      const res = await fetch(withQuery(this._streamBase, { server: r.id, res: resParam() }));
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
         const e = new Error(j.detail || j.error || `the server replied ${res.status}`);

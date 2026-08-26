@@ -425,3 +425,82 @@ test("sweepSessionRoot: a missing root is not an error", async () => {
   const { sweepSessionRoot } = await import("../lib/transcode/session.mjs");
   assert.equal(await sweepSessionRoot("Z:\does\not\exist"), 0);
 });
+
+// ---------- the resolution dial ----------
+//
+// `maxHeight` is the viewer's own control, and the point of it is that it
+// OVERRIDES the planner's judgement in both directions: down (a smaller picture
+// than the source, on any client) and up (no automatic 1080p cap on a capped
+// remote encode). Everything the planner infers stays inferred; only the number
+// of lines is theirs.
+
+test("dial: a downscale on the LAN forces an encode out of what would have been a remux", () => {
+  const probe = probeOf({ height: 2160 });          // browser-safe codecs in an mkv
+  assert.equal(planDelivery(probe, { local: true }).mode, "remux");
+  const p = planDelivery(probe, { local: true, maxHeight: 720 });
+  assert.equal(p.mode, "encode");
+  assert.equal(p.copyVideo, false, "a smaller picture cannot come from a copied stream");
+  assert.equal(p.targetMbps, null, "the LAN has no bitrate budget — only the size was asked for");
+  assert.equal(p.scaleHeight, 720);
+  assert.match(argsOf(p, probe), /scale=-2:720/);
+});
+
+test("dial: a downscale on a remote copy-video stream re-encodes it", () => {
+  // Under budget with safe codecs, this is a straight remux by default.
+  const probe = probeOf({ mbps: 4 });
+  assert.equal(planDelivery(probe, { local: false, targetMbps: 6 }).mode, "remux");
+  const p = planDelivery(probe, { local: false, targetMbps: 6, maxHeight: 480 });
+  assert.equal(p.mode, "encode");
+  assert.equal(p.copyVideo, false);
+  assert.equal(p.targetMbps, 6);
+  assert.match(argsOf(p, probe), /scale=-2:480/);
+});
+
+test("dial: asking for MORE than the automatic rule keeps the source resolution", () => {
+  // The complaint this exists for: a capped remote encode was pinned to 1080p
+  // whatever the viewer wanted, with no way to say "spend it on pixels".
+  const probe = probeOf({ height: 2160, mbps: 40 });
+  assert.match(argsOf(planDelivery(probe, { local: false, targetMbps: 6 }), probe), /scale=-2:1080/);
+  const p = planDelivery(probe, { local: false, targetMbps: 6, maxHeight: 2160 });
+  assert.equal(p.scaleHeight, null);
+  assert.equal(p.outputHeight, 2160);
+  assert.doesNotMatch(argsOf(p, probe), /scale=/);
+});
+
+test("dial: asking for more than the file holds is not an upscale", () => {
+  const probe = probeOf({ height: 720, mbps: 3 });
+  const p = planDelivery(probe, { local: true, maxHeight: 2160 });
+  assert.equal(p.mode, "remux", "nothing to do — the file is already smaller than the ask");
+  assert.equal(p.outputHeight, 720);
+});
+
+test("dial: asking for exactly the source resolution changes nothing", () => {
+  const probe = probeOf({ height: 1080, mbps: 4 });
+  const p = planDelivery(probe, { local: false, targetMbps: 6, maxHeight: 1080 });
+  assert.equal(p.mode, "remux");
+  assert.equal(p.scaleHeight ?? null, null);
+});
+
+test("dial: junk and absurd values fall back to the automatic rule", () => {
+  const probe = probeOf({ height: 2160, mbps: 40 });
+  for (const bad of [null, undefined, 0, "", "auto", -1, 12, NaN]) {
+    const p = planDelivery(probe, { local: false, targetMbps: 6, maxHeight: bad });
+    assert.equal(p.scaleHeight, 1080, `${String(bad)} must mean "no opinion"`);
+  }
+});
+
+test("dial: the plan reports what actually comes out, for the menu to show", () => {
+  const probe = probeOf({ height: 2160, mbps: 40 });
+  assert.equal(planDelivery(probe, { local: false, targetMbps: 6 }).outputHeight, 1080);
+  assert.equal(planDelivery(probe, { local: false, targetMbps: 6, maxHeight: 720 }).outputHeight, 720);
+  assert.equal(planDelivery(probe, { local: true }).outputHeight, 2160);
+});
+
+test("dial: a downscale still tone-maps HDR, and scales before the tonemap chain", () => {
+  // Order matters for cost, not correctness: zscale is the expensive filter and
+  // it should see a quarter of the pixels, not four times as many.
+  const probe = probeOf({ height: 2160, mbps: 40, hdr: true });
+  const p = planDelivery(probe, { local: false, targetMbps: 6, maxHeight: 720 });
+  const args = argsOf(p, probe);
+  assert.match(args, /scale=-2:720,zscale=/);
+});

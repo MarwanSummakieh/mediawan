@@ -243,6 +243,10 @@
     <div class="p-menu settings-menu" id="settingsMenu" hidden>
       <div class="p-submenu" data-sub="root">
         <button class="p-menu-row" data-goto="quality"><span>Quality</span><span class="p-menu-val" id="valQuality">Auto</span></button>
+        <!-- Resolution is its own row, one below Quality, because they answer
+             two different questions: Quality is WHICH RELEASE plays, this is
+             how big a picture the server encodes out of it. -->
+        <button class="p-menu-row" data-goto="res"><span>Resolution</span><span class="p-menu-val" id="valRes">Auto</span></button>
         <button class="p-menu-row" data-goto="servers"><span>Server</span><span class="p-menu-val" id="valServer">Auto</span></button>
         <button class="p-menu-row" data-goto="speed"><span>Playback speed</span><span class="p-menu-val" id="valSpeed">Normal</span></button>
         <button class="p-menu-row" data-goto="subs"><span>Subtitle style</span><span class="p-menu-val" id="valSubStyle">Medium</span></button>
@@ -250,6 +254,11 @@
       <div class="p-submenu" data-sub="quality" hidden>
         <button class="p-menu-back" data-goto="root">‹ Quality</button>
         <div id="qualityList"></div>
+      </div>
+      <div class="p-submenu" data-sub="res" hidden>
+        <button class="p-menu-back" data-goto="root">‹ Resolution</button>
+        <div id="resList"></div>
+        <div class="p-menu-note" id="resNote"></div>
       </div>
       <div class="p-submenu" data-sub="servers" hidden>
         <button class="p-menu-back" data-goto="root">‹ Server</button>
