@@ -94,6 +94,53 @@ docker compose up -d
 Compose runs the app plus a Cloudflare Tunnel connector, so nothing needs to be
 port-forwarded. Point your tunnel's public hostname at `http://web:8787`.
 
+### Downloader and encoder on the NAS
+
+The downloader and encoder run inside `web`. Playback starts from the source
+while the downloader saves a reusable copy to the NAS. Two downloads run at a
+time by default; further plays still stream, and can start caching on a later
+play. Downloads resume from a partial file when that release is requested again.
+Completed files use a 2 TiB LRU cache. A 20 GiB free-space reserve also protects
+the volume. Encoding adapts playback on demand; it does not replace the original
+download with a lower-quality file.
+
+1. In the NAS `.env`, configure `ADMIN_EMAIL`, `ADMIN_PASSWORD`, and at least one
+   of `REAL_DEBRID_TOKEN` or `PREMIUMIZE_API_KEY`. The companion Seanime service
+   also requires `SEANIME_PASSWORD`; Cloudflare requires `TUNNEL_TOKEN`.
+2. Set `DATA_DIR` to persistent app storage and `MEDIA_DIR` to a directory on
+   the media array. Set `PUID` / `PGID` to its owner. The container writes cache
+   files under `/media/cache` and temporary HLS segments under `/media/transcode`.
+3. On an Intel NAS, verify `/dev/dri/renderD128` exists. Set `VIDEO_GID` and
+   `RENDER_GID` from the actual device group IDs (`stat -c '%g'`), then retain
+   `TRANSCODE_HWACCEL=qsv`. The app tests Quick Sync, then VAAPI on the same GPU
+   when Quick Sync is unavailable. Set `TRANSCODE_HWACCEL=vaapi` to select VAAPI
+   directly and `TRANSCODE_DEVICE` if the render device is not
+   `/dev/dri/renderD128`. Docker must be able to pass `/dev/dri` through.
+4. Start or recreate the container with `docker compose up -d`. Open **Admin**
+   for cache usage, downloads, encoder sessions and setup checks. Run the same
+   checks from the NAS shell with:
+
+   ```bash
+   docker compose exec web node scripts/check-pipeline.mjs
+   ```
+
+The checks test a real GPU encode, the availability of `ffprobe`, and a cache
+write. Provider checks here confirm credentials are configured; use **Check
+sources** to test the account and playback sources. The diagnostic exits with
+status 1 when setup needs attention and never prints credentials or media URLs.
+
+`CACHE_DOWNLOADS=false` disables background saving. `CACHE_MAX_DOWNLOADS`,
+`CACHE_BUDGET_BYTES`, and `CACHE_RESERVE_BYTES` control storage. Encoding uses
+`TRANSCODE`, `TRANSCODE_HWACCEL` (`qsv`, `vaapi`, or `none`), `TRANSCODE_REMOTE_MBPS`, and
+`TRANSCODE_MAX_SESSIONS`. Recreate the web container after changing `.env`.
+Software mode also requires removing the `/dev/dri` device and GPU group entries
+from Compose on hosts without that device.
+
+Compose uses the published image. Source edits take effect only after building
+and deploying an updated image; pulling `latest` alone does not build this checkout.
+The separate Jellyfin/qBittorrent proposal in `docs/phase-0.md` is not required
+for this built-in pipeline.
+
 ### TV app
 
 ```bash

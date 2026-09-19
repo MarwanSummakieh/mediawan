@@ -137,6 +137,34 @@ test("QSV encodes use the medium preset; the software fallback stays veryfast", 
   assert.match(argsOf(plan, probe, { forceSoftware: true }), /libx264.*-preset veryfast -crf 21/);
 });
 
+test("VAAPI uploads converted frames and retains the remote bitrate cap and GOP", () => {
+  const probe = probeOf({ vcodec: "hevc", mbps: 25 });
+  const plan = planDelivery(probe, { local: false, targetMbps: 6 });
+  const args = argsOf(plan, probe, { hardwareMode: "vaapi", device: "/dev/dri/renderD128" });
+  assert.match(args, /-vaapi_device \/dev\/dri\/renderD128.*-i in.mkv/);
+  assert.match(args, /-vf format=nv12,hwupload -c:v h264_vaapi/);
+  assert.match(args, /-b:v 6000k -maxrate 6000k -bufsize 12000k/);
+  assert.match(args, /-g 96/);
+  assert.doesNotMatch(args, /-pix_fmt|-preset|-crf/);
+});
+
+test("VAAPI downscales and tone-maps before uploading frames to the GPU", () => {
+  const probe = probeOf({ vcodec: "hevc", height: 2160, mbps: 40, hdr: true });
+  const plan = planDelivery(probe, { local: false, targetMbps: 6 });
+  const args = argsOf(plan, probe, { hardwareMode: "vaapi" });
+  assert.match(args, /scale=-2:1080,zscale=.*tonemap=.*format=yuv420p,format=nv12,hwupload/);
+});
+
+test("VAAPI configuration never initializes a GPU when copying video or retrying in software", () => {
+  const probe = probeOf();
+  const copied = argsOf(planDelivery(probe, { local: true }), probe, { hardwareMode: "vaapi" });
+  assert.doesNotMatch(copied, /vaapi|hwupload/);
+  const encoded = probeOf({ vcodec: "hevc", mbps: 25 });
+  const software = argsOf(planDelivery(encoded, { local: false }), encoded, { hardwareMode: "vaapi", forceSoftware: true });
+  assert.match(software, /-c:v libx264/);
+  assert.doesNotMatch(software, /vaapi|hwupload/);
+});
+
 test("HDR tone-mapping joins the filter chain after the downscale", () => {
   const probe = probeOf({ vcodec: "hevc", height: 2160, mbps: 40, hdr: true });
   const plan = planDelivery(probe, { local: false, targetMbps: 6 });

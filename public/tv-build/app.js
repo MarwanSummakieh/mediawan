@@ -216,7 +216,11 @@ function setActiveTab(tab) {
 }
 function syncRail() {
   const here = document.body.dataset.tab === "browse" ? document.body.dataset.lib : "home";
-  document.querySelectorAll("#rail .rail-btn[data-id]").forEach((b) => b.classList.toggle("active", b.dataset.id === here));
+  document.querySelectorAll("#rail .rail-btn[data-id]").forEach((b) => {
+    b.classList.toggle("active", b.dataset.id === here);
+    if (b.dataset.id === here) b.setAttribute("aria-current", "page");
+    else b.removeAttribute("aria-current");
+  });
 }
 async function route() {
   const qs = new URLSearchParams(location.search);
@@ -273,21 +277,34 @@ async function renderHome() {
     if (APP_VIEW !== "home") paintHome(BROWSE.data);
   } else {
     APP_VIEW = "home";
-    app.innerHTML = `<div class="loading">Loading your library\u2026</div>`;
+    app.innerHTML = `<div class="page-heading"><h1>Home</h1></div><div class="loading" role="status">Loading library\u2026</div>`;
   }
   if (BROWSE.data && Date.now() - BROWSE.at < 3e4) return;
-  let res;
   try {
-    res = await fetch("/api/browse");
+    const res = await fetch("/api/browse");
+    if (!res.ok) throw new Error("Catalog unavailable");
+    const txt = await res.text();
+    const data = JSON.parse(txt);
+    const changed = txt !== BROWSE.txt;
+    BROWSE = { txt, data, at: Date.now() };
+    if (changed && APP_VIEW === "home") paintHome(data);
   } catch {
-    return;
+    if (!BROWSE.data && APP_VIEW === "home") {
+      app.innerHTML = `<div class="page-heading"><h1>Home</h1></div>${homeEmptyHtml()}`;
+    }
   }
-  if (!res.ok) return;
-  const txt = await res.text();
-  const changed = txt !== BROWSE.txt;
-  BROWSE = { txt, data: JSON.parse(txt), at: Date.now() };
-  if (changed && APP_VIEW === "home") paintHome(BROWSE.data);
-  if (await refreshHomeRails() && APP_VIEW === "home") paintHome(BROWSE.data);
+  if (await refreshHomeRails() && APP_VIEW === "home") paintHome(BROWSE.data || {});
+}
+function homeEmptyHtml() {
+  return `<div class="library-empty" role="status"><h2>Library unavailable</h2>
+    <p>The catalog returned no titles. Try again or browse a different library.</p>
+    <div class="empty-actions"><button class="btn" onclick="retryHome()">Retry library</button>
+      <a class="btn ghost" href="/browse" onclick="event.preventDefault(); nav('/browse')">Browse libraries</a></div></div>`;
+}
+function retryHome() {
+  BROWSE.at = 0;
+  BROWSE.txt = null;
+  return renderHome();
 }
 let RAILS = { movies: null, tv: null };
 async function refreshHomeRails() {
@@ -309,13 +326,15 @@ async function refreshHomeRails() {
   return changed;
 }
 function paintHome(data) {
-  var _a, _b;
+  var _a, _b, _c, _d, _e, _f, _g;
   APP_VIEW = "home";
-  const { rows, continueWatching, favorites, watchlist, collections, recommendations, flags } = data;
+  const { rows = {}, continueWatching, favorites, watchlist, collections, recommendations, flags } = data;
   FAV = new Set((flags == null ? void 0 : flags.favorites) || []);
   LIST = new Set((flags == null ? void 0 : flags.watchlist) || []);
   const trending = ((_a = rows.trending) == null ? void 0 : _a.items) || [];
-  let html = "";
+  let html = `<header class="page-heading"><h1>Home</h1>
+    <a class="text-link" href="/browse" onclick="event.preventDefault(); nav('/browse')">Browse library <span aria-hidden="true">\u2197</span></a></header>`;
+  if (continueWatching == null ? void 0 : continueWatching.length) html += `<div class="rows resume-rows">${continueRowHtml(continueWatching)}</div>`;
   const seen = /* @__PURE__ */ new Set();
   const pool = [];
   for (const [label, items] of [["Recommended for you", (recommendations == null ? void 0 : recommendations.items) || []], ["Trending now", trending]])
@@ -327,19 +346,26 @@ function paintHome(data) {
   const slides = (bannered.length >= 3 ? bannered : pool).slice(0, 6);
   if (slides.length) html += heroCarouselHtml(slides);
   html += `<div class="rows">`;
-  if (continueWatching == null ? void 0 : continueWatching.length) html += continueRowHtml(continueWatching);
-  if (watchlist == null ? void 0 : watchlist.length) html += rowHtml("My List", watchlist, { cls: "list-row" });
+  if (watchlist == null ? void 0 : watchlist.length) html += rowHtml("My list", watchlist, { cls: "list-row" });
   if (favorites == null ? void 0 : favorites.length) html += rowHtml("Favorites", favorites, { cls: "list-row" });
   for (const c of collections || []) {
     if (c.items.length) html += rowHtml(c.name, c.items, { collection: c.id, cls: "list-row" });
   }
   if ((_b = recommendations == null ? void 0 : recommendations.items) == null ? void 0 : _b.length) html += rowHtml(recommendations.label, recommendations.items);
-  if (RAILS.movies) html += mediaRowHtml("Popular Movies", RAILS.movies, "movies");
-  if (RAILS.tv) html += mediaRowHtml("Popular TV Shows", RAILS.tv, "tv");
+  if (RAILS.movies) html += mediaRowHtml("Popular movies", RAILS.movies, "movies");
+  if (RAILS.tv) html += mediaRowHtml("Popular TV shows", RAILS.tv, "tv");
+  const rowLabels = { airing: "Airing now", trending: "Trending", popular: "Popular anime", top: "Top rated" };
   for (const key of ["airing", "trending", "popular", "top"]) {
-    if (rows[key]) html += rowHtml(rows[key].label, rows[key].items);
+    if ((_d = (_c = rows[key]) == null ? void 0 : _c.items) == null ? void 0 : _d.length) html += rowHtml(rowLabels[key], rows[key].items);
   }
   html += `</div>`;
+  if (!slides.length && !(continueWatching == null ? void 0 : continueWatching.length) && !(watchlist == null ? void 0 : watchlist.length) && !(favorites == null ? void 0 : favorites.length) && !(collections == null ? void 0 : collections.some((c) => {
+    var _a2;
+    return (_a2 = c.items) == null ? void 0 : _a2.length;
+  })) && !((_e = recommendations == null ? void 0 : recommendations.items) == null ? void 0 : _e.length) && !((_f = RAILS.movies) == null ? void 0 : _f.length) && !((_g = RAILS.tv) == null ? void 0 : _g.length) && !Object.values(rows).some((r) => {
+    var _a2;
+    return (_a2 = r.items) == null ? void 0 : _a2.length;
+  })) html += homeEmptyHtml();
   app.innerHTML = html;
   startHeroCar(slides.length);
   initRowArrows();
@@ -348,64 +374,51 @@ const ICON_CLOCK = svg('<path d="M12 2a10 10 0 100 20 10 10 0 000-20zm0 18a8 8 0
 const ICON_INFO = svg('<path d="M12 2a10 10 0 100 20 10 10 0 000-20zm1 15h-2v-6h2zm0-8h-2V7h2z"/>', 15);
 const ICON_PLAY_SM = svg('<path d="M8 5v14l11-7z"/>', 15);
 function heroCarouselHtml(slides) {
-  return `<div class="hero-car" id="heroCar">
+  return `<section class="hero-car" id="heroCar" aria-label="Featured titles" aria-roledescription="carousel">
     ${slides.map((m, i) => {
-    const badge = m.airing ? `${ICON_CLOCK} EP ${m.airing.episode} \xB7 Airing Now` : esc(m.heroLabel || "");
+    const badge = m.airing ? `Episode ${m.airing.episode} \xB7 Airing now` : esc(m.heroLabel || "");
     const meta = [m.format || "TV", m.year, m.episodes ? `${m.episodes} eps` : null, m.score ? `\u2605 ${m.score}` : null].filter(Boolean);
     return `
-      <div class="hero ${i === 0 ? "active" : ""} ${m.banner ? "" : "no-banner"}" style="--hero-img:url('${m.banner || m.cover}')">
+      <div class="hero ${i === 0 ? "active" : ""} ${m.banner ? "" : "no-banner"}" ${i === 0 ? "" : "hidden"} role="group" aria-label="${i + 1} of ${slides.length}" style="--hero-img:url('${esc(m.banner || m.cover)}')">
         <div class="hero-bg"></div>
         <div class="hero-scrim"></div>
-        <div class="hero-badge">${badge}</div>
         <div class="hero-content">
+          <div class="hero-badge">${badge}</div>
+          <h2 class="hero-title">${esc(m.title)}</h2>
           <div class="hero-chips">${meta.map((c) => `<span class="hero-chip">${c}</span>`).join("")}</div>
-          <div class="hero-title">${esc(m.title)}</div>
-          <div class="hero-chips hero-genres">${(m.genres || []).slice(0, 3).map((g) => `<button class="hero-chip" onclick="openCategory('${esc(g)}')">${esc(g)}</button>`).join("")}</div>
           <div class="hero-actions">
-            <button class="hero-btn" onclick="openTitle(${m.anilistId})">${ICON_INFO} Details</button>
-            <button class="hero-btn primary" onclick="playTitle(${m.anilistId})">${ICON_PLAY_SM} Watch Now</button>
+            <button class="hero-btn primary" onclick="playTitle(${m.anilistId})">${ICON_PLAY_SM} Play</button>
+            <button class="hero-btn" onclick="openTitle(${m.anilistId})">View details</button>
           </div>
         </div>
       </div>`;
   }).join("")}
     ${slides.length > 1 ? `
     <div class="hero-pager">
-      <button class="hero-pg-btn" onclick="heroNav(-1)" title="Previous">${ICON_CHEV_L}</button>
-      <div class="hero-count"><b id="heroCurrent">1</b> / ${slides.length}</div>
-      <button class="hero-pg-btn" onclick="heroNav(1)" title="Next">${ICON_CHEV_R}</button>
+      <button class="hero-pg-btn" onclick="heroNav(-1)" aria-label="Previous featured title">${ICON_CHEV_L}</button>
+      <div class="hero-count" aria-live="polite"><b id="heroCurrent">1</b> / ${slides.length}</div>
+      <button class="hero-pg-btn" onclick="heroNav(1)" aria-label="Next featured title">${ICON_CHEV_R}</button>
     </div>` : ""}
-  </div>`;
+  </section>`;
 }
-let heroTimer = null, heroIdx = 0, heroCount = 0;
-const HERO_INTERVAL = 7e3;
+let heroIdx = 0, heroCount = 0;
 function startHeroCar(count) {
-  clearInterval(heroTimer);
-  heroTimer = null;
   heroIdx = 0;
   heroCount = count;
-  if (count < 2) return;
-  heroTimer = setInterval(() => heroGo(heroIdx + 1), HERO_INTERVAL);
-  const car = $("#heroCar");
-  car.addEventListener("mouseenter", () => clearInterval(heroTimer));
-  car.addEventListener("mouseleave", () => {
-    clearInterval(heroTimer);
-    heroTimer = setInterval(() => heroGo(heroIdx + 1), HERO_INTERVAL);
-  });
 }
-function heroGo(i, user) {
+function heroGo(i) {
   const car = $("#heroCar");
   if (!car || !heroCount) return;
   heroIdx = (i % heroCount + heroCount) % heroCount;
-  car.querySelectorAll(".hero").forEach((el, j) => el.classList.toggle("active", j === heroIdx));
+  car.querySelectorAll(".hero").forEach((el, j) => {
+    el.classList.toggle("active", j === heroIdx);
+    el.hidden = j !== heroIdx;
+  });
   const cur = $("#heroCurrent");
   if (cur) cur.textContent = heroIdx + 1;
-  if (user) {
-    clearInterval(heroTimer);
-    heroTimer = setInterval(() => heroGo(heroIdx + 1), HERO_INTERVAL);
-  }
 }
 function heroNav(d) {
-  heroGo(heroIdx + d, true);
+  heroGo(heroIdx + d);
 }
 function rowHtml(label, items, opts = {}) {
   const del = opts.collection ? `<button class="row-del" title="Delete collection" onclick="deleteCollection(${opts.collection}, event)">\u2715</button>` : "";
@@ -428,7 +441,7 @@ function continueCardHtml(p) {
   const left = p.duration && p.duration > p.seconds ? Math.round((p.duration - p.seconds) / 60) + "m left" : null;
   const badge = continueBadge(p);
   const art = p.cover ? `<img loading="lazy" src="${p.cover}" alt="" />` : `<div class="movie-noart"><span>${esc(p.title)}</span></div>`;
-  return `<div class="card" onclick="${continueHref(p)}">
+  return `<div class="card" role="link" tabindex="0" aria-label="Resume ${esc(p.title)}" onclick="${continueHref(p)}">
     <div class="card-art">${art}
       ${badge ? `<span class="badge">${esc(badge)}</span>` : ""}
       <div class="card-scrim">
@@ -441,7 +454,7 @@ function continueCardHtml(p) {
   </div>`;
 }
 function continueRowHtml(items) {
-  return `<div class="row"><h2>Continue Watching</h2>
+  return `<div class="row"><h2>Continue watching</h2>
     ${scrollerHtml("cards", items.map(continueCardHtml).join(""))}</div>`;
 }
 function mediaRowHtml(label, items, kind) {
@@ -485,7 +498,7 @@ function cardHtml(m) {
   const airing = m.badge ? null : airingBadge(m.airing);
   const badge = m.badge || airing;
   const sub = [m.year, m.episodes ? m.episodes + " eps" : null, m.score ? m.score + "%" : null].filter(Boolean).join(" \xB7 ");
-  return `<div class="card" onclick="openTitle(${id})">
+  return `<div class="card" role="link" tabindex="0" aria-label="${esc(m.title)}" onclick="openTitle(${id})">
     <div class="card-art">
       <img loading="lazy" src="${m.cover}" alt="" />
       ${badge ? `<span class="badge${airing ? " airing" : ""}">${badge}</span>` : ""}
@@ -3551,7 +3564,7 @@ const CATALOGS = {
     key: (m) => m.anilistId,
     card: (m) => cardHtml(m),
     open: (m) => `openTitle(${m.anilistId})`,
-    disabled: `Anime is unavailable right now \u2014 AniList couldn't be reached.`
+    disabled: `The anime catalog is unavailable.`
   },
   movies: {
     title: "Movies",
@@ -3561,7 +3574,7 @@ const CATALOGS = {
     key: (m) => m.id,
     card: (m) => mediaCardHtml(m, `openMovie('${esc(m.id)}')`),
     open: (m) => `openMovie('${esc(m.id)}')`,
-    disabled: `Movies are off \u2014 set a <code>REAL_DEBRID_TOKEN</code> to enable them.`
+    disabled: `The movie catalog is unavailable.`
   },
   tv: {
     title: "TV Shows",
@@ -3571,14 +3584,14 @@ const CATALOGS = {
     key: (m) => m.id,
     card: (m) => mediaCardHtml(m, `openTvShow('${esc(m.id)}')`),
     open: (m) => `openTvShow('${esc(m.id)}')`,
-    disabled: `TV Shows are unavailable right now \u2014 the catalog addon couldn't be reached.`
+    disabled: `The TV catalog is unavailable.`
   }
 };
 const BROWSE_TYPES = [
   { id: "all", label: "All" },
   { id: "anime", label: "Anime" },
   { id: "movies", label: "Movies" },
-  { id: "tv", label: "TV Shows" }
+  { id: "tv", label: "TV shows" }
 ];
 const CAT = {
   anime: { items: null, meta: null, hasMore: false, nextSkip: 0, off: false },
@@ -3645,8 +3658,7 @@ async function renderBrowse(filters) {
   document.body.dataset.lib = filters.type;
   syncRail();
   if (!wasHere || !$("#catGrid")) {
-    app.innerHTML = `<div class="rows"><div class="row">
-      <h2>Browse</h2>
+    app.innerHTML = `<header class="page-heading"><h1>Browse</h1></header><div class="rows"><div class="row catalog-row">
       <div class="mode-pills browse-types" id="catTypes" role="group" aria-label="Library"></div>
       <div class="filter-bar" id="catBar"></div>
       <div id="catGrid" class="cards-grid"><div class="grid-empty">Loading\u2026</div></div>
@@ -3761,9 +3773,16 @@ function paintBrowse() {
   const off = kinds.filter((k) => CAT[k].off);
   const loaded = kinds.every((k) => CAT[k].items);
   if (!loaded) return;
-  setCatGrid(off.length === kinds.length ? off.map((k) => `<div class="grid-empty">${CATALOGS[k].disabled}</div>`).join("") : `<div class="grid-empty">Nothing matches these filters.
+  setCatGrid(off.length === kinds.length ? `<div class="grid-empty"><p>${off.map((k) => CATALOGS[k].disabled).join(" ")}</p>
+        <div class="empty-actions"><button class="btn ghost mini" onclick="retryBrowse()">Retry catalog</button>
+        ${(ME == null ? void 0 : ME.role) === "admin" ? `<a class="btn ghost mini" href="/admin.html">Check server setup</a>` : ""}</div></div>` : `<div class="grid-empty">Nothing matches these filters.
         <button class="btn ghost mini" onclick="resetBrowseFilters()">Reset filters</button></div>`);
   renderCatFoot();
+}
+function retryBrowse() {
+  BR.sig = null;
+  BR.at = 0;
+  return renderBrowse(BR.filters);
 }
 function renderCatFoot() {
   const foot = $("#catFoot");
@@ -3809,7 +3828,7 @@ async function loadMoreBrowse() {
 function mediaCardHtml(m, onclick) {
   const art = m.poster ? `<img loading="lazy" src="${m.poster}" alt="" />` : `<div class="movie-noart"><span>${esc(m.title)}</span></div>`;
   const sub = [m.year, m.rating ? m.rating + "%" : null].filter(Boolean).join(" \xB7 ");
-  return `<div class="card movie-card" onclick="${onclick}">
+  return `<div class="card movie-card" role="link" tabindex="0" aria-label="${esc(m.title)}" onclick="${onclick}">
     <div class="card-art">${art}
       ${m.rating ? `<span class="badge">${m.rating}%</span>` : ""}
       <div class="card-scrim"><div class="card-t">${esc(m.title)}</div>${sub ? `<div class="card-sub">${sub}</div>` : ""}</div>
@@ -4191,6 +4210,10 @@ document.addEventListener("click", (e) => {
 });
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") closeRailMore();
+  if (!document.documentElement.classList.contains("tv") && e.key === "Enter" && e.target.matches(".card[role='link']")) {
+    e.preventDefault();
+    e.target.click();
+  }
 });
 window.Player = Player;
 window.epThumbFallback = epThumbFallback;

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Mediawan</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-  <meta name="theme-color" content="#101216" />
+  <meta name="theme-color" content="#171a19" />
   <link rel="stylesheet" href="/styles.css" />
   <!-- 10-foot overrides; every rule is scoped to html.tv, which tv.js sets -->
   <link rel="stylesheet" href="/tv.css" />
@@ -15,6 +15,7 @@
        browsers that support it) to avoid its noisy http fallback elsewhere. -->
 </head>
 <body class="app-shell">
+  <a class="skip-link" href="#app">Skip to content</a>
   <!-- ===== the rail: the app's only navigation, on every screen =====
        A phone, a laptop and a television get the same destinations in the same
        order. Only the geometry changes: a left column with room for labels on
@@ -22,7 +23,7 @@
        where the secondary half folds into .rail-tail behind the More button.
        Static markup rather than JS-built, so it survives app.js failing. -->
   <nav class="rail" id="rail" aria-label="Main">
-    <a class="rail-mark" href="/" aria-label="Mediawan — home"></a>
+    <a class="rail-mark" href="/" aria-label="Mediawan — home"><span>Mediawan</span></a>
     <button class="rail-btn" data-act="search" id="railSearch">
       <svg viewBox="0 0 24 24" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 1 0-.7.7l.27.28v.79l5 4.99L20.49 19zm-6 0A4.5 4.5 0 1 1 14 9.5 4.5 4.5 0 0 1 9.5 14z"/></svg><span>Search</span>
     </button>
@@ -75,7 +76,7 @@
     </button>
   </div>
 
-  <div id="app"><div class="loading">Loading your library…</div></div>
+  <main id="app" tabindex="-1"><div class="loading" role="status">Loading library…</div></main>
 
   <!-- ===== detail modal (info + episode list) ===== -->
   <div class="overlay" id="detail">
