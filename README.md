@@ -1,5 +1,7 @@
 # Mediawan
 
+Live sports, competition shelves, commentary languages and programme-guide setup are documented in [Live TV](docs/live-tv.md).
+
 A self-hosted, invite-only, Netflix-style streaming front-end for anime, films and
 TV. One Node process serves the SPA, authentication, an admin panel, cached
 [AniList](https://anilist.co) metadata, stream resolution, local transcoding and a

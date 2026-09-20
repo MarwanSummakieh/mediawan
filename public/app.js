@@ -248,6 +248,8 @@ function goBack(fallback) {
 // home-only tools). "home" hosts everything that isn't the Movies or TV
 // catalog: the unified front page, anime detail/watch, categories, schedule.
 function activeTabFor(path) {
+  if (path.startsWith('/sports')) return 'sports';
+  if (path.startsWith('/library/')) return 'browse';
   if (path === "/browse" || path === "/movies" || path === "/tv") return "browse";
   if (path.startsWith("/movie/") || path.startsWith("/moviewatch/")) return "browse";
   if (path.startsWith("/tv/") || path.startsWith("/tvwatch/")) return "browse";
@@ -269,7 +271,7 @@ function setActiveTab(tab) {
 // browsing everything at once ("all") matches no single button, and lighting
 // one anyway would point at a library the grid isn't showing.
 function syncRail() {
-  const here = document.body.dataset.tab === "browse" ? document.body.dataset.lib : "home";
+  const here = document.body.dataset.tab === "browse" ? document.body.dataset.lib : document.body.dataset.tab;
   document.querySelectorAll("#rail .rail-btn[data-id]").forEach((b) => {
     b.classList.toggle("active", b.dataset.id === here);
     if (b.dataset.id === here) b.setAttribute("aria-current", "page");
@@ -278,6 +280,7 @@ function syncRail() {
 }
 
 async function route() {
+  if (APP_VIEW === 'sports' && !location.pathname.startsWith('/sports')) window.MediawanSports.leave();
   const qs = new URLSearchParams(location.search);
   setActiveTab(activeTabFor(location.pathname));
   // The strip is part of the search view, so leaving that view puts it away —
@@ -294,6 +297,8 @@ async function route() {
   if ((m = location.pathname.match(/^\/movie\/([^/?]+)/))) { Player.hide(); hideDetail(); return showMediaDetail("movie", decodeURIComponent(m[1])); }
   if ((m = location.pathname.match(/^\/tv\/([^/?]+)/))) { Player.hide(); hideDetail(); return showMediaDetail("tv", decodeURIComponent(m[1])); }
   Player.hide(); hideDetail(); hideMDetail();
+  if (location.pathname.startsWith('/sports')) { APP_VIEW = 'sports'; return window.MediawanSports.render(app, { nav, user: ME }); }
+  if ((m = location.pathname.match(/^\/library\/(anime|movies|tv)$/))) return renderLibraryHub(m[1]);
   if (location.pathname === "/browse") return renderBrowse(browseFiltersFromQs(qs));
   // The old per-vertical URLs still resolve — bookmarks, the TV app's saved
   // deep links, anything already out there — as the Browse page pre-filtered
@@ -386,6 +391,7 @@ function paintHome(data) {
   const trending = rows.trending?.items || [];
   let html = `<header class="page-heading"><h1>Home</h1>
     <a class="text-link" href="/browse" onclick="event.preventDefault(); nav('/browse')">Browse library <span aria-hidden="true">↗</span></a></header>`;
+  html += libraryLinks();
   if (continueWatching?.length) html += `<div class="rows resume-rows">${continueRowHtml(continueWatching)}</div>`;
 
   // Hero carousel: your recommendations first, topped up with trending.
@@ -3586,6 +3592,35 @@ const CATALOGS = {
     card: (m) => mediaCardHtml(m, `openTvShow('${esc(m.id)}')`), open: (m) => `openTvShow('${esc(m.id)}')`,
     disabled: `The TV catalog is unavailable.` },
 };
+function libraryLinks() {
+  return `<nav class="library-hub-links" aria-label="Libraries">${[['movies','Movies'],['tv','TV shows'],['anime','Anime'],['sports','Live sports']].map(([id,label])=>{
+    const url=id==='sports'?'/sports':'/library/'+id;
+    return `<a href="${url}" onclick="event.preventDefault(); nav('${url}')"><strong>${label}</strong></a>`;
+  }).join('')}</nav>`;
+}
+async function renderLibraryHub(kind) {
+  const c=CATALOGS[kind],view='library:'+kind;APP_VIEW=view;
+  document.body.dataset.lib=kind;syncRail();document.title=c.title+' · Mediawan';
+  const header=`<header class="page-heading"><h1>${c.title}</h1><a class="text-link" href="${c.path}" onclick="event.preventDefault(); nav('${c.path}')">Browse all ↗</a></header>`;
+  app.innerHTML=header+libraryLinks()+'<div class="loading" role="status">Loading titles…</div>';
+  const genres=kind==='anime'?['Action','Adventure','Comedy','Fantasy']:['Action','Comedy','Drama','Thriller'];
+  const sections=[{label:'Popular now',filters:{}},...genres.map(genre=>({label:genre,filters:{genre}}))];
+  const results=await Promise.all(sections.map(async section=>{
+    try {const res=await fetch(c.api+catQuery(section.filters));if(!res.ok)throw Error();const d=await res.json();
+      if(d.enabled===false)return {...section,items:[]};
+      const items=(d.items||[]).slice(0,18);items.forEach(m=>c.cache.set(c.key(m),m));return {...section,items};
+    }catch{return {...section,items:[]}};
+  }));
+  if(APP_VIEW!==view)return;
+  let html=header+libraryLinks();
+  const featured=results[0].items[0];
+  if(featured){const name=kind==='anime'?(featured.title?.english||featured.title?.romaji||featured.title):featured.title;
+    html+=`<section class="library-hub-hero"><div><span class="sports-eyebrow">Popular in ${esc(c.title)}</span><h2>${esc(name)}</h2><button class="sports-button primary" onclick="${c.open(featured)}">View title</button></div>${featured.poster||featured.cover?`<img src="${esc(featured.poster||featured.cover)}" alt="" />`:''}</section>`;
+  }
+  html+='<div class="rows">'+results.filter(s=>s.items.length).map(s=>{const url=c.path+(s.filters.genre?'&genre='+encodeURIComponent(s.filters.genre):'');return `<section class="row"><h2>${esc(s.label)}<a class="row-see" href="${url}" onclick="event.preventDefault(); nav('${url}')">See all ›</a></h2>${scrollerHtml('cards',s.items.map(c.card).join(''))}</section>`}).join('')+'</div>';
+  if(!results.some(s=>s.items.length))html+=`<div class="library-empty"><h2>${esc(c.disabled)}</h2><button class="btn" onclick="renderLibraryHub('${kind}')">Retry library</button></div>`;
+  app.innerHTML=html;initRowArrows();
+}
 const BROWSE_TYPES = [
   { id: "all", label: "All" },
   { id: "anime", label: "Anime" },
