@@ -23,6 +23,12 @@ import { downloadStatus as debridProgress, startDownload as debridStartDownload 
 import * as cacheStore from "./lib/cache/store.mjs";
 import * as transcodeSessions from "./lib/transcode/session.mjs";
 import { capabilities } from "./lib/transcode/probe.mjs";
+import { pipelineStatus } from "./lib/pipeline.mjs";
+import { cancelAll as cancelDownloads } from "./lib/cache/fetcher.mjs";
+import { serveCachedFile } from "./lib/cache/serve.mjs";
+import { mountLiveRoutes } from "./lib/live/routes.mjs";
+import { startGuideRefresh } from "./lib/live/store.mjs";
+import { startLiveReaper, stopAllLive } from "./lib/live/sessions.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -158,7 +164,12 @@ app.post("/api/invite/:token", (req, res) => {
 });
 
 // ---------- admin panel ----------
+mountLiveRoutes(app, { requireAuth, requireAdmin });
 app.use("/api/admin", requireAuth, requireAdmin);
+app.get("/api/admin/pipeline", ah(async (_req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  res.json(await pipelineStatus());
+}));
 app.get("/api/admin/users", (_req, res) => res.json({ users: db.listUsers(), invites: db.listInvites() }));
 app.post("/api/admin/invite", (req, res) => {
   const { email, name, role } = req.body || {};
@@ -1299,22 +1310,7 @@ app.get("/media/hls/:id/:file", mediaCors, requireMediaGrant((req) => req.params
 
 // Direct playback of a cached file — LAN clients whose codecs need nothing done
 // to them. Range-aware so seeking works without a transcoder in the path.
-app.get("/media/file/:key", mediaCors, requireMediaGrant((req) => req.params.key), (req, res) => {
-  const row = cacheStore.lookup(req.params.key);
-  if (!row) return res.status(404).end("not cached");
-  const size = fs.statSync(row.path).size;
-  const range = req.headers.range?.match(/bytes=(\d*)-(\d*)/);
-  res.setHeader("Accept-Ranges", "bytes");
-  if (range) {
-    const start = Number(range[1] || 0);
-    const end = Math.min(Number(range[2] || size - 1), size - 1);
-    res.status(206).setHeader("Content-Range", `bytes ${start}-${end}/${size}`);
-    res.setHeader("Content-Length", end - start + 1);
-    return fs.createReadStream(row.path, { start, end }).pipe(res);
-  }
-  res.setHeader("Content-Length", size);
-  fs.createReadStream(row.path).pipe(res);
-});
+app.get("/media/file/:key", mediaCors, requireMediaGrant((req) => req.params.key), serveCachedFile);
 
 // ---------- upgrade-in-place ----------
 //
@@ -1527,7 +1523,7 @@ app.get("/healthz", (req, res) =>
 // public/tv-build; serve those to Tizen webviews and the untouched originals to
 // every other browser. Missing build directory → everyone gets the originals,
 // so a desktop-only checkout behaves exactly as before.
-const TV_ASSETS = new Set(["/app.js", "/tv.js", "/config.js", "/styles.css", "/tv.css"]);
+const TV_ASSETS = new Set(["/app.js", "/tv.js", "/config.js", "/styles.css", "/tv.css", "/sports.js", "/sports.css", "/admin.js", "/admin.css"]);
 const TV_BUILD = path.join(__dirname, "public", "tv-build");
 const hasTvBuild = fs.existsSync(TV_BUILD);
 if (!hasTvBuild) console.warn("  [tv] public/tv-build missing — old Samsung TVs will fail to boot. Run: npm run build:tv");
@@ -1558,7 +1554,7 @@ app.use(express.static(path.join(__dirname, "public"), {
 }));
 
 // Client-routed pages (deep links / reloads) get the SPA shell with a 200.
-app.get([/^\/title\/\d+$/, /^\/watch\/\d+\/[^/]+$/, /^\/category\/[^/]+$/, "/schedule", "/browse", "/movies", /^\/movie\/[^/]+$/, /^\/moviewatch\/[^/]+$/, "/tv", /^\/tv\/[^/]+$/, /^\/tvwatch\/[^/]+\/[^/]+\/[^/]+$/], (_req, res) => {
+app.get([/^\/sports(?:\/.*)?$/, /^\/library\/(?:anime|movies|tv)$/, /^\/title\/\d+$/, /^\/watch\/\d+\/[^/]+$/, /^\/category\/[^/]+$/, "/schedule", "/browse", "/movies", /^\/movie\/[^/]+$/, /^\/moviewatch\/[^/]+$/, "/tv", /^\/tv\/[^/]+$/, /^\/tvwatch\/[^/]+\/[^/]+\/[^/]+$/], (_req, res) => {
   res.setHeader("Cache-Control", "no-cache");
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
@@ -1613,6 +1609,8 @@ cacheStore.reconcile()
 // Reap idle ffmpeg sessions. Not housekeeping — a leaked encoder holds a core
 // forever, and on a 4-core N100 two leaks are most of the box.
 transcodeSessions.startReaper();
+startGuideRefresh();
+startLiveReaper();
 // Sweep session dirs a killed predecessor left on disk. Session ids are
 // deterministic, so a stale dir is exactly where the next play of that episode
 // will write — and ffmpeg would APPEND to the dead playlist instead of
@@ -1621,8 +1619,9 @@ transcodeSessions.sweepSessionRoot().catch(() => {});
 capabilities().then((c) => {
   if (!config.transcode.enabled) return console.log("  Transcode: disabled (TRANSCODE=false)");
   if (!c.ffmpeg) return console.warn(`  [transcode] ffmpeg NOT FOUND (${c.error}) — remote clients cannot be served adapted streams`);
-  if (!c.qsv && config.transcode.hwaccel === "qsv")
-    console.warn("  [transcode] QuickSync unavailable — falling back to libx264. An N100 will NOT keep up in real time; check /dev/dri is passed through.");
+  if (!c.qsv && !c.vaapi && config.transcode.hwaccel !== "none")
+    console.warn("  [transcode] GPU encoding unavailable — falling back to libx264. An N100 may not keep up in real time; check /dev/dri is passed through.");
+  else if (c.vaapi) console.log(`  Transcode: Intel GPU via VAAPI · remote cap ${config.transcode.remoteMbps} Mbps · max ${config.transcode.maxSessions} sessions`);
   else console.log(`  Transcode: ${c.encoders.join(", ")} · remote cap ${config.transcode.remoteMbps} Mbps · max ${config.transcode.maxSessions} sessions`);
 });
 console.log("");
@@ -1644,6 +1643,8 @@ function shutdown(signal, code = 0) {
   // outlives its process is exactly the appended-playlist corruption the boot
   // sweep exists to clean up after.
   transcodeSessions.stopAll().catch(() => {});
+  stopAllLive().catch(() => {});
+  cancelDownloads();
   server.close(() => {
     db.closeDb();
     process.exit(code);

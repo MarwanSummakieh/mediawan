@@ -155,6 +155,8 @@
     return menu || null;
   }
   function surface() {
+    const live = document.querySelector(".sports-modal .sports-dialog, .sports-player");
+    if (live) return live;
     const picker = document.querySelector('.picker[data-open="true"] .picker-menu:not([hidden])');
     if (picker) return picker;
     if (isShown("#player")) return playerLayer() || $("#player");

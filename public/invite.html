@@ -5,23 +5,23 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Accept invite · Mediawan</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-  <meta name="theme-color" content="#101216" />
+  <meta name="theme-color" content="#171a19" />
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
   <div class="auth">
     <div class="auth-card">
-      <h1>MEDIAWAN</h1>
+      <h1>Mediawan</h1>
       <p id="intro">Checking your invite…</p>
       <form id="f" style="display:none">
-        <label>Email</label>
+        <label for="email">Email</label>
         <input id="email" type="email" disabled />
-        <label>Choose a password</label>
+        <label for="password">Choose a password</label>
         <!-- must match the server's minPasswordLength default (config.mjs) -->
         <input id="password" type="password" autocomplete="new-password" minlength="8" required />
-        <button class="btn" type="submit">Create Account</button>
+        <button class="btn" type="submit">Create account</button>
       </form>
-      <div class="err" id="err"></div>
+      <div class="err" id="err" role="alert"></div>
     </div>
   </div>
   <script>

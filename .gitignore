@@ -18,6 +18,9 @@ data.sqlite-*
 /media/
 /data/
 /transcode/
+/live-tv/
+*.m3u
+*.m3u8
 
 # VidLink's wasm binary + glue, fetched once at runtime and pinned by hash on
 # first use. Third-party artifacts, not source — never redistribute them.

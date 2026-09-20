@@ -25,7 +25,7 @@ const OUT = path.join(SRC, "tv-build");
 
 // Chromium 69 is the floor: Tizen 5.5 (2020 sets). Newer TVs are all above it.
 const TARGET = "chrome69";
-const ASSETS = ["app.js", "tv.js", "config.js", "styles.css", "tv.css"];
+const ASSETS = ["app.js", "admin.js", "sports.js", "tv.js", "config.js", "styles.css", "admin.css", "sports.css", "tv.css"];
 
 mkdirSync(OUT, { recursive: true });
 

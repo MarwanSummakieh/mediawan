@@ -213,13 +213,17 @@ html.tv .genres button, html.tv .sheet-back, html.tv .filter-bar .btn, html.tv #
 
 /* Hero. The pull-up that slid it under a translucent top bar is gone from
    styles.css itself now — there is no bar on any device to slide under. */
-html.tv .hero-car { height: 44vh; min-height: 420px; max-height: 560px; }
-html.tv .hero-badge { top: 34px; left: var(--tv-pad); font-size: 19px; padding: 12px 22px; }
+html.tv .hero-car { min-height: 420px; margin: 0 var(--tv-pad) 32px; }
+html.tv .hero { min-height: 420px; padding-bottom: 88px; }
+html.tv .hero-content { max-width: 760px; }
 html.tv .hero-title { font-size: 58px; }
 html.tv .hero-btn { font-size: 22px; padding: 16px 34px; background: rgba(14,14,14,.78); }
 html.tv .hero-btn.primary { background: var(--accent); }
-html.tv .hero-badge { font-size: 18px; padding: 10px 20px; }
-html.tv .hero-chip, html.tv button.hero-chip { font-size: 18px; padding: 8px 16px; background: rgba(14,14,14,.72); }
+html.tv .hero-badge { font-size: 18px; padding: 0; }
+html.tv .hero-chip, html.tv button.hero-chip { font-size: 18px; padding: 0; background: none; }
+html.tv .hero-pager { display: flex; }
+html.tv .hero-pg-btn { width: 58px; height: 58px; }
+html.tv .hero-count { font-size: 20px; }
 /* its flex gaps are dead on Chromium 69, like everything else's */
 html.tv .hero-content, html.tv .hero-chips, html.tv .hero-actions { gap: 0; }
 html.tv .hero-content > * + * { margin-top: 18px; }

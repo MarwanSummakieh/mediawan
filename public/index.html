@@ -5,8 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Mediawan</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-  <meta name="theme-color" content="#101216" />
+  <meta name="theme-color" content="#171a19" />
   <link rel="stylesheet" href="/styles.css" />
+  <link rel="stylesheet" href="/sports.css" />
   <!-- 10-foot overrides; every rule is scoped to html.tv, which tv.js sets -->
   <link rel="stylesheet" href="/tv.css" />
   <script src="/config.js"></script>
@@ -15,6 +16,7 @@
        browsers that support it) to avoid its noisy http fallback elsewhere. -->
 </head>
 <body class="app-shell">
+  <a class="skip-link" href="#app">Skip to content</a>
   <!-- ===== the rail: the app's only navigation, on every screen =====
        A phone, a laptop and a television get the same destinations in the same
        order. Only the geometry changes: a left column with room for labels on
@@ -22,21 +24,24 @@
        where the secondary half folds into .rail-tail behind the More button.
        Static markup rather than JS-built, so it survives app.js failing. -->
   <nav class="rail" id="rail" aria-label="Main">
-    <a class="rail-mark" href="/" aria-label="Mediawan — home"></a>
+    <a class="rail-mark" href="/" aria-label="Mediawan — home"><span>Mediawan</span></a>
     <button class="rail-btn" data-act="search" id="railSearch">
       <svg viewBox="0 0 24 24" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 1 0-.7.7l.27.28v.79l5 4.99L20.49 19zm-6 0A4.5 4.5 0 1 1 14 9.5 4.5 4.5 0 0 1 9.5 14z"/></svg><span>Search</span>
     </button>
     <button class="rail-btn" data-nav="/" data-id="home">
       <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3 2 12h3v8h6v-6h2v6h6v-8h3z"/></svg><span>Home</span>
     </button>
-    <button class="rail-btn" data-nav="/browse?type=anime" data-id="anime">
+    <button class="rail-btn" data-nav="/library/anime" data-id="anime">
       <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3a9 9 0 1 0 9 9c0-.46-.04-.92-.1-1.36A5.39 5.39 0 0 1 16.5 13a5.4 5.4 0 0 1-5.4-5.4c0-1.7.79-3.22 2.02-4.22C12.75 3.13 12.38 3 12 3z"/></svg><span>Anime</span>
     </button>
-    <button class="rail-btn" data-nav="/browse?type=movies" data-id="movies">
+    <button class="rail-btn" data-nav="/library/movies" data-id="movies">
       <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 3v2h-2V3H8v2H6V3H4v18h2v-2h2v2h8v-2h2v2h2V3h-2zM8 17H6v-2h2v2zm0-4H6v-2h2v2zm0-4H6V7h2v2zm10 8h-2v-2h2v2zm0-4h-2v-2h2v2zm0-4h-2V7h2v2z"/></svg><span>Movies</span>
     </button>
-    <button class="rail-btn" data-nav="/browse?type=tv" data-id="tv">
+    <button class="rail-btn" data-nav="/library/tv" data-id="tv">
       <svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 3H3a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h5v2h8v-2h5a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2zm0 14H3V5h18z"/></svg><span>TV</span>
+    </button>
+    <button class="rail-btn" data-nav="/sports" data-id="sports">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><path d="m12 7 5 4-2 6H9l-2-6zM12 7V3m5 8 4-2m-6 8 2 3m-8-3-2 3m0-9L3 9"/></svg><span>Sports</span>
     </button>
     <!-- phones only: opens .rail-tail as a popover above the bar -->
     <button class="rail-btn rail-more-btn" data-act="more" aria-expanded="false">
@@ -46,6 +51,7 @@
     <!-- The secondary half. Same buttons everywhere — it is the container that
          moves, from the foot of the column to a popover on a phone. -->
     <div class="rail-tail" id="railTail">
+      <button class="rail-btn rail-mobile-search" data-act="search"><span>Search library</span></button>
       <button class="rail-btn anime-tool" data-act="schedule">
         <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 3h-1V1h-2v2H8V1H6v2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2zm0 16H5V9h14v10zM5 7V5h14v2H5zm2 4h5v5H7z"/></svg><span>Schedule</span>
       </button>
@@ -75,7 +81,7 @@
     </button>
   </div>
 
-  <div id="app"><div class="loading">Loading your library…</div></div>
+  <main id="app" tabindex="-1"><div class="loading" role="status">Loading library…</div></main>
 
   <!-- ===== detail modal (info + episode list) ===== -->
   <div class="overlay" id="detail">
@@ -308,6 +314,7 @@
     </div>
   </div>
 
+  <script src="/sports.js"></script>
   <script src="/app.js"></script>
   <script src="/tv.js"></script>
 </body>

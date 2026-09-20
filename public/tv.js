@@ -164,6 +164,8 @@
     return menu || null;
   }
   function surface() {
+    const live = document.querySelector('.sports-modal .sports-dialog, .sports-player');
+    if (live) return live;
     // An open picker owns the remote while it is up, wherever it was opened
     // from — the filter bar, a season chooser inside a detail sheet. Without
     // this, Left/Right would walk straight out of the list and along the bar

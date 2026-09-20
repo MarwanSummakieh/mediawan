@@ -24,6 +24,9 @@ cache/
 media/
 data/
 transcode/
+live-tv/
+*.m3u
+*.m3u8
 
 # Tizen build output (regenerate with `npm run tv-build`). public/tv-build IS
 # needed in the image — it's the Chromium-69 bundle old Samsung TVs load — but
