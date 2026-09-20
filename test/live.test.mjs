@@ -35,6 +35,7 @@ test('competition classification does not guess broadcaster rights',()=>{
  assert.equal(channelLanguage('Ca | Fr: TVA Sports','Canada','').language,'French');
  assert.equal(channelLanguage('|PT| NFL NETWORK HD','Arabic / MENA','').language,'Portuguese');
  assert.deepEqual(competitionIds('LALIGA TV HYPERMOTION'),['segunda']);
+ assert.deepEqual(parseM3u('#EXTM3U\n#EXTINF:-1 group-title="Europe - UEFA CHAMPIONS LEAGUE",ES: M. GOLF HD\nhttps://example.com/golf').channels[0].competitions,[]);
 });
 const now=Date.UTC(2026,8,20,12);
 const xml=`<?xml version="1.0"?><tv><channel id="pl"><display-name>Sky Sports Premier League</display-name></channel><channel id="200"><display-name>LaLiga</display-name></channel>
