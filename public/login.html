@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Sign in · Mediawan</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-  <meta name="theme-color" content="#101216" />
+  <meta name="theme-color" content="#171a19" />
   <link rel="stylesheet" href="/styles.css" />
   <link rel="stylesheet" href="/tv.css" />
   <script src="/config.js"></script>
@@ -13,22 +13,29 @@
 <body>
   <div class="auth">
     <div class="auth-card">
-      <h1>MEDIAWAN</h1>
-      <p>Private members only. Ask Marwan for an invite.</p>
+      <h1>Mediawan</h1>
       <form id="f">
-        <label>Email</label>
-        <input id="email" type="email" autocomplete="username" required />
-        <label>Password</label>
-        <input id="password" type="password" autocomplete="current-password" required />
-        <button class="btn" type="submit">Sign In</button>
+        <label for="email">Email</label>
+        <input id="email" type="email" inputmode="email" enterkeyhint="next" autocomplete="username" required />
+        <label for="password">Password</label>
+        <input id="password" type="password" enterkeyhint="done" autocomplete="current-password" required />
+        <button class="btn ghost" id="passwordToggle" type="button" aria-controls="password" aria-pressed="false">Show password</button>
+        <button class="btn" type="submit">Sign in</button>
       </form>
-      <div class="err" id="err"></div>
+      <div class="err" id="err" role="alert"></div>
     </div>
   </div>
   <script>
     const form = document.getElementById("f");
     const err = document.getElementById("err");
-    const btn = form.querySelector("button");
+    const btn = form.querySelector('button[type="submit"]');
+    document.getElementById("passwordToggle").addEventListener("click", (e) => {
+      const password = document.getElementById("password");
+      const visible = password.type === "password";
+      password.type = visible ? "text" : "password";
+      e.currentTarget.textContent = visible ? "Hide password" : "Show password";
+      e.currentTarget.setAttribute("aria-pressed", String(visible));
+    });
     // Land back on the page the user was on (?next=/watch/123/5). Only accept
     // same-origin paths, and keep ?tv=1 through the redirect so TV navigation
     // survives login.

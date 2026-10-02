@@ -1,4 +1,4 @@
-# Build a production image on every push to main and publish it to GHCR.
+# Publish main to :latest and every build to its full commit SHA in GHCR.
 #
 # There is no PUSH half to this deploy. GitHub cannot reach the NAS: the box has
 # no inbound path at all — the Cloudflare tunnel is an outbound connection, and
@@ -14,7 +14,7 @@ name: Deploy
 on:
   push:
     branches: [main]
-  workflow_dispatch:   # a manual re-run, for when the NAS needs a known image rebuilt
+  workflow_dispatch:   # branches publish only their commit tag for manual deployment
 
 concurrency:
   # Two merges in quick succession must not race to publish :latest. Queue them
@@ -74,8 +74,27 @@ jobs:
           # Lowercased for us — GHCR rejects the capitals in the repo name.
           images: ghcr.io/${{ github.repository }}
           tags: |
-            type=raw,value=latest
-            type=sha,prefix=,format=short
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=raw,value=${{ github.sha }}
+
+      - name: Verify publish tags
+        env:
+          PUBLISH_TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          set -euo pipefail
+          image="ghcr.io/${GITHUB_REPOSITORY,,}"
+          found_commit=false
+          while IFS= read -r tag; do
+            if [[ "$tag" == "$image:$GITHUB_SHA" ]]; then
+              found_commit=true
+            elif [[ "$GITHUB_REF" == "refs/heads/main" && "$tag" == "$image:latest" ]]; then
+              :
+            else
+              echo "::error::Refusing unexpected publish tag: $tag"
+              exit 1
+            fi
+          done <<< "$PUBLISH_TAGS"
+          [[ "$found_commit" == "true" ]]
 
       # Built locally FIRST so it can be booted before anyone sees it. The push
       # below reuses this exact cache, so it costs one build, not two.
@@ -124,7 +143,8 @@ jobs:
           docker logs smoke
           exit 1
 
-      - uses: docker/build-push-action@v6
+      - id: publish
+        uses: docker/build-push-action@v6
         with:
           context: .
           platforms: linux/amd64
@@ -135,9 +155,18 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Summary
+        env:
+          PUBLISHED_TAGS: ${{ steps.meta.outputs.tags }}
+          IMAGE_DIGEST: ${{ steps.publish.outputs.digest }}
+          PUBLISHED_LATEST: ${{ github.ref == 'refs/heads/main' }}
         run: |
           echo "### Published" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
-          echo "${{ steps.meta.outputs.tags }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "$PUBLISHED_TAGS" >> "$GITHUB_STEP_SUMMARY"
+          echo "ghcr.io/${GITHUB_REPOSITORY,,}@$IMAGE_DIGEST" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
-          echo "Watchtower on the NAS picks this up within its poll interval." >> "$GITHUB_STEP_SUMMARY"
+          if [ "$PUBLISHED_LATEST" = "true" ]; then
+            echo "Updated latest; Watchtower can pick this up within its poll interval." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Published the commit tag only. Latest is unchanged; deploy the digest manually." >> "$GITHUB_STEP_SUMMARY"
+          fi

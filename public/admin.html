@@ -3,221 +3,152 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Admin · Mediawan</title>
+  <title>Administration · Mediawan</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-  <meta name="theme-color" content="#101216" />
-  <link rel="stylesheet" href="/styles.css" />
+  <meta name="theme-color" content="#171a19" />
+  <link rel="stylesheet" href="/admin.css" />
+  <link rel="stylesheet" href="/tv.css" />
+  <script src="/admin.js" defer></script>
+  <script src="/tv.js" defer></script>
 </head>
 <body>
-  <div class="nav">
-    <a class="brand" href="/">MEDIAWAN</a>
-    <div class="spacer"></div>
-    <a class="btn ghost mini" href="/">← Back to browse</a>
-  </div>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="admin-nav">
+    <a class="brand" href="/">Mediawan</a>
+    <nav aria-label="Main navigation">
+      <a href="/">Browse</a>
+      <a href="/admin.html" aria-current="page">Administration</a>
+    </nav>
+  </header>
 
-  <div class="admin">
-    <h1>Admin</h1>
-
-    <div class="panel">
-      <h2>Streaming health</h2>
-      <p style="color:var(--muted);font-size:13px;margin:4px 0 10px">
-        Where playback can come from right now. <b>Quality</b> sources are real release
-        files (Real-Debrid); <b>floor</b> sources are streaming sites (Movies and TV only,
-        see VidLink) that start instantly while the release is still being fetched. Playback is fine as long
-        as one source is serving — checking exercises each one against a known title.
-      </p>
-      <div class="row-form" style="align-items:center">
-        <span id="rs-status" class="tag">…</span>
-        <span id="rs-detail" style="color:var(--muted);font-size:13px"></span>
-        <button class="btn ghost mini" id="rs-btn">Check sources now</button>
-      </div>
-      <div id="rs-providers" style="display:flex;flex-direction:column;gap:8px;margin-top:12px"></div>
-      <div id="rs-indexes" style="display:flex;flex-direction:column;gap:4px;margin-top:12px"></div>
+  <main class="admin" id="main" tabindex="-1">
+    <div class="page-heading">
+      <h1>Administration</h1>
+      <button class="button secondary" id="pipeline-refresh" type="button">Refresh status</button>
     </div>
+    <p class="feedback error" id="page-error" role="alert" hidden></p>
 
-    <div class="panel">
-      <h2>Invite a friend</h2>
-      <div class="row-form">
-        <div><label style="color:var(--muted);font-size:13px">Name</label><br /><input id="i-name" placeholder="Ahmad" /></div>
-        <div><label style="color:var(--muted);font-size:13px">Email</label><br /><input id="i-email" type="email" placeholder="ahmad@example.com" /></div>
-        <div><label style="color:var(--muted);font-size:13px">Role</label><br />
-          <select id="i-role"><option value="member">member</option><option value="admin">admin</option></select>
+    <section class="server-section" aria-labelledby="server-heading">
+      <div class="section-heading">
+        <div class="heading-with-status">
+          <h2 id="server-heading">Download &amp; encode</h2>
+          <span class="status neutral" id="pipeline-status">Checking…</span>
         </div>
-        <button class="btn" id="i-btn">Generate invite link</button>
+        <span class="updated" id="pipeline-updated" role="status"></span>
       </div>
-      <div class="invite-link" id="i-out" style="display:none"></div>
-    </div>
+      <p class="feedback error" id="pipeline-error" role="alert" hidden></p>
 
-    <div class="panel">
-      <h2>Members</h2>
-      <table>
-        <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th></th></tr></thead>
-        <tbody id="users"></tbody>
-      </table>
-    </div>
+      <div class="pipeline-grid" id="pipeline-overview" aria-busy="true">
+        <section class="service" aria-labelledby="downloader-heading">
+          <div class="service-heading">
+            <h3 id="downloader-heading">Downloader</h3>
+            <span class="status neutral" id="downloader-status">Checking…</span>
+          </div>
+          <p class="service-purpose">Source files are cached when playback starts.</p>
+          <dl class="metrics">
+            <div><dt>Download sources</dt><dd id="download-backends">—</dd></div>
+            <div><dt>Concurrent downloads</dt><dd id="download-limit">—</dd></div>
+            <div><dt>Cache storage</dt><dd id="cache-usage">—</dd></div>
+          </dl>
+          <div class="storage-meter" id="cache-meter" role="meter" aria-label="Cache storage used" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden><span></span></div>
+          <div class="storage-meta"><span id="cache-files">Loading cache…</span><span id="cache-free"></span></div>
+          <p class="detail-path" id="cache-path"></p>
+        </section>
+        <section class="service" aria-labelledby="encoder-heading">
+          <div class="service-heading">
+            <h3 id="encoder-heading">Encoder</h3>
+            <span class="status neutral" id="encoder-status">Checking…</span>
+          </div>
+          <dl class="metrics">
+            <div><dt>Encoding mode</dt><dd id="encoder-mode">—</dd></div>
+            <div><dt>Remote video limit</dt><dd id="encoder-bitrate">—</dd></div>
+            <div><dt>Active sessions</dt><dd id="encoder-sessions">—</dd></div>
+            <div><dt>FFmpeg / FFprobe</dt><dd id="encoder-tools">—</dd></div>
+          </dl>
+          <p class="service-note" id="encoder-note"></p>
+        </section>
+      </div>
 
-    <div class="panel">
-      <h2>Pending invites</h2>
-      <table>
-        <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Link</th></tr></thead>
-        <tbody id="invites"></tbody>
-      </table>
-    </div>
-  </div>
+      <div class="activity-grid" id="pipeline-activity">
+        <section aria-labelledby="downloads-heading">
+          <div class="activity-heading"><h3 id="downloads-heading">Downloads</h3><span class="count" id="download-count">—</span></div>
+          <div id="download-list" class="activity-list"><p class="empty-state">Loading downloads…</p></div>
+        </section>
+        <section aria-labelledby="sessions-heading">
+          <div class="activity-heading"><h3 id="sessions-heading">Encoding sessions</h3><span class="count" id="session-count">—</span></div>
+          <div id="session-list" class="activity-list"><p class="empty-state">Loading sessions…</p></div>
+        </section>
+      </div>
 
-  <script>
-    // same helper as app.js — this page builds rows with innerHTML too
-    function esc(s) { return String(s || "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+      <details class="setup-details" id="setup-details">
+        <summary><span>Server setup</span><span class="summary-note" id="setup-summary">Checking requirements…</span></summary>
+        <div class="setup-content">
+          <ul class="check-list" id="setup-checks"><li class="empty-state">Loading requirements…</li></ul>
+          <details class="install-details">
+            <summary data-tv-key="admin-install-details">NAS / Docker configuration</summary>
+            <ol class="setup-steps" tabindex="0" data-tv-scroll aria-label="NAS and Docker setup instructions">
+              <li><strong>Connect a download source.</strong> In the server’s <code>.env</code>, set <code>REAL_DEBRID_TOKEN</code> or <code>PREMIUMIZE_API_KEY</code>. A configured token still needs a valid account and subscription.</li>
+              <li><strong>Choose storage.</strong> Set <code>DATA_DIR</code> and <code>MEDIA_DIR</code> to folders on the NAS. Set <code>CACHE_BUDGET_BYTES</code> to the space available for cached files. Old files are removed when the cache reaches its budget.</li>
+              <li><strong>Configure the encoder.</strong> Set <code>TRANSCODE=true</code>. Use <code>TRANSCODE_HWACCEL=qsv</code> for Intel Quick Sync with a tested VAAPI fallback, or <code>vaapi</code> to select VAAPI directly. Pass <code>/dev/dri</code> into the container and set <code>VIDEO_GID</code> / <code>RENDER_GID</code> to its device group IDs. <code>TRANSCODE_DEVICE</code> defaults to <code>/dev/dri/renderD128</code>. Software encoding uses <code>TRANSCODE_HWACCEL=none</code>; remove the device and GPU group entries from Compose if the host has no GPU.</li>
+              <li><strong>Apply and verify.</strong> From the Mediawan directory on the server, run the commands below, then refresh this page.
+                <pre><code>docker compose up -d
+docker compose exec web node scripts/check-pipeline.mjs</code></pre>
+              </li>
+            </ol>
+            <p class="setup-note">Set <code>PUID</code> and <code>PGID</code> to a NAS user with write access to both folders. The full Compose stack also requires <code>SEANIME_PASSWORD</code> and <code>TUNNEL_TOKEN</code>. See the NAS setup section in <code>README.md</code>.</p>
+          </details>
+        </div>
+      </details>
+    </section>
 
-    async function load() {
-      const meRes = await fetch("/api/me");
-      if (!meRes.ok) { location.href = "/login.html"; return; }
-      const me = await meRes.json();
-      if (me.role !== "admin") { location.href = "/"; return; }
+    <section class="admin-section" aria-labelledby="sources-heading">
+      <div class="section-heading">
+        <div class="heading-with-status"><h2 id="sources-heading">Streaming sources</h2><span class="status neutral" id="rs-status">Checking…</span></div>
+        <button class="button secondary" id="rs-btn" type="button">Check sources</button>
+      </div>
+      <p class="section-note" id="rs-detail">Loading source status…</p>
+      <p class="feedback error" id="sources-error" role="alert" hidden></p>
+      <div class="source-list" id="rs-providers"></div>
+      <div class="index-list" id="rs-indexes"></div>
+    </section>
 
-      const res = await fetch("/api/admin/users");
-      const { users, invites } = await res.json();
+    <section class="admin-section" aria-labelledby="members-heading">
+      <div class="section-heading"><div class="heading-with-status"><h2 id="members-heading">Members</h2><span class="count" id="member-count">—</span></div><button class="button secondary" id="members-refresh" type="button">Refresh members</button></div>
+      <p class="feedback error" id="members-error" role="alert" hidden></p>
+      <div class="table-scroll" tabindex="0" data-tv-scroll data-tv-key="admin-members-table" aria-label="Members and access controls">
+        <table>
+          <caption class="sr-only">Members and access controls</caption>
+          <thead><tr><th scope="col">Name</th><th scope="col">Email</th><th scope="col">Role</th><th scope="col">Status</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead>
+          <tbody id="users"><tr><td colspan="5" class="empty-state">Loading members…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
 
-      document.getElementById("users").innerHTML = users.map((u) => `
-        <tr>
-          <td>${esc(u.name)}</td><td>${esc(u.email)}</td>
-          <td><span class="tag ${u.role === "admin" ? "admin" : ""}">${esc(u.role)}</span></td>
-          <td><span class="tag ${u.active ? "" : "off"}">${u.active ? "active" : "disabled"}</span></td>
-          <td class="center">
-            <button class="btn ghost mini" onclick="toggle(${u.id}, ${u.active ? 0 : 1})">${u.active ? "Disable" : "Enable"}</button>
-            <button class="btn mini" onclick="del(${u.id})">Delete</button>
-          </td>
-        </tr>`).join("");
+    <section class="admin-section" aria-labelledby="invite-heading">
+      <h2 id="invite-heading">Invite member</h2>
+      <form class="invite-form" id="invite-form">
+        <div class="field"><label for="i-name">Name</label><input id="i-name" name="name" autocomplete="name" placeholder="Full name" required maxlength="100" /></div>
+        <div class="field"><label for="i-email">Email</label><input id="i-email" name="email" type="email" autocomplete="email" placeholder="name@example.com" required /></div>
+        <div class="field role-field"><label for="i-role">Role</label><select id="i-role" name="role"><option value="member">Member</option><option value="admin">Admin</option></select></div>
+        <button class="button primary" id="i-btn" type="submit">Create invite link</button>
+      </form>
+      <p class="feedback error" id="invite-error" role="alert" hidden></p>
+      <div class="invite-result" id="i-out" hidden>
+        <label for="invite-url" id="invite-recipient">Invite link</label>
+        <div class="invite-copy"><input id="invite-url" readonly /><button class="button secondary" id="invite-copy" type="button">Copy link</button></div>
+        <p class="section-note" id="invite-feedback" role="status"></p>
+      </div>
 
-      document.getElementById("invites").innerHTML = invites.filter(i=>!i.used).map((i) => `
-        <tr><td>${esc(i.name)}</td><td>${esc(i.email)}</td><td>${esc(i.role)}</td>
-        <td><a class="invite-link" style="display:inline-block" href="/invite.html?token=${encodeURIComponent(i.token)}">/invite.html?token=${esc(i.token.slice(0,12))}…</a></td></tr>
-      `).join("") || `<tr><td colspan="4" style="color:var(--muted)">No pending invites</td></tr>`;
-    }
-
-    async function toggle(id, active) {
-      await fetch(`/api/admin/user/${id}/active`, { method: "POST",
-        headers: { "Content-Type": "application/json" }, body: JSON.stringify({ active }) });
-      load();
-    }
-    async function del(id) {
-      if (!confirm("Delete this user? They lose access immediately.")) return;
-      const res = await fetch(`/api/admin/user/${id}`, { method: "DELETE" });
-      if (!res.ok) alert((await res.json()).error);
-      load();
-    }
-    document.getElementById("i-btn").addEventListener("click", async () => {
-      const body = {
-        name: document.getElementById("i-name").value,
-        email: document.getElementById("i-email").value,
-        role: document.getElementById("i-role").value,
-      };
-      const res = await fetch("/api/admin/invite", { method: "POST",
-        headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      const out = document.getElementById("i-out");
-      if (res.ok) {
-        const { url } = await res.json();
-        const full = location.origin + url;
-        out.style.display = "block";
-        out.innerHTML = `Send this link to ${esc(body.name)}: <br /><b>${esc(full)}</b>`;
-        load();
-      } else {
-        out.style.display = "block";
-        out.textContent = (await res.json()).error;
-      }
-    });
-    // ---- streaming health ----
-    // Failure is TYPED (see lib/providers/index.mjs), and the type is the whole
-    // point: "blocked" needs a source change and will never heal on its own,
-    // while "upstream-down" heals by itself. Say which, and say what to do.
-    const PROV_LABELS = {
-      ok: "serving", "no-sources": "nothing for that episode", "no-match": "title not in this source",
-      blocked: "blocked / bot-gated", "rate-limited": "rate-limited", "upstream-down": "unreachable",
-      error: "error", unknown: "not checked yet",
-    };
-    const PROV_HINTS = {
-      blocked: "Will not fix itself — swap the source rather than waiting.",
-      "rate-limited": "Backing off automatically, then retrying.",
-      "upstream-down": "Transient; retried automatically.",
-      "no-match": "Normal for an obscure title — not a fault.",
-    };
-    const TIER_LABELS = { quality: "quality · real release files", floor: "floor · instant, lower bitrate" };
-    const SETUP_HINTS = {
-      debrid: "Set REAL_DEBRID_TOKEN in .env.",
-      torrentio: "Needs REAL_DEBRID_TOKEN too — playback goes through our own debrid client.",
-      vidlink: "Set VIDLINK=true in .env. Runs a sandboxed third-party WASM binary — read the VidLink section of .env.example first.",
-    };
-
-    function renderSources(s) {
-      const provs = s.providers || [];
-      const serving = provs.filter((p) => p.status === "ok");
-      const off = provs.filter((p) => p.configured === false);
-      const el = document.getElementById("rs-status");
-      // One source serving is enough to play; none is the only real outage.
-      const ok = serving.length > 0;
-      const checked = provs.some((p) => p.status !== "unknown");
-      el.textContent = !checked ? "not checked yet" : ok ? "streaming ok" : "nothing serving";
-      el.className = "tag " + (ok || !checked ? "" : "off");
-      document.getElementById("rs-detail").textContent = checked
-        ? `${serving.length} of ${provs.length - off.length} configured source${provs.length - off.length === 1 ? "" : "s"} serving`
-          + (off.length ? ` · ${off.length} not set up` : "")
-        : "press check to probe every source";
-
-      document.getElementById("rs-providers").innerHTML = provs.map((p) => {
-        // An unconfigured source declines every title, which the registry
-        // records as "no match" — a NON-fault. Saying that would be a lie of
-        // omission: nothing is wrong with the source, it was never set up.
-        const unset = p.configured === false;
-        const status = unset ? "not set up" : (PROV_LABELS[p.status] || p.status);
-        const hint = unset ? (SETUP_HINTS[p.name] || "") : (PROV_HINTS[p.status] || "");
-        const detail = [
-          !unset && p.lastError ? esc(String(p.lastError).slice(0, 160)) : "",
-          !unset && p.breakerOpen ? `paused for ${Math.round(p.opensInMs / 1000)}s` : "",
-          hint,
-        ].filter(Boolean).join(" · ");
-        return `
-        <div style="display:flex;flex-direction:column;gap:2px;font-size:13px">
-          <span style="display:inline-flex;align-items:center;gap:8px">
-            <span class="tag ${p.status === "ok" && !unset ? "" : p.status === "unknown" || unset ? "" : "off"}" style="min-width:0">${esc(p.label)}</span>
-            <span style="color:var(--muted)">${esc(status)}</span>
-            <span style="color:var(--muted);opacity:.7">${esc(TIER_LABELS[p.tier] || p.tier || "")}</span>
-          </span>
-          ${detail ? `<span style="color:var(--muted);opacity:.85;padding-left:2px">${detail}</span>` : ""}
-        </div>`;
-      }).join("");
-
-      // Index freshness: the newest release timestamp each torrent index has
-      // returned. A stale index doesn't error — it answers, with old results —
-      // which is how AnimeTosho died in May 2026 and went unnoticed till July.
-      const idx = s.indexes || [];
-      document.getElementById("rs-indexes").innerHTML = !idx.length ? "" : `
-        <span style="color:var(--muted);font-size:12px;letter-spacing:.04em;text-transform:uppercase">Index freshness</span>
-        ${idx.map((f) => `
-          <span style="font-size:13px;display:inline-flex;align-items:center;gap:8px">
-            <span class="tag ${f.stale ? "off" : ""}" style="min-width:0">${esc(f.indexer)}</span>
-            <span style="color:var(--muted)">${f.newestAt
-              ? `newest release ${esc(f.newestAt.slice(0, 10))}${f.ageDays != null ? ` · ${esc(String(f.ageDays))}d old` : ""}`
-              : "no timestamps seen yet"}${f.stale ? " · STALE — this index has gone quiet" : ""}</span>
-          </span>`).join("")}`;
-    }
-    async function loadSources() {
-      const res = await fetch("/api/admin/sources");
-      if (res.ok) renderSources(await res.json());
-    }
-    document.getElementById("rs-btn").addEventListener("click", async () => {
-      const btn = document.getElementById("rs-btn");
-      btn.disabled = true; btn.textContent = "Checking…";
-      try {
-        const res = await fetch("/api/admin/sources", { method: "POST" });
-        if (res.ok) renderSources(await res.json());
-      } finally {
-        btn.disabled = false; btn.textContent = "Check sources now";
-      }
-    });
-
-    window.toggle = toggle; window.del = del;
-    load();
-    loadSources();
-  </script>
+      <div class="pending-heading"><h3>Pending invites</h3><span class="count" id="invite-count">—</span></div>
+      <div class="table-scroll" tabindex="0" data-tv-scroll data-tv-key="admin-invites-table" aria-label="Pending invitations">
+        <table>
+          <caption class="sr-only">Pending invitations</caption>
+          <thead><tr><th scope="col">Name</th><th scope="col">Email</th><th scope="col">Role</th><th scope="col">Invite</th></tr></thead>
+          <tbody id="invites"><tr><td colspan="4" class="empty-state">Loading invites…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+    <footer class="admin-footer"><a href="/">Back to browse</a><span>Mediawan</span></footer>
+  </main>
 </body>
 </html>
