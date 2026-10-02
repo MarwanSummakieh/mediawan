@@ -2,6 +2,8 @@
 
 Live sports, competition shelves, commentary languages and programme-guide setup are documented in [Live TV](docs/live-tv.md).
 
+Synchronized playback, room invitations and host controls are documented in [Watch together](docs/watch-together.md).
+
 A self-hosted, invite-only, Netflix-style streaming front-end for anime, films and
 TV. One Node process serves the SPA, authentication, an admin panel, cached
 [AniList](https://anilist.co) metadata, stream resolution, local transcoding and a
@@ -144,6 +146,10 @@ The separate Jellyfin/qBittorrent proposal in `docs/phase-0.md` is not required
 for this built-in pipeline.
 
 ### TV app
+
+The whole website supports remote navigation, including account and admin
+pages. Preview it with `/?tv=1`; see [TV remote navigation](docs/tv-navigation.md)
+for controls and implementation details.
 
 ```bash
 npm run tv-build     # build the Tizen .wgt

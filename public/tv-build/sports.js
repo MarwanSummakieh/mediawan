@@ -28,7 +28,7 @@
   const upcoming = (c) => (c.programmes || []).filter((p) => p.start > now());
   const channelComp = (c) => Array.from(new Set(c.competitions.concat((c.programmes || []).filter((p) => p.end > now()).reduce((all, p) => all.concat(p.competitions), []))));
   const nav = (url) => options.nav(url);
-  const link = (url, label, cls = "") => `<a class="${cls}" href="${esc(url)}" data-sports-nav="${esc(url)}">${label}</a>`;
+  const link = (url, label, cls = "", focusKey = "") => `<a class="${cls}" href="${esc(url)}" data-sports-nav="${esc(url)}" data-tv-key="${esc(focusKey || "sports-link-" + url + "-" + cls + "-" + label.replace(/<[^>]*>/g, ""))}">${label}</a>`;
   function savePrefs() {
     try {
       localStorage.setItem(key, JSON.stringify({ follows: Array.from(follows), saved: Array.from(saved), language }));
@@ -74,7 +74,7 @@
   }
   function competitionTile(c) {
     const count = catalog.channels.filter((ch) => channelComp(ch).includes(c.id)).length;
-    return `<article class="competition-tile" style="--competition:${c.color}">${link("/sports/competition/" + c.id, `<span class="competition-mark" aria-hidden="true">${c.code}</span><strong>${esc(c.name)}</strong><span>${count} channels</span>`)}<button class="competition-follow ${follows.has(c.id) ? "following" : ""}" data-follow="${c.id}" aria-label="${follows.has(c.id) ? "Unfollow" : "Follow"} ${esc(c.name)}" aria-pressed="${follows.has(c.id)}">${follows.has(c.id) ? "\u2713" : "+"}</button></article>`;
+    return `<article class="competition-tile" style="--competition:${c.color}">${link("/sports/competition/" + c.id, `<span class="competition-mark" aria-hidden="true">${c.code}</span><strong>${esc(c.name)}</strong><span>${count} channels</span>`)}<button class="competition-follow ${follows.has(c.id) ? "following" : ""}" data-follow="${c.id}" data-tv-key="sports-follow-${c.id}" aria-label="${follows.has(c.id) ? "Unfollow" : "Follow"} ${esc(c.name)}" aria-pressed="${follows.has(c.id)}">${follows.has(c.id) ? "\u2713" : "+"}</button></article>`;
   }
   function competitionRail() {
     let list = catalog.competitions;
@@ -86,14 +86,14 @@
   function logo(c) {
     return `<span class="channel-logo"><span aria-hidden="true">${esc(c.name.replace(/^[^:]+:\s*/, "").slice(0, 2).toUpperCase())}</span>${c.logo ? `<img src="${esc(c.logo)}" alt="" loading="lazy" onerror="this.hidden=true">` : ""}</span>`;
   }
-  function channelCard(c) {
+  function channelCard(c, context = "channels") {
     const p = current(c);
     const percentage = p ? Math.max(0, Math.min(100, (now() - p.start) / (p.end - p.start) * 100)) : 0;
-    return `<article class="sports-channel"><button class="channel-watch" data-watch="${c.id}" aria-label="Watch ${esc(c.name)}, ${esc(c.language)}"><div class="channel-art">${logo(c)}<span class="channel-quality">${esc(c.quality)}</span><span class="channel-play" aria-hidden="true">\u25B6</span></div>
+    return `<article class="sports-channel"><button class="channel-watch" data-watch="${c.id}" data-tv-key="${esc("sports-watch-" + context + "-" + c.id)}" aria-label="Watch ${esc(c.name)}, ${esc(c.language)}"><div class="channel-art">${logo(c)}<span class="channel-quality">${esc(c.quality)}</span><span class="channel-play" aria-hidden="true">\u25B6</span></div>
     <span class="channel-line"><strong>${esc(c.name)}</strong></span><span class="channel-meta" title="Language inferred from ${esc(c.languageSource)}">${esc(c.language)} \xB7 ${esc(c.region)}</span>
     <span class="channel-programme">${esc(p && !p.generic ? p.title : "No programme listing")}</span>${p ? `<span class="channel-progress"><i style="width:${percentage}%"></i></span><span class="channel-times">${clock(p.start)} \u2014 ${clock(p.end)}</span>` : ""}</button>
-    <button class="channel-save ${saved.has(c.id) ? "saved" : ""}" data-save="${c.id}" aria-label="${saved.has(c.id) ? "Remove" : "Save"} ${esc(c.name)}" aria-pressed="${saved.has(c.id)}">${saved.has(c.id) ? "\u2605" : "\u2606"}</button>
-    <button class="channel-details" data-details="${c.id}" aria-label="Guide and details for ${esc(c.name)}">Guide <span aria-hidden="true">\u2197</span></button></article>`;
+    <button class="channel-save ${saved.has(c.id) ? "saved" : ""}" data-save="${c.id}" data-tv-key="${esc("sports-save-" + context + "-" + c.id)}" aria-label="${saved.has(c.id) ? "Remove" : "Save"} ${esc(c.name)}" aria-pressed="${saved.has(c.id)}">${saved.has(c.id) ? "\u2605" : "\u2606"}</button>
+    <button class="channel-details" data-details="${c.id}" data-tv-key="${esc("sports-details-" + context + "-" + c.id)}" aria-label="Guide and details for ${esc(c.name)}">Guide <span aria-hidden="true">\u2197</span></button></article>`;
   }
   function programmes(channels, future = false) {
     const results = /* @__PURE__ */ new Map();
@@ -114,15 +114,15 @@
   }
   function programmeCard(p) {
     const c = p.channels[0], competition = comp(p.competitions[0]), on = p.start <= now() && p.end > now();
-    return `<article class="event-card" style="--competition:${(competition == null ? void 0 : competition.color) || "#315c50"}"><button ${on ? `data-watch="${c.id}"` : `data-details="${c.id}"`} aria-label="${on ? "Watch" : "View guide for"} ${esc(p.title)}">
+    return `<article class="event-card" style="--competition:${(competition == null ? void 0 : competition.color) || "#315c50"}"><button data-tv-key="${esc("sports-programme-" + c.id + "-" + p.start)}" ${on ? `data-watch="${c.id}"` : `data-details="${c.id}"`} aria-label="${on ? "Watch" : "View guide for"} ${esc(p.title)}">
     <div class="event-art"><span class="event-label ${on ? "on-now" : ""}">${on ? "On now" : day(p.start) + " \xB7 " + clock(p.start)}</span><span class="event-code" aria-hidden="true">${esc((competition == null ? void 0 : competition.code) || "TV")}</span><span>${esc((competition == null ? void 0 : competition.name) || c.name)}</span></div>
     <strong>${esc(p.title)}</strong><span class="event-meta">${esc(c.language)}${p.channels.length > 1 ? " \xB7 " + p.channels.length + " channel options" : " \xB7 " + esc(c.name)}</span>${on ? `<span class="event-time">Until ${clock(p.end)}</span>` : ""}</button></article>`;
   }
   function programmeRail(label, items) {
-    return items.length ? `<section class="sports-section"><div class="sports-section-head"><h2>${label}</h2>${link("/sports/guide", 'Open guide <span aria-hidden="true">\u2197</span>')}</div><div class="events-rail">${items.map(programmeCard).join("")}</div></section>` : "";
+    return items.length ? `<section class="sports-section"><div class="sports-section-head"><h2>${label}</h2>${link("/sports/guide", 'Open guide <span aria-hidden="true">\u2197</span>', "", "sports-programme-guide-" + label)}</div><div class="events-rail">${items.map(programmeCard).join("")}</div></section>` : "";
   }
   function channelRail(label, channels, url) {
-    return channels.length ? `<section class="sports-section"><div class="sports-section-head"><h2>${esc(label)}</h2>${url ? link(url, 'See all <span aria-hidden="true">\u2197</span>') : ""}</div><div class="sports-channel-rail">${channels.slice(0, 12).map(channelCard).join("")}</div></section>` : "";
+    return channels.length ? `<section class="sports-section"><div class="sports-section-head"><h2>${esc(label)}</h2>${url ? link(url, 'See all <span aria-hidden="true">\u2197</span>', "", "sports-rail-all-" + label) : ""}</div><div class="sports-channel-rail">${channels.slice(0, 12).map((c) => channelCard(c, label)).join("")}</div></section>` : "";
   }
   function hero(channels) {
     const selected = comp(view.split("/")[1] || (["nfl", "nhl"].includes(view) ? view : "premier-league")) || catalog.competitions[0];
@@ -140,24 +140,24 @@
     const date = today.valueOf();
     const start = guideHour === null && guideDay === 0 ? Math.floor(now() / 18e5) * 18e5 : new Date(today).setHours(guideHour === null ? 12 : guideHour), end = start + 6 * 36e5;
     const rows = channels.filter((c) => showEmpty || (c.programmes || []).some((p) => !p.generic && p.end > date && p.start < date + 864e5));
-    return `<section class="sports-guide"><div class="guide-controls"><div><button data-guide-day="-1" aria-label="Previous day" ${guideDay === 0 ? "disabled" : ""}>\u2039</button><strong>${guideDay === 0 ? "Today" : day(date)}</strong><button data-guide-day="1" aria-label="Next day" ${guideDay === 7 ? "disabled" : ""}>\u203A</button></div><label><input type="checkbox" id="guide-empty" ${showEmpty ? "checked" : ""}> Include channels without listings</label></div>
-    <div class="guide-controls"><label>Start time <select id="guide-hour">${Array.from({ length: 24 }, (_, hour) => `<option value="${hour}" ${hour === new Date(start).getHours() ? "selected" : ""}>${String(hour).padStart(2, "0")}:00</option>`).join("")}</select></label><button class="sports-button secondary" data-guide-now>Now</button></div>
+    return `<section class="sports-guide"><div class="guide-controls"><div><button data-guide-day="-1" data-tv-key="sports-guide-previous" aria-label="Previous day" ${guideDay === 0 ? "disabled" : ""}>\u2039</button><strong>${guideDay === 0 ? "Today" : day(date)}</strong><button data-guide-day="1" data-tv-key="sports-guide-next" aria-label="Next day" ${guideDay === 7 ? "disabled" : ""}>\u203A</button></div><label><input type="checkbox" id="guide-empty" ${showEmpty ? "checked" : ""}> Include channels without listings</label></div>
+    <div class="guide-controls"><label>Start time <select id="guide-hour">${Array.from({ length: 24 }, (_, hour) => `<option value="${hour}" ${hour === new Date(start).getHours() ? "selected" : ""}>${String(hour).padStart(2, "0")}:00</option>`).join("")}</select></label><button class="sports-button secondary" data-guide-now data-tv-key="sports-guide-now">Now</button></div>
     <p class="guide-coverage">${catalog.guide.informativeChannels || 0} of ${catalog.channels.length} channels have detailed programme listings. Times are shown in your local time.</p>
-    ${rows.length ? `<div class="guide-scroll" tabindex="0" aria-label="Channel schedule; scroll horizontally for later programmes"><div class="guide-grid"><div class="guide-axis"><strong>Channel</strong><div>${Array.from({ length: 12 }, (_, i) => `<span>${clock(start + i * 18e5)}</span>`).join("")}</div></div>${rows.slice(0, limit).map((c) => {
+    ${rows.length ? `<div class="guide-scroll" tabindex="0" data-tv-scroll data-tv-key="sports-guide-scroll" aria-label="Channel schedule; scroll horizontally for later programmes"><div class="guide-grid"><div class="guide-axis"><strong>Channel</strong><div>${Array.from({ length: 12 }, (_, i) => `<span>${clock(start + i * 18e5)}</span>`).join("")}</div></div>${rows.slice(0, limit).map((c) => {
       const slots = (c.programmes || []).filter((p) => p.end > start && p.start < end);
-      return `<div class="guide-row"><button class="guide-channel" data-watch="${c.id}">${logo(c)}<span><strong>${esc(c.name)}</strong><small>${esc(c.language)}</small></span></button><div class="guide-lane">${slots.length ? slots.map((p) => {
+      return `<div class="guide-row"><button class="guide-channel" data-watch="${c.id}" data-tv-key="sports-guide-watch-${c.id}">${logo(c)}<span><strong>${esc(c.name)}</strong><small>${esc(c.language)}</small></span></button><div class="guide-lane">${slots.length ? slots.map((p) => {
         const left = Math.max(0, (p.start - start) / (end - start) * 100), width = Math.min(100, (p.end - start) / (end - start) * 100) - left;
-        return `<button class="guide-programme ${p.start <= now() && p.end > now() ? "current" : ""}" data-details="${c.id}" style="left:${left}%;width:${width}%" title="${esc(p.title)} \xB7 ${clock(p.start)}\u2013${clock(p.end)}"><strong>${esc(p.generic ? "No programme details" : p.title)}</strong><span>${clock(p.start)} \u2013 ${clock(p.end)}</span></button>`;
+        return `<button class="guide-programme ${p.start <= now() && p.end > now() ? "current" : ""}" data-details="${c.id}" data-tv-key="sports-guide-programme-${c.id}-${p.start}" aria-label="${esc(p.title)} \xB7 ${clock(p.start)}\u2013${clock(p.end)}" style="left:${left}%;width:${width}%" title="${esc(p.title)} \xB7 ${clock(p.start)}\u2013${clock(p.end)}"><strong>${esc(p.generic ? "No programme details" : p.title)}</strong><span>${clock(p.start)} \u2013 ${clock(p.end)}</span></button>`;
       }).join("") : '<span class="guide-no-listing">No listing supplied for this time</span>'}</div></div>`;
     }).join("")}</div></div>` : '<div class="sports-empty"><h2>No guide listings for this selection</h2><p>You can still watch channels from All channels. Another language may have more listings.</p>' + link("/sports/channels", "Browse channels", "sports-button secondary") + "</div>"}
-    ${rows.length > limit ? '<button class="sports-button secondary sports-load" data-more>Show more channels</button>' : ""}</section>`;
+    ${rows.length > limit ? '<button class="sports-button secondary sports-load" data-more data-tv-key="sports-more-channels">Show more channels</button>' : ""}</section>`;
   }
   function content() {
     const channels = filteredChannels();
     let html = "";
     if (!catalog.channels.length) return `<div class="sports-empty"><h2>Add your live channels</h2><p>Import an M3U playlist to build your sports library.</p>${options.user.role === "admin" ? '<button class="sports-button primary" data-settings>Import playlist</button>' : "<p>Your administrator can add a playlist.</p>"}</div>`;
     if (view === "guide") return guideHtml(channels);
-    if (view === "channels" || query.trim()) return `<section class="sports-section"><div class="sports-section-head"><h2>${query ? "Search results" : "Channels"}</h2><span>${channels.length} channels</span></div>${channels.length ? `<div class="sports-channel-grid">${channels.slice(0, limit).map(channelCard).join("")}</div>` : '<div class="sports-empty"><h2>No channels match</h2><p>Try another language or search term.</p></div>'}${channels.length > limit ? '<button class="sports-button secondary sports-load" data-more>Show more channels</button>' : ""}</section>`;
+    if (view === "channels" || query.trim()) return `<section class="sports-section"><div class="sports-section-head"><h2>${query ? "Search results" : "Channels"}</h2><span>${channels.length} channels</span></div>${channels.length ? `<div class="sports-channel-grid">${channels.slice(0, limit).map((c) => channelCard(c)).join("")}</div>` : '<div class="sports-empty"><h2>No channels match</h2><p>Try another language or search term.</p></div>'}${channels.length > limit ? '<button class="sports-button secondary sports-load" data-more data-tv-key="sports-more-channels">Show more channels</button>' : ""}</section>`;
     html += hero(channels);
     if (!view || view === "football") html += competitionRail();
     html += programmeRail("On now", programmes(channels));
@@ -172,14 +172,14 @@
     } else {
       html += programmeRail("Coming up", programmes(channels, true));
       if (!channels.length) html += `<div class="sports-empty"><h2>No channels linked yet</h2><p>A channel appears here when its playlist or guide names this competition. You can browse all channels${options.user.role === "admin" ? " or assign a competition in channel details" : ""}.</p>${link("/sports/channels", "All channels", "sports-button secondary")}</div>`;
-      else html += `<section class="sports-section"><div class="sports-section-head"><h2>Channels</h2><span>${channels.length} options</span></div><div class="sports-channel-grid">${channels.slice(0, limit).map(channelCard).join("")}</div>${channels.length > limit ? '<button class="sports-button secondary sports-load" data-more>Show more channels</button>' : ""}</section>`;
+      else html += `<section class="sports-section"><div class="sports-section-head"><h2>Channels</h2><span>${channels.length} options</span></div><div class="sports-channel-grid">${channels.slice(0, limit).map((c) => channelCard(c)).join("")}</div>${channels.length > limit ? '<button class="sports-button secondary sports-load" data-more data-tv-key="sports-more-channels">Show more channels</button>' : ""}</section>`;
     }
     return html;
   }
   function paint() {
     if (!host || !catalog || !location.pathname.startsWith("/sports")) return;
     const selected = view.startsWith("competition/") ? comp(view.split("/")[1]) : null;
-    host.innerHTML = `<div class="sports-page"><header class="sports-heading"><div>${selected ? link("/sports", 'Sports <span aria-hidden="true">/</span>', "sports-breadcrumb") : ""}<h1>${esc(title())}</h1></div><div>${selected ? `<button class="sports-button secondary" data-follow="${selected.id}">${follows.has(selected.id) ? "\u2713 Following" : "+ Follow competition"}</button>` : ""}${options.user.role === "admin" ? '<button class="sports-settings" data-settings>Manage live TV</button>' : ""}</div></header>${tabs()}${toolbar()}<div id="sports-content">${content()}</div>${catalog.guide.status === "stale" || catalog.guide.status === "unavailable" ? '<p class="sports-guide-warning" role="status">The guide could not be refreshed. Channels remain available; some listings may be outdated.</p>' : ""}</div>`;
+    host.innerHTML = `<div class="sports-page"><header class="sports-heading"><div>${selected ? link("/sports", 'Sports <span aria-hidden="true">/</span>', "sports-breadcrumb") : ""}<h1>${esc(title())}</h1></div><div>${selected ? `<button class="sports-button secondary" data-follow="${selected.id}" data-tv-key="sports-competition-follow-${selected.id}">${follows.has(selected.id) ? "\u2713 Following" : "+ Follow competition"}</button>` : ""}${options.user.role === "admin" ? '<button class="sports-settings" data-settings data-tv-key="sports-settings">Manage live TV</button>' : ""}</div></header>${tabs()}${toolbar()}<div id="sports-content">${content()}</div>${catalog.guide.status === "stale" || catalog.guide.status === "unavailable" ? '<p class="sports-guide-warning" role="status">The guide could not be refreshed. Channels remain available; some listings may be outdated.</p>' : ""}</div>`;
     host.querySelector("#sports-search").addEventListener("input", (e) => {
       query = e.target.value;
       limit = 48;
@@ -252,7 +252,7 @@
     modalFocus = document.activeElement;
     const box = document.createElement("div");
     box.className = "sports-modal";
-    box.innerHTML = `<section class="sports-dialog" role="dialog" aria-modal="true" aria-label="${esc(label)}"><header><h2>${esc(label)}</h2><button class="sports-dialog-close" data-close-modal aria-label="Close dialog">\xD7</button></header>${html}</section>`;
+    box.innerHTML = `<section class="sports-dialog" role="dialog" aria-modal="true" aria-label="${esc(label)}"><header><h2>${esc(label)}</h2><button class="sports-dialog-close" data-tv-key="sports-dialog-close" data-close-modal aria-label="Close dialog">\xD7</button></header>${html}</section>`;
     document.body.appendChild(box);
     box.querySelector("button").focus();
   }
@@ -269,7 +269,7 @@
     const c = channel(id);
     if (!c) return;
     openModal(c.name, `<div class="channel-detail-heading">${logo(c)}<div><p>${esc(c.language)} \xB7 ${esc(c.region)} \xB7 ${esc(c.quality)}</p><small>Language from ${esc(c.languageSource)}. Actual commentary can vary by programme.</small></div></div><button class="sports-button primary" data-watch="${id}">\u25B6 Watch channel</button>
-      <h3>Programme guide</h3><div class="channel-schedule">${(c.programmes || []).length ? c.programmes.filter((p) => p.end > now()).slice(0, 22).map((p) => `<div class="channel-slot"><time>${day(p.start)}<br>${clock(p.start)}\u2013${clock(p.end)}</time><div><strong>${esc(p.title)}</strong>${p.subtitle ? `<span>${esc(p.subtitle)}</span>` : ""}${p.start <= now() && p.end > now() ? '<span class="slot-current">On now</span>' : ""}</div></div>`).join("") : '<p class="sports-muted">No programme listings were supplied for this channel.</p>'}</div>
+      <h3>Programme guide</h3><div class="channel-schedule" tabindex="0" data-tv-scroll data-tv-key="sports-channel-schedule" aria-label="Programme schedule">${(c.programmes || []).length ? c.programmes.filter((p) => p.end > now()).slice(0, 22).map((p) => `<div class="channel-slot"><time>${day(p.start)}<br>${clock(p.start)}\u2013${clock(p.end)}</time><div><strong>${esc(p.title)}</strong>${p.subtitle ? `<span>${esc(p.subtitle)}</span>` : ""}${p.start <= now() && p.end > now() ? '<span class="slot-current">On now</span>' : ""}</div></div>`).join("") : '<p class="sports-muted">No programme listings were supplied for this channel.</p>'}</div>
       ${options.user.role === "admin" ? `<button class="sports-button secondary" data-edit-channel="${id}">Edit competition, language or guide</button>` : ""}`);
   }
   async function settings() {
@@ -297,7 +297,29 @@
     }
   }
   function playerMarkup(c) {
-    return `<section class="sports-player" role="dialog" aria-modal="true" aria-label="Live TV player"><header><button data-close-player aria-label="Close live player">\u2190 Back</button><div><span class="live-dot">LIVE TV</span><strong id="live-playing-name">${esc(c.name)}</strong></div><button data-player-fullscreen aria-label="Full screen">\u26F6</button></header><div class="sports-player-layout"><div class="live-video-wrap"><video id="sports-video" controls autoplay playsinline></video><div class="live-player-status" id="live-player-status" role="status">Connecting to channel\u2026</div><button class="sports-button secondary live-retry" data-retry-player hidden>Retry channel</button></div><aside class="live-player-sidebar"><h2>Watching</h2><div id="live-playing-programme"></div><div class="live-player-actions"><button class="sports-button secondary" data-jump-live>Jump to live</button><button class="sports-button secondary" data-toggle-live>Play / pause</button></div><label for="live-player-language">Commentary language</label><select id="live-player-language"><option value="all">All languages</option>${catalog.languages.map((l) => `<option ${l === c.language ? "selected" : ""}>${esc(l)}</option>`).join("")}</select><h3>Switch channel</h3><div class="live-channel-switch" id="live-channel-switch"></div></aside></div></section>`;
+    return `<section class="sports-player" role="dialog" aria-modal="true" aria-label="Live TV player">
+    <header><button data-close-player data-tv-key="sports-player-back" aria-label="Close live player">\u2190 Back</button><div><span class="live-dot">LIVE TV</span><strong id="live-playing-name">${esc(c.name)}</strong></div><button data-player-fullscreen data-tv-key="sports-player-fullscreen" aria-label="Full screen">\u26F6</button></header>
+    <div class="sports-player-layout"><div class="live-video-wrap"><video id="sports-video" ${document.documentElement.classList.contains("tv") ? 'tabindex="-1"' : "controls"} autoplay playsinline></video><div class="live-player-status" id="live-player-status" role="status">Connecting to channel\u2026</div><button class="sports-button secondary live-retry" data-retry-player data-tv-key="sports-player-retry" hidden>Retry channel</button></div>
+    <aside class="live-player-sidebar"><h2>Watching</h2><div id="live-playing-programme" tabindex="0" data-tv-scroll aria-label="Current programme"></div>
+    <div class="live-player-actions"><button class="sports-button secondary" data-jump-live data-tv-key="sports-player-live">Jump to live</button><button class="sports-button secondary" data-toggle-live data-tv-key="sports-player-toggle">Play</button><button class="sports-button secondary" data-mute-live data-tv-key="sports-player-mute" aria-pressed="false">Mute</button></div>
+    <div class="live-player-volume" aria-label="Player volume"><button class="sports-button secondary" data-live-volume="-1" data-tv-key="sports-player-volume-down" aria-label="Lower volume">Volume \u2212</button><output id="live-volume-level" aria-live="polite">100%</output><button class="sports-button secondary" data-live-volume="1" data-tv-key="sports-player-volume-up" aria-label="Raise volume">Volume +</button></div>
+    <label for="live-player-language">Commentary language</label><select id="live-player-language"><option value="all">All languages</option>${catalog.languages.map((l) => `<option ${l === c.language ? "selected" : ""}>${esc(l)}</option>`).join("")}</select><h3>Switch channel</h3><div class="live-channel-switch" id="live-channel-switch"></div></aside></div></section>`;
+  }
+  function syncLiveControls() {
+    const v = $("#sports-video");
+    if (!v) return;
+    const toggle = $("[data-toggle-live]");
+    if (toggle) {
+      toggle.textContent = v.paused ? "Play" : "Pause";
+      toggle.setAttribute("aria-label", v.paused ? "Play live channel" : "Pause live channel");
+    }
+    const mute = $("[data-mute-live]");
+    if (mute) {
+      mute.textContent = v.muted ? "Unmute" : "Mute";
+      mute.setAttribute("aria-pressed", String(v.muted));
+    }
+    const volume = $("#live-volume-level");
+    if (volume) volume.textContent = v.muted ? "Muted" : Math.round(v.volume * 100) + "%";
   }
   function playerStatus(message, retry = false) {
     const el = $("#live-player-status");
@@ -314,7 +336,7 @@
     const ids = channelComp(c);
     let list = catalog.channels.filter((x) => (selector.value === "all" || x.language === selector.value) && (!ids.length || channelComp(x).some((id) => ids.includes(id))));
     if (!list.length) list = catalog.channels.filter((x) => selector.value === "all" || x.language === selector.value);
-    $("#live-channel-switch").innerHTML = list.slice(0, 100).map((x) => `<button class="${x.id === c.id ? "playing" : ""}" data-watch="${x.id}"><strong>${esc(x.name)}</strong><span>${esc(x.language)} \xB7 ${esc(x.quality)}</span></button>`).join("");
+    $("#live-channel-switch").innerHTML = list.slice(0, 100).map((x) => `<button class="${x.id === c.id ? "playing" : ""}" data-watch="${x.id}" data-tv-key="sports-switch-${x.id}" aria-pressed="${x.id === c.id}"><strong>${esc(x.name)}</strong><span>${esc(x.language)} \xB7 ${esc(x.quality)}</span></button>`).join("");
     const p = current(c);
     $("#live-playing-programme").innerHTML = `<strong>${esc(p && !p.generic ? p.title : c.name)}</strong><p>${esc(c.language)} \xB7 ${esc(c.quality)}${p ? " \xB7 Until " + clock(p.end) : ""}</p>${(p == null ? void 0 : p.description) ? `<p class="sports-muted">${esc(p.description.slice(0, 350))}</p>` : ""}`;
     $("#live-playing-name").textContent = c.name;
@@ -356,6 +378,9 @@
       playerFocus = document.activeElement;
       document.body.insertAdjacentHTML("beforeend", playerMarkup(c));
       document.body.classList.add("live-player-open");
+      const video = $("#sports-video");
+      ["play", "pause", "volumechange", "ended"].forEach((event) => video.addEventListener(event, syncLiveControls));
+      syncLiveControls();
       $("[data-close-player]").focus();
     }
     $(".sports-player").dataset.channel = id;
@@ -499,7 +524,28 @@
       const v = $("#sports-video");
       if (v) v.paused ? v.play().catch(() => {
       }) : v.pause();
+    } else if (b.hasAttribute("data-mute-live")) {
+      const v = $("#sports-video");
+      if (v) v.muted = !v.muted;
+    } else if (b.hasAttribute("data-live-volume")) {
+      const v = $("#sports-video");
+      if (v) {
+        v.volume = Math.min(1, Math.max(0, v.volume + Number(b.dataset.liveVolume) * 0.1));
+        v.muted = false;
+        syncLiveControls();
+      }
     }
+  });
+  document.addEventListener("focusin", (e) => {
+    var _a, _b;
+    if (!document.documentElement.classList.contains("tv") || !e.target.matches(".guide-programme")) return;
+    const scroller = e.target.closest(".guide-scroll"), row = e.target.closest(".guide-row");
+    if (!scroller || !row) return;
+    const bounds = scroller.getBoundingClientRect(), item = e.target.getBoundingClientRect(), sticky = row.querySelector(".guide-channel").getBoundingClientRect();
+    const clearance = ((_b = (_a = window.TVNav) == null ? void 0 : _a.unit) == null ? void 0 : _b.call(_a, 10)) || 10;
+    const left = sticky.right + clearance, right = bounds.right - clearance;
+    if (item.width > right - left || item.left < left) scroller.scrollLeft -= left - item.left;
+    else if (item.right > right) scroller.scrollLeft += item.right - right;
   });
   document.addEventListener("change", (e) => {
     if (e.target.id === "guide-hour") {
@@ -523,7 +569,7 @@
       try {
         const d = await api("/api/admin/live/guide-channels?q=" + encodeURIComponent(q));
         const box = $("#live-guide-matches");
-        if (box) box.innerHTML = d.channels.slice(0, 12).map((c) => `<button type="button" data-guide-id="${esc(c.id)}">${esc(c.names[0] || c.id)} <small>${esc(c.id)}</small></button>`).join("");
+        if (box) box.innerHTML = d.channels.slice(0, 12).map((c) => `<button type="button" data-guide-id="${esc(c.id)}" data-tv-key="sports-guide-match-${esc(c.id)}">${esc(c.names[0] || c.id)} <small>${esc(c.id)}</small></button>`).join("");
       } catch {
       }
     }, 300);
@@ -568,7 +614,7 @@
   document.addEventListener("keydown", (e) => {
     const modal = $(".sports-modal"), live = $(".sports-player"), surface = modal || live;
     if (!surface) return;
-    if (e.key === "Escape" || e.keyCode === 10009) {
+    if (!document.documentElement.classList.contains("tv") && (e.key === "Escape" || e.keyCode === 10009)) {
       e.preventDefault();
       e.stopImmediatePropagation();
       modal ? closeModal() : closePlayer();
@@ -586,12 +632,20 @@
         first.focus();
       }
     }
-    if (live && !modal && (e.code === "Space" || e.key === "MediaPlayPause" || e.keyCode === 10252) && !["INPUT", "SELECT", "BUTTON"].includes(e.target.tagName)) {
-      e.preventDefault();
-      e.stopImmediatePropagation();
+    if (live && !modal && !["INPUT", "TEXTAREA", "SELECT"].includes(e.target.tagName)) {
       const v = $("#sports-video");
-      v.paused ? v.play().catch(() => {
-      }) : v.pause();
+      if (!v) return;
+      const toggle = e.key === "MediaPlayPause" || e.keyCode === 10252 || e.code === "Space" && e.target.tagName !== "BUTTON";
+      const play = e.key === "MediaPlay" || e.keyCode === 415, pause = e.key === "MediaPause" || e.keyCode === 19, stop = e.key === "MediaStop" || e.keyCode === 413;
+      if (toggle || play || pause || stop) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        if (stop) closePlayer();
+        else if (pause || toggle && !v.paused) v.pause();
+        else v.play().catch(() => {
+        });
+        syncLiveControls();
+      }
     }
   }, true);
   window.addEventListener("pagehide", () => {

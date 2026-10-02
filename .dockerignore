@@ -35,3 +35,7 @@ tizen/Mediawan/Debug/
 tizen/Mediawan/Release/
 tizen/Mediawan/.buildResult/
 *.wgt
+
+# Local editor metadata and host-specific preflight notes.
+.idea/
+docs/phase-0.local.md

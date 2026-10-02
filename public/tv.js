@@ -8,7 +8,9 @@
   // Persist the flag so TV mode survives navigations/redirects (login → home)
   // that would otherwise drop ?tv=1 from the URL.
   if (/[?&]tv=1/.test(location.search)) { try { localStorage.setItem("tv", "1"); } catch {} }
-  const TV = !!window.tizen || /[?&]tv=1/.test(location.search) || localStorage.getItem("tv") === "1";
+  let savedTV = false;
+  try { savedTV = localStorage.getItem("tv") === "1"; } catch {}
+  const TV = !!window.tizen || /[?&]tv=1/.test(location.search) || savedTV;
   if (!TV) return;
   document.documentElement.classList.add("tv");
 
@@ -106,6 +108,13 @@
   })();
 
   const $ = (s) => document.querySelector(s);
+  // CSS scales layout pixels without zooming the page. Read the same token
+  // for scroll bands and row tolerances, including after a viewport resize.
+  const tvUnit = (pixels) => {
+    const style = getComputedStyle(document.documentElement);
+    const scale = Number(style.getPropertyValue?.("--tv-scale"));
+    return pixels * (scale > 0 ? scale : 1);
+  };
   // Eligible = RENDERED, deliberately not "currently on screen". Moving is what
   // causes scrolling, so a viewport test is circular: with TV-sized posters the
   // next row sits entirely below the fold, so it would never become focusable
@@ -117,9 +126,12 @@
   // translateX(100%) with its full size (its display rule beats the [hidden] UA
   // rule), so a closed one has to be ruled out explicitly or it steals focus.
   const visible = (el) => {
+    if (!el || el.disabled || el.closest('[aria-disabled="true"], fieldset[disabled]') ||
+        el.closest('[hidden], [inert], [aria-hidden="true"]')) return false;
     const r = el.getBoundingClientRect();
-    if (r.width < 2 || r.height < 2) return false;
-    if (getComputedStyle(el).visibility === "hidden") return false;
+    if (r.width < tvUnit(2) || r.height < tvUnit(2)) return false;
+    const style = getComputedStyle(el);
+    if (style.visibility === "hidden" || style.display === "none") return false;
     if (el.closest(".p-drawer:not(.show)")) return false;
     // Hero slides are STACKED full-size and cross-fade via opacity, so only the
     // active slide's buttons are real — the rest are invisible twins that would
@@ -129,6 +141,8 @@
 
   // Everything the remote can land on, across every surface.
   const SEL = [
+    'button, a[href], summary, input:not([type="hidden"]), select, textarea',
+    '[role="button"], [role="link"], [tabindex]:not([tabindex="-1"]), [data-tv-scroll]',
     ".card", ".fr-card", ".ep-row", ".sched-item", ".sched-day",
     ".hero-btn", ".hero-pg-btn", ".mode-pill", ".act-btn", ".detail-play", ".sheet-back",
     ".p-icon", ".p-bottom .scrub", ".up-next .btn", ".col-row input", "#search",
@@ -149,6 +163,7 @@
     // A remote has no "s" or "c" shortcut key, so every one of these has to be
     // landable or the panel behind it may as well not exist on a TV.
     ".p-menu-item", ".p-menu-row", ".p-menu-back", ".sub-sync .p-icon",
+    ".watch-menu .btn", ".watch-menu input", ".watch-lobby .btn", ".watch-lobby input",
     ".p-drawer-ep", ".srv-row", ".srv-fav", ".srv-foot .btn", ".p-status .btn",
   ].join(",");
 
@@ -164,15 +179,27 @@
     return menu || null;
   }
   function surface() {
-    const live = document.querySelector('.sports-modal .sports-dialog, .sports-player');
-    if (live) return live;
+    if (selectDialog) return selectDialog;
+    if (isShown("#watchLobby")) return $("#watchLobby");
+    const modal = [...document.querySelectorAll('[aria-modal="true"], .sports-modal .sports-dialog')]
+      .filter(visible).pop();
+    if (modal) return modal;
     // An open picker owns the remote while it is up, wherever it was opened
     // from — the filter bar, a season chooser inside a detail sheet. Without
     // this, Left/Right would walk straight out of the list and along the bar
     // behind it, and OK would fire whatever it landed on.
-    const picker = document.querySelector('.picker[data-open="true"] .picker-menu:not([hidden])');
-    if (picker) return picker;
-    if (isShown("#player")) return playerLayer() || $("#player");
+    if (isShown("#player")) {
+      const layer = playerLayer() || $("#player");
+      const picker = layer.querySelector('.picker[data-open="true"] .picker-menu:not([hidden])');
+      return picker && visible(picker) ? picker : layer;
+    }
+    const context = isShown("#detail") ? $("#detail") : isShown("#mDetail") ? $("#mDetail") : document.body;
+    const picker = context.querySelector('.picker[data-open="true"] .picker-menu:not([hidden])');
+    if (picker && visible(picker)) return picker;
+    const collection = $("#colMenu");
+    if (collection && visible(collection)) return collection;
+    const live = $(".sports-player");
+    if (live) return live;
     if (isShown("#detail")) return $("#detail");
     // The films/shows sheet is its own layer for the same reason the anime one
     // is: it covers the screen, and the D-pad must not wander onto the catalog
@@ -181,18 +208,47 @@
     return document.body;
   }
   function focusables() {
-    return [...surface().querySelectorAll(SEL)].filter(visible);
+    return [...surface().querySelectorAll(SEL)].filter((el) => !el.matches(".skip-link") && visible(el));
   }
 
   let cur = null;          // the highlighted element
   let inControls = false;  // remote is walking the player's control bar (see below)
+  let editing = null;
+  let selectDialog = null;
+  let selectSource = null;
+  let currentSurface = null;
+  const memories = new WeakMap();
+  const textField = (el) => !!el && (el.tagName === "TEXTAREA" ||
+    (el.tagName === "INPUT" && !/^(checkbox|radio|range|button|submit|reset|color|file|hidden)$/i.test(el.type)));
+  const identity = (el) => el.id ? "id:" + el.id : el.dataset.tvKey ? "key:" + el.dataset.tvKey : null;
+  function finishEditing() {
+    if (!editing) return;
+    editing.classList.remove("tv-editing");
+    editing.blur();
+    editing = null;
+  }
+  function startEditing(el) {
+    setFocus(el);
+    editing = el;
+    el.classList.add("tv-editing");
+    el.focus();
+    if (el.readOnly && el.select) el.select();
+  }
+  function clearFocus() {
+    finishEditing();
+    document.querySelectorAll(".tv-focus, .tv-focus-within").forEach((e) => {
+      e.classList.remove("tv-focus", "tv-focus-within");
+    });
+    cur = null;
+  }
   function setFocus(el, opts) {
     if (!el) return;
     // Leaving an input behind must BLUR it, or it keeps DOM focus and swallows
     // every key while the visible highlight sits somewhere else entirely —
     // that's the search-field trap.
     const act = document.activeElement;
-    if (act && act !== el && ["INPUT", "TEXTAREA", "SELECT"].includes(act.tagName)) {
+    if (editing && editing !== el) finishEditing();
+    if (act && act !== el && act.blur) {
       act.blur();
       // Blur EVENTS can't be trusted here — they don't fire at all in an
       // unfocused document and TV webviews are erratic with them — so the
@@ -204,6 +260,8 @@
     document.querySelectorAll(".tv-focus").forEach((e) => e.classList.remove("tv-focus")); // never leave a stray highlight
     document.querySelectorAll(".tv-focus-within").forEach((e) => e.classList.remove("tv-focus-within"));
     cur = el;
+    currentSurface = surface();
+    memories.set(currentSurface, { node: el, key: identity(el), rect: el.getBoundingClientRect() });
     el.classList.add("tv-focus");
     // Card artwork owns the focus ring, but a card's own buttons sit inside it —
     // mark the owning card so its actions stay visible while one is highlighted.
@@ -217,11 +275,35 @@
     // (The browse rows engine positions the page itself and passes noScroll.)
     if (!opts || !opts.noScroll)
       el.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "auto" });
-    if (el.tagName === "INPUT" || el.tagName === "SELECT") { try { el.focus({ preventScroll: true }); } catch {} }
+    // Navigation only highlights text fields. OK deliberately opens the IME.
+    // Native focus on other controls provides screen-reader and focusin events.
+    if (!textField(el) && el.tagName !== "SELECT") {
+      if (!el.hasAttribute("tabindex") && !el.matches("button, a, input")) el.setAttribute("tabindex", "0");
+      try { el.focus({ preventScroll: true }); } catch { el.focus(); }
+    }
   }
   function ensure() {
-    if (cur && document.contains(cur) && visible(cur) && surface().contains(cur)) return;
+    const s = surface();
+    if (s === currentSurface && cur && document.contains(cur) && visible(cur) && s.contains(cur)) return;
     const f = focusables();
+    const memory = memories.get(s);
+    const previousSurface = currentSurface;
+    currentSurface = s;
+    // Returning from an overlay and replacing a live list both retain the
+    // user's place. Stable identities survive a complete innerHTML repaint.
+    if (!(s === $("#player") && !inControls)) {
+      const restored = memory && f.find((e) => e === memory.node || (memory.key && identity(e) === memory.key));
+      if (restored) { setFocus(restored); return; }
+      if (memory && previousSurface === s && f.length) {
+        const a = memory.rect;
+        const nearby = f.filter((e) => !e.closest("#rail"));
+        nearby.sort((x, y) => {
+          const distance = (e) => { const b = e.getBoundingClientRect(); return Math.abs(a.left - b.left) + Math.abs(a.top - b.top); };
+          return distance(x) - distance(y);
+        });
+        if (nearby[0]) { setFocus(nearby[0]); return; }
+      }
+    }
     // Land on whatever the layer is "currently on" — the playing server, the
     // selected quality, this episode — before falling back to the first card
     // (browse) or the first control.
@@ -234,12 +316,11 @@
     // bar over the film's opening seconds. A status action or the up-next
     // toast is the exception: those exist to be pressed, so they take the
     // highlight — otherwise leave the picture alone.
-    if (isShown("#player") && !playerLayer() && !inControls) {
+    if (s === $("#player") && !playerLayer() && !inControls) {
       const act = f.find((e) => e.closest(".p-status, .up-next"));
       if (act) { setFocus(act); return; }
       // no highlight at all — and none left behind on the page under the overlay
-      document.querySelectorAll(".tv-focus").forEach((e) => e.classList.remove("tv-focus"));
-      document.querySelectorAll(".tv-focus-within").forEach((e) => e.classList.remove("tv-focus-within"));
+      clearFocus();
       return;
     }
     // A panel closed (picked a server, chose a quality) while the remote was on
@@ -263,17 +344,14 @@
       const bar = [...$("#player").querySelectorAll(".p-bottom .p-icon")].filter(visible);
       if (bar.length) { setFocus(bar.find((b) => b.id === "pPlay") || bar[0]); return; }
     }
-    // Never LAND on an input by default — focusing one summons the TV's IME,
-    // which is jarring when nobody asked to type. Inputs stay reachable by an
-    // explicit move; they just stop being the fallback.
-    const noInput = f.filter((e) => !["INPUT", "SELECT"].includes(e.tagName));
-    // Nor on the rail. It is a destination reached with Left, not a resting
+    // Highlighting a field is safe now: only explicit editing opens the IME.
+    // Avoid the rail. It is a destination reached with Left, not a resting
     // place — and it is the FIRST thing in the document now that it is the
     // app's own navigation, so a plain "first focusable" fallback would park
     // the highlight on Home every time a ladder-less page (the schedule)
     // repainted, and Down would then walk the rail instead of the content.
-    const content = noInput.filter((e) => !e.closest("#rail"));
-    setFocus(content.find((e) => e.classList.contains("card")) || content[0] || noInput[0] || f[0]);
+    const content = f.filter((e) => !e.closest("#rail"));
+    setFocus(content.find((e) => e.classList.contains("card")) || content[0] || f[0]);
   }
 
   // Column memory. Rows scroll independently, so stepping down out of a row and
@@ -286,6 +364,19 @@
   function move(dir) {
     ensure();
     if (!cur) return;
+    const form = cur.closest("form");
+    if (form && (dir === "up" || dir === "down")) {
+      const fields = focusables().filter((el) => el.closest("form") === form);
+      const index = fields.indexOf(cur);
+      const direction = dir === "up" ? -1 : 1;
+      // Text/select fields have unequal widths. Geometry would skip the short
+      // select below a wide URL field in favour of a distant submit button.
+      // Follow form order between fields, and leave button rows vertically.
+      for (let i = index + direction; index >= 0 && i >= 0 && i < fields.length; i += direction) {
+        const sameLine = Math.abs(fields[i].getBoundingClientRect().top - cur.getBoundingClientRect().top) < tvUnit(18);
+        if (textField(cur) || cur.tagName === "SELECT" || !sameLine) { setFocus(fields[i]); return; }
+      }
+    }
     const a = cur.getBoundingClientRect();
     const vertical = dir === "up" || dir === "down";
     const ay = a.top + a.height / 2;
@@ -310,7 +401,7 @@
       else if (dir === "right") { forward = dx; primary = Math.abs(dx); cross = Math.abs(dy); }
       else if (dir === "up") { forward = -dy; primary = Math.abs(dy); cross = Math.abs(bx - ax); }
       else { forward = dy; primary = Math.abs(dy); cross = Math.abs(bx - ax); }
-      if (forward <= 2) continue; // strictly in the requested direction
+      if (forward <= tvUnit(2)) continue; // strictly in the requested direction
       const s = primary + cross * 2;
       if (s < score) { score = s; best = el; }
     }
@@ -324,12 +415,86 @@
   function activate() {
     ensure();
     if (!cur) return;
-    if (cur.tagName === "INPUT") { cur.focus(); return; }
-    // OK used to have to CYCLE a native <select>, because its dropdown was a
-    // platform-drawn list no remote could enter. Every one of them is a .picker
-    // now — a real list of real buttons — so OK just presses what it is on.
+    if (textField(cur)) { startEditing(cur); return; }
+    if (cur.tagName === "SELECT") { openSelect(cur); return; }
+    if (cur.tagName === "INPUT" && cur.type === "range") { adjustRange(cur, 1); return; }
     cur.click();
   }
+
+  function adjustRange(el, direction) {
+    const min = Number(el.min || 0), max = Number(el.max || 100);
+    const step = el.step === "any" ? (max - min) / 100 : Number(el.step || 1);
+    const next = Math.max(min, Math.min(max, Number(el.value) + direction * step));
+    if (next === Number(el.value)) return;
+    el.value = String(Number(next.toFixed(6)));
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+  function closeSelect() {
+    const source = selectSource;
+    if (selectDialog) selectDialog.parentElement.remove();
+    selectDialog = null; selectSource = null;
+    if (source && document.contains(source)) setFocus(source);
+    else ensure();
+  }
+  function openSelect(source) {
+    const cover = document.createElement("div");
+    cover.className = "tv-select-overlay";
+    const dialog = document.createElement("div");
+    dialog.className = "tv-select-dialog";
+    dialog.setAttribute("role", "dialog");
+    dialog.setAttribute("aria-modal", "true");
+    const label = source.labels && source.labels[0];
+    const labelText = label && [...label.childNodes].filter((node) => node.nodeType === 3)
+      .map((node) => node.textContent).join(" ").trim();
+    dialog.setAttribute("aria-label", source.getAttribute("aria-label") || labelText || "Choose an option");
+    const title = document.createElement("h2");
+    title.textContent = dialog.getAttribute("aria-label");
+    dialog.appendChild(title);
+    let selected = null;
+    [...source.options].forEach((option, index) => {
+      if (option.hidden) return;
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "tv-select-option";
+      button.textContent = option.textContent;
+      button.disabled = option.disabled || !!option.closest("optgroup[disabled]");
+      button.setAttribute("aria-pressed", String(option.selected));
+      if (option.selected) selected = button;
+      button.addEventListener("click", () => {
+        const changed = source.selectedIndex !== index;
+        source.selectedIndex = index;
+        closeSelect();
+        if (changed) {
+          source.dispatchEvent(new Event("input", { bubbles: true }));
+          source.dispatchEvent(new Event("change", { bubbles: true }));
+        }
+      });
+      dialog.appendChild(button);
+    });
+    const cancel = document.createElement("button");
+    cancel.type = "button"; cancel.textContent = "Cancel";
+    cancel.className = "tv-select-option";
+    cancel.addEventListener("click", closeSelect);
+    dialog.appendChild(cancel);
+    cover.appendChild(dialog);
+    document.body.appendChild(cover);
+    selectSource = source; selectDialog = dialog;
+    setFocus(selected && visible(selected) ? selected : focusables()[0]);
+  }
+
+  // Pointer use, form validation and app-owned focus restoration must agree
+  // with the remote cursor. Our highlight-only field navigation emits no
+  // focusin; a real field focus is a deliberate request to edit.
+  document.addEventListener("focusin", (event) => {
+    const el = event.target;
+    if (!el.matches || !el.matches(SEL) || el.matches(".skip-link") || !visible(el) || !surface().contains(el)) return;
+    if (cur !== el) setFocus(el);
+    if (textField(el) && !editing) {
+      editing = el;
+      el.classList.add("tv-editing");
+    }
+  });
 
   // ---- Netflix-model browse navigation ----
   // A browse page is not free 2D space, it's a LADDER: hero buttons, the
@@ -344,8 +509,8 @@
     const out = [];
     let line = null, top = null;
     for (const c of grid.querySelectorAll(".card")) {
-      if (c.offsetWidth < 2) continue;
-      if (top === null || Math.abs(c.offsetTop - top) > 4) {
+      if (!visible(c)) continue;
+      if (top === null || Math.abs(c.offsetTop - top) > tvUnit(4)) {
         top = c.offsetTop;
         line = { type: "grid", el: grid, items: [] };
         out.push(line);
@@ -372,12 +537,30 @@
       if (items.length) groups.push({ type: "bar", el: bar, items });
     }
     for (const row of document.querySelectorAll(".row .cards")) {
-      const items = [...row.querySelectorAll(".card")].filter((c) => c.offsetWidth > 1);
+      const items = [...row.querySelectorAll(".card")].filter(visible);
       if (items.length) groups.push({ type: "row", el: row, items });
     }
     for (const grid of document.querySelectorAll(".cards-grid")) groups.push(...gridLines(grid));
     const more = $("#catMore");
     if (more && more.offsetHeight > 0) groups.push({ type: "foot", el: more.parentElement, items: [more] });
+    // Include page actions, library links, empty-state retries, collection
+    // management and new features without another selector allowlist. They
+    // form rows alongside the catalog's established card ladder.
+    const grouped = groups.reduce((all, group) => all.concat(group.items), []);
+    const extra = focusables().filter((el) => !el.closest("#rail, #searchbar") &&
+      !grouped.some((item) => item === el || item.contains(el)));
+    for (const el of extra) {
+      const y = el.getBoundingClientRect().top;
+      const row = groups.find((g) => g.type === "actions" && Math.abs(g.y - y) < tvUnit(18));
+      if (row) row.items.push(el);
+      else groups.push({ type: "actions", el, items: [el], y });
+    }
+    groups.forEach((g, index) => { g.order = index; });
+    const groupTop = (g) => (g.type === "grid" || g.type === "actions" ? g.items[0] : g.el).getBoundingClientRect().top;
+    groups.sort((a, b) => groupTop(a) - groupTop(b) || a.order - b.order);
+    groups.forEach((g) => {
+      if (g.type === "actions") g.items.sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left);
+    });
     // The search strip, when it is up, is the rung above everything else — the
     // field and the ✕ that dismisses it. Only ever an EXTRA rung, though: on a
     // ladder-less view (the schedule) an empty group set is the signal to fall
@@ -410,19 +593,20 @@
     i = Math.max(0, Math.min(i, group.items.length - 1));
     const item = group.items[i];
     if (group.type !== "grid") group.el.__tvIdx = i;
-    setFocus(item, { noScroll: true });
+    setFocus(item, { noScroll: group.type !== "actions" });
     // card rows slide under a left-pinned highlight
     if (group.type === "row") {
-      const t = item.offsetLeft - 8;
+      const t = item.offsetLeft - tvUnit(8);
       group.el.scrollLeft = Math.max(0, Math.min(t, group.el.scrollWidth - group.el.clientWidth));
     }
     // hold the rung at a stable height: hero owns the top, rows keep their
     // title readable, grid lines sit in the same band every time
     if (group.type === "hero") { window.scrollTo(0, 0); return; }
-    const cont = group.type === "row" ? (group.el.closest(".row") || group.el)
+    const cont = group.type === "actions" ? item
+               : group.type === "row" ? (group.el.closest(".row") || group.el)
                : group.type === "grid" ? item : group.el;
     const y = window.pageYOffset + cont.getBoundingClientRect().top;
-    window.scrollTo(0, Math.max(0, y - (group.type === "grid" ? 210 : 150)));
+    window.scrollTo(0, Math.max(0, y - tvUnit(group.type === "grid" ? 210 : 150)));
   }
   function browseDefault() {
     const groups = contentGroups();
@@ -438,7 +622,7 @@
     const groups = contentGroups();
     if (!groups.length) return false;
     const pos = cur ? findPos(groups, cur) : null;
-    if (!pos) return browseDefault(); // rail, a vanished slide, a repaint — re-enter at the top
+    if (!pos) return false;
     const group = groups[pos.g];
     if (dir === "left") {
       if (pos.i === 0) { focusRail(); return true; }
@@ -548,6 +732,12 @@
   // The ‹ in the title bar is the ladder's top rung — a single-button row, so
   // sideways presses on it go nowhere rather than leaping somewhere surprising.
   const onTop = () => !!(cur && cur.closest && cur.closest("#player .p-top"));
+  function topMove(dir) {
+    const buttons = [...$("#player .p-top").querySelectorAll(SEL)]
+      .filter(visible).sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left);
+    const index = buttons.indexOf(cur);
+    if (index >= 0) setFocus(buttons[Math.max(0, Math.min(buttons.length - 1, index + (dir === "right" ? 1 : -1)))]);
+  }
   const barButtons = () => [...document.querySelectorAll("#player .p-bottom .p-icon")]
     .filter(visible)
     .sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left);
@@ -567,6 +757,20 @@
 
   // Back button: unwind the most specific open thing.
   function back() {
+    if (editing) { finishEditing(); return; }
+    if (selectDialog) { closeSelect(); return; }
+    const s = surface();
+    const close = s.querySelector('[data-close-modal], #watchLobbyClose');
+    if (s.matches('[aria-modal="true"], .sports-dialog') && close) { close.click(); ensure(); return; }
+    const openPicker = s.closest('.picker[data-open="true"]');
+    if (openPicker && s.classList.contains("picker-menu")) {
+      const btn = openPicker.querySelector(".picker-btn");
+      btn.click(); setFocus(btn); return;
+    }
+    if (s.id === "colMenu") {
+      if (window.closeCollections) window.closeCollections(); else s.hidden = true;
+      setFocus($("#actCol")); return;
+    }
     // an open drawer/menu closes before the control bar, which closes before
     // the player itself — one Back per layer, innermost first
     if (isShown("#player")) {
@@ -580,7 +784,7 @@
         else if (layer.classList.contains("p-drawer")) window.Player?.closeDrawer?.();
         else window.Player?.hideMenus?.();
         cur = null;
-        setTimeout(() => inControls && enterControls(), SETTLE_MS);
+        setTimeout(ensure, SETTLE_MS);
         return;
       }
       if (inControls) { exitControls(); return; }
@@ -590,14 +794,10 @@
     for (const id of ["#colMenu", "#ccMenu", "#audMenu", "#settingsMenu"]) {
       const m = $(id); if (m && !m.hidden) { m.hidden = true; return; }
     }
-    // An open picker is the innermost layer — one Back closes it and hands the
-    // highlight back to the control, not to the page behind the sheet.
-    const openPicker = document.querySelector('.picker[data-open="true"]');
-    if (openPicker) {
-      const btn = openPicker.querySelector(".picker-btn");
-      btn.click(); // app.js owns open/close; this is the same press a mouse makes
-      setFocus(btn);
-      return;
+    if (s.classList.contains("sports-player")) {
+      const liveBack = s.querySelector("[data-close-player]");
+      if (liveBack) liveBack.click(); else window.MediawanSports?.closePlayer?.();
+      ensure(); return;
     }
     if (isShown("#detail")) { $("#detailClose")?.click(); cur = null; return; }
     // Films and shows use their own sheet (same treatment, different overlay).
@@ -610,13 +810,54 @@
     // is the last thing Back can unwind. Its ✕ does the same job for a pointer,
     // but a remote never reaches it — arrow keys inside a text field move the
     // caret, which is why the field swallows Left and Right.
-    if (document.body.classList.contains("search-open")) $("#searchClose").click();
+    if (document.body.classList.contains("search-open")) { $("#searchClose").click(); ensure(); return; }
+    // Full account/admin pages have a real return link. SPA routes use their
+    // own navigation so Back cannot leave the installed TV application.
+    const home = !$("#app") && document.querySelector('a[href="/"], a[href="/login.html"]');
+    if (home && visible(home)) { home.click(); return; }
+    if (location.pathname !== "/") {
+      const fallback = location.pathname.startsWith("/sports/") ? "/sports" : "/";
+      if (window.goBack) window.goBack(fallback);
+      else window.nav?.(fallback);
+    }
   }
 
   document.addEventListener("keydown", (e) => {
-    const player = isShown("#player");
-    const k = e.keyCode;
-    if (k === 10009) { e.preventDefault(); back(); return; }          // Tizen Back
+    const codes = { ArrowLeft: 37, ArrowUp: 38, ArrowRight: 39, ArrowDown: 40, Enter: 13, Escape: 10009, BrowserBack: 10009 };
+    const k = codes[e.key] || e.keyCode;
+    const own = () => { e.preventDefault(); e.stopPropagation(); };
+    if (k === 10009 || k === 27 || (k === 8 && !editing)) { own(); back(); return; }
+    // IME editing is explicit: caret keys and text stay native; OK finishes,
+    // and Up/Down dismiss the keyboard and resume page navigation.
+    if (editing) {
+      if (k === 13) {
+        own(); const wasSearch = editing.id === "search"; finishEditing();
+        if (wasSearch) setTimeout(() => {
+          const hit = [...document.querySelectorAll("#app .card")].filter(visible)[0];
+          if (hit) setFocus(hit); else ensure();
+        }, 450);
+        return;
+      }
+      if (k === 38 || k === 40) finishEditing();
+      else return;
+    }
+    ensure();
+    if ((k === 37 || k === 39) && cur?.tagName === "INPUT" && cur.type === "range") {
+      own(); adjustRange(cur, k === 37 ? -1 : 1); return;
+    }
+    if (cur?.hasAttribute("data-tv-scroll") && k >= 37 && k <= 40) {
+      const horizontal = k === 37 || k === 39;
+      const pos = horizontal ? cur.scrollLeft : cur.scrollTop;
+      const max = horizontal ? cur.scrollWidth - cur.clientWidth : cur.scrollHeight - cur.clientHeight;
+      const step = Math.max(tvUnit(80), (horizontal ? cur.clientWidth : cur.clientHeight) * .7);
+      const next = Math.max(0, Math.min(max, pos + (k === 37 || k === 38 ? -step : step)));
+      if (next !== pos && max > 0) {
+        own(); if (horizontal) cur.scrollLeft = next; else cur.scrollTop = next; return;
+      }
+    }
+    // A room dialog or selector over a film owns navigation before playback.
+    const activeSurface = surface();
+    const player = isShown("#player") && (activeSurface === $("#player") || activeSurface === playerLayer());
     if (player) {
       // Three modes inside the player, innermost first:
       //   a drawer/menu is open → the D-pad navigates it;
@@ -624,7 +865,6 @@
       //   otherwise → the arrows stay with the video (seek/volume) and Up enters.
       // Taking a key here means stopping it in the capture phase, or the
       // player's own document handler would seek at the same time.
-      const own = () => { e.preventDefault(); e.stopPropagation(); };
       const layer = playerLayer();
       if (layer) {
         switch (k) {
@@ -640,8 +880,8 @@
         window.Player?.poke?.(); // keep the chrome up while the remote is on it
         armIdle();
         switch (k) {
-          case 37: own(); if (onScrub()) seekBy(-10); else if (onBar()) barMove("left"); else if (!onTop()) move("left"); return;
-          case 39: own(); if (onScrub()) seekBy(10); else if (onBar()) barMove("right"); else if (!onTop()) move("right"); return;
+          case 37: own(); if (onScrub()) seekBy(-10); else if (onBar()) barMove("left"); else if (onTop()) topMove("left"); else move("left"); return;
+          case 39: own(); if (onScrub()) seekBy(10); else if (onBar()) barMove("right"); else if (onTop()) topMove("right"); else move("right"); return;
           // Three rungs: the ‹ in the title bar, the scrubber, the buttons.
           // Up climbs, Down comes back to where it left — and Down from the
           // buttons leaves the bar altogether, which is the way in reversed.
@@ -671,7 +911,7 @@
       // OK over the bare video is play/pause — unless a status action or the
       // up-next toast holds the highlight, in which case OK means THAT button.
       if (k === 13) {
-        e.preventDefault();
+        own();
         if (cur && document.contains(cur) && visible(cur) && cur.closest(".p-status, .up-next")) activate();
         else window.Player?.togglePlay?.();
         return;
@@ -680,8 +920,6 @@
       if (k === 39) { own(); seekBy(10); return; }
       return;
     }
-    const typing = document.activeElement && document.activeElement.tagName === "INPUT";
-    const inSearch = typing && document.activeElement.id === "search";
     // Browse pages run the rows engine; overlays (detail sheet, login) keep the
     // spatial search, which suits list-shaped layouts.
     const go = (dir) => {
@@ -695,28 +933,13 @@
       move(dir);
     };
     switch (k) {
-      case 37: if (typing) return; go("left"); e.preventDefault(); break;   // caret keys stay with the field
-      case 39: if (typing) return; go("right"); e.preventDefault(); break;
+      case 37: own(); go("left"); break;
+      case 39: own(); go("right"); break;
       // Up/Down leave the field: setFocus blurs it, so the highlight and the
       // DOM focus move TOGETHER — splitting them is what trapped the remote.
-      case 38: go("up"); e.preventDefault(); break;
-      case 40: go("down"); e.preventDefault(); break;
-      case 13:
-        // OK in the search field = "done typing": close the IME and jump to
-        // the results the query just painted (they render on a debounce, so
-        // give them a beat). Login/invite inputs keep their submit behaviour.
-        if (inSearch) {
-          e.preventDefault();
-          document.activeElement.blur();
-          cur = null;
-          setTimeout(() => {
-            const hit = [...document.querySelectorAll("#app .card")].filter(visible)[0];
-            if (hit) setFocus(hit); else ensure();
-          }, 450);
-          break;
-        }
-        if (!typing) { activate(); e.preventDefault(); }
-        break;
+      case 38: own(); go("up"); break;
+      case 40: own(); go("down"); break;
+      case 13: own(); activate(); break;
     }
   }, true); // capture phase so we pre-empt default page scrolling
 
@@ -726,9 +949,12 @@
   // is decided from on-screen geometry, and a drawer caught mid-transition is
   // still parked off the right edge — we'd find nothing to highlight.
   const SETTLE_MS = 320;
-  const reanchor = () => { cur = null; setTimeout(ensure, SETTLE_MS); };
-  const detail = $("#detail"), player = $("#player"), appEl = $("#app");
-  if (detail) new MutationObserver(reanchor).observe(detail, { attributes: true, attributeFilter: ["class"] });
+  let anchorTimer = null;
+  const reanchor = () => {
+    clearTimeout(anchorTimer);
+    anchorTimer = setTimeout(ensure, 60);
+  };
+  const player = $("#player");
   // Only an open/close is a layer change. The player's class churns constantly
   // (controls-hidden, hide-cursor, tv-controls) and reanchoring on that would
   // yank the highlight back to the first control on every keypress.
@@ -743,24 +969,16 @@
   // A drawer opening (.show), a menu un-hiding, or Settings swapping to a
   // submenu all create a new layer that must take the highlight — none of them
   // shows up as a class change on #player itself.
-  for (const el of document.querySelectorAll("#player .p-drawer, #player .p-menu, #player .p-submenu"))
-    new MutationObserver(reanchor).observe(el, { attributes: true, attributeFilter: ["class", "hidden"] });
-  // Opening a picker creates a layer the same way a player menu does, and it
-  // has to take the highlight — onto the option already chosen, which ensure()
-  // finds by .picker-opt.active. data-open is what surface() reads, so that is
-  // what to watch. Pickers are re-rendered constantly, so this observes the
-  // page and re-attaches rather than binding to elements that will be replaced.
-  const watchPickers = () => {
-    for (const box of document.querySelectorAll(".picker")) {
-      if (box.__tvWatched) continue;
-      box.__tvWatched = true;
-      new MutationObserver(reanchor).observe(box, { attributes: true, attributeFilter: ["data-open"] });
-    }
-  };
-  watchPickers();
-  new MutationObserver(watchPickers).observe(document.body, { childList: true, subtree: true });
-  if (appEl) new MutationObserver(() => { if (!cur || !document.contains(cur)) setTimeout(ensure, 60); })
-    .observe(appEl, { childList: true, subtree: true });
+  // Observe all pages, including dynamically mounted sports/admin dialogs and
+  // replacing room rosters. Focus classes need no re-anchor: changing them is
+  // our own work and must never pull the cursor away from a valid destination.
+  new MutationObserver((records) => {
+    if (records.some((record) => record.type === "childList" ||
+        record.attributeName !== "class" || !cur || !visible(cur) || surface() !== currentSurface)) reanchor();
+  }).observe(document.body, {
+    childList: true, subtree: true, attributes: true,
+    attributeFilter: ["class", "hidden", "disabled", "aria-disabled", "aria-hidden", "data-open"],
+  });
   // Dismissing the search strip hides the field and the ✕ with display:none —
   // they stay in the document, so the check above never fires and the highlight
   // is left on something invisible. Summoning it needs no help: the rail's own
@@ -787,19 +1005,22 @@
       // app.js has already revealed the strip and focused the field; a hidden
       // input cannot take focus, so the highlight follows rather than leads.
       const box = $("#search");
-      if (box) setFocus(box);
+      if (box) startEditing(box);
       return;
     }
-    if (!b.dataset.nav) return;
+    if (!b.dataset.nav && !["schedule", "random"].includes(b.dataset.act)) return;
     // Landing puts the highlight on the new page's hero button the moment it
     // exists, so the rail is never where the remote is left sitting.
     let tries = 0;
     const seek = setInterval(() => {
-      const ready = document.querySelector("#heroCar .hero.active .hero-btn") ||
-                    document.querySelector("#app .card");
-      if (ready && visible(ready)) { clearInterval(seek); cur = null; browseDefault(); }
+      const ready = [...$("#app").querySelectorAll(SEL)].find(visible);
+      if (ready) {
+        clearInterval(seek); memories.delete(document.body); cur = null;
+        if (!browseDefault()) setFocus(ready);
+      }
       else if (++tries > 25) clearInterval(seek); // page never painted — stay on the rail
     }, 120);
   });
-  window.TVNav = { ensure, setFocus };
+  window.TVNav = { ensure, setFocus, move, activate, back, focusables, surface, unit: tvUnit,
+    get current() { return cur; } };
 })();

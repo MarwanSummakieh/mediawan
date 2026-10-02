@@ -7,7 +7,9 @@
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <meta name="theme-color" content="#171a19" />
   <link rel="stylesheet" href="/admin.css" />
+  <link rel="stylesheet" href="/tv.css" />
   <script src="/admin.js" defer></script>
+  <script src="/tv.js" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
@@ -19,7 +21,7 @@
     </nav>
   </header>
 
-  <main class="admin" id="main">
+  <main class="admin" id="main" tabindex="-1">
     <div class="page-heading">
       <h1>Administration</h1>
       <button class="button secondary" id="pipeline-refresh" type="button">Refresh status</button>
@@ -83,8 +85,8 @@
         <div class="setup-content">
           <ul class="check-list" id="setup-checks"><li class="empty-state">Loading requirements…</li></ul>
           <details class="install-details">
-            <summary>NAS / Docker configuration</summary>
-            <ol class="setup-steps">
+            <summary data-tv-key="admin-install-details">NAS / Docker configuration</summary>
+            <ol class="setup-steps" tabindex="0" data-tv-scroll aria-label="NAS and Docker setup instructions">
               <li><strong>Connect a download source.</strong> In the server’s <code>.env</code>, set <code>REAL_DEBRID_TOKEN</code> or <code>PREMIUMIZE_API_KEY</code>. A configured token still needs a valid account and subscription.</li>
               <li><strong>Choose storage.</strong> Set <code>DATA_DIR</code> and <code>MEDIA_DIR</code> to folders on the NAS. Set <code>CACHE_BUDGET_BYTES</code> to the space available for cached files. Old files are removed when the cache reaches its budget.</li>
               <li><strong>Configure the encoder.</strong> Set <code>TRANSCODE=true</code>. Use <code>TRANSCODE_HWACCEL=qsv</code> for Intel Quick Sync with a tested VAAPI fallback, or <code>vaapi</code> to select VAAPI directly. Pass <code>/dev/dri</code> into the container and set <code>VIDEO_GID</code> / <code>RENDER_GID</code> to its device group IDs. <code>TRANSCODE_DEVICE</code> defaults to <code>/dev/dri/renderD128</code>. Software encoding uses <code>TRANSCODE_HWACCEL=none</code>; remove the device and GPU group entries from Compose if the host has no GPU.</li>
@@ -113,7 +115,7 @@ docker compose exec web node scripts/check-pipeline.mjs</code></pre>
     <section class="admin-section" aria-labelledby="members-heading">
       <div class="section-heading"><div class="heading-with-status"><h2 id="members-heading">Members</h2><span class="count" id="member-count">—</span></div><button class="button secondary" id="members-refresh" type="button">Refresh members</button></div>
       <p class="feedback error" id="members-error" role="alert" hidden></p>
-      <div class="table-scroll">
+      <div class="table-scroll" tabindex="0" data-tv-scroll data-tv-key="admin-members-table" aria-label="Members and access controls">
         <table>
           <caption class="sr-only">Members and access controls</caption>
           <thead><tr><th scope="col">Name</th><th scope="col">Email</th><th scope="col">Role</th><th scope="col">Status</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead>
@@ -138,7 +140,7 @@ docker compose exec web node scripts/check-pipeline.mjs</code></pre>
       </div>
 
       <div class="pending-heading"><h3>Pending invites</h3><span class="count" id="invite-count">—</span></div>
-      <div class="table-scroll">
+      <div class="table-scroll" tabindex="0" data-tv-scroll data-tv-key="admin-invites-table" aria-label="Pending invitations">
         <table>
           <caption class="sr-only">Pending invitations</caption>
           <thead><tr><th scope="col">Name</th><th scope="col">Email</th><th scope="col">Role</th><th scope="col">Invite</th></tr></thead>

@@ -7,6 +7,8 @@
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <meta name="theme-color" content="#171a19" />
   <link rel="stylesheet" href="/styles.css" />
+  <link rel="stylesheet" href="/tv.css" />
+  <script src="/config.js"></script>
 </head>
 <body>
   <div class="auth">
@@ -18,10 +20,13 @@
         <input id="email" type="email" disabled />
         <label for="password">Choose a password</label>
         <!-- must match the server's minPasswordLength default (config.mjs) -->
-        <input id="password" type="password" autocomplete="new-password" minlength="8" required />
+        <input id="password" type="password" enterkeyhint="done" autocomplete="new-password" minlength="8" required />
+        <button class="btn ghost" id="passwordToggle" type="button" aria-controls="password" aria-pressed="false">Show password</button>
         <button class="btn" type="submit">Create account</button>
       </form>
       <div class="err" id="err" role="alert"></div>
+      <button class="btn ghost" id="inviteRetry" type="button" hidden>Retry invite</button>
+      <a class="text-link" href="/login.html">Sign in</a>
     </div>
   </div>
   <script>
@@ -29,27 +34,49 @@
     const intro = document.getElementById("intro");
     const f = document.getElementById("f");
     const err = document.getElementById("err");
+    const btn = f.querySelector('button[type="submit"]');
+    document.getElementById("passwordToggle").addEventListener("click", (e) => {
+      const password = document.getElementById("password");
+      const visible = password.type === "password";
+      password.type = visible ? "text" : "password";
+      e.currentTarget.textContent = visible ? "Hide password" : "Show password";
+      e.currentTarget.setAttribute("aria-pressed", String(visible));
+    });
 
-    (async () => {
-      const res = await fetch("/api/invite/" + token);
-      if (!res.ok) { intro.textContent = "This invite is invalid or already used."; return; }
-      const inv = await res.json();
-      intro.textContent = `Welcome ${inv.name}! Set a password to finish.`;
-      document.getElementById("email").value = inv.email;
-      f.style.display = "block";
-    })();
+    async function loadInvite() {
+      document.getElementById("inviteRetry").hidden = true;
+      intro.textContent = "Checking your invite…";
+      try {
+        const res = await fetch("/api/invite/" + encodeURIComponent(token || ""));
+        if (!res.ok) { intro.textContent = "This invite is invalid or already used."; return; }
+        const inv = await res.json();
+        intro.textContent = `Welcome ${inv.name}! Set a password to finish.`;
+        document.getElementById("email").value = inv.email;
+        f.style.display = "block";
+      } catch {
+        intro.textContent = "Couldn't check the invite.";
+        document.getElementById("inviteRetry").hidden = false;
+      }
+    }
+    document.getElementById("inviteRetry").addEventListener("click", loadInvite);
+    loadInvite();
 
     f.addEventListener("submit", async (e) => {
       e.preventDefault();
       err.textContent = "";
-      const res = await fetch("/api/invite/" + token, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password: document.getElementById("password").value }),
-      });
-      if (res.ok) location.href = "/";
-      else err.textContent = (await res.json()).error || "Failed";
+      btn.disabled = true;
+      try {
+        const res = await fetch("/api/invite/" + encodeURIComponent(token || ""), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ password: document.getElementById("password").value }),
+        });
+        if (res.ok) location.href = document.documentElement.classList.contains("tv") ? "/?tv=1" : "/";
+        else err.textContent = (await res.json().catch(() => ({}))).error || "Couldn't create the account. Try again.";
+      } catch { err.textContent = "Network error — please try again."; }
+      finally { btn.disabled = false; }
     });
   </script>
+  <script src="/tv.js"></script>
 </body>
 </html>

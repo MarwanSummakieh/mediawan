@@ -1,53 +1,70 @@
 .sports-page {
-  max-width: 1760px;
+  max-width: calc(1760px * var(--tv-scale, 1));
   margin: 0 auto;
-  padding: 32px 40px 64px;
+  padding: calc(32px * var(--tv-scale, 1)) calc(40px * var(--tv-scale, 1)) calc(64px * var(--tv-scale, 1));
   color: var(--text);
+}
+.live-player-volume {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(8px * var(--tv-scale, 1));
+  margin-top: calc(14px * var(--tv-scale, 1));
+}
+.live-player-volume .sports-button {
+  font-size: calc(12px * var(--tv-scale, 1));
+  padding: calc(8px * var(--tv-scale, 1)) calc(10px * var(--tv-scale, 1));
+}
+.live-player-volume output {
+  font-size: calc(13px * var(--tv-scale, 1));
+  color: #c1d4c6;
+  text-align: center;
+  min-width: calc(48px * var(--tv-scale, 1));
 }
 .sports-heading {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 20px;
-  margin-bottom: 20px;
+  gap: calc(20px * var(--tv-scale, 1));
+  margin-bottom: calc(20px * var(--tv-scale, 1));
 }
 .sports-heading h1 {
-  font-size: 32px;
+  font-size: calc(32px * var(--tv-scale, 1));
   line-height: 1.2;
-  letter-spacing: -.8px;
+  letter-spacing: calc(-.8px * var(--tv-scale, 1));
   font-weight: 650;
   margin: 0;
 }
 .sports-heading > div:last-child {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: calc(12px * var(--tv-scale, 1));
 }
 .sports-breadcrumb {
   display: block;
   color: var(--muted);
-  font-size: 14px;
-  margin-bottom: 8px;
+  font-size: calc(14px * var(--tv-scale, 1));
+  margin-bottom: calc(8px * var(--tv-scale, 1));
 }
 .sports-breadcrumb span {
-  margin-left: 10px;
+  margin-left: calc(10px * var(--tv-scale, 1));
   color: #637169;
 }
 .sports-tabs {
   display: flex;
-  gap: 26px;
-  border-bottom: 1px solid #354039;
+  gap: calc(26px * var(--tv-scale, 1));
+  border-bottom: calc(1px * var(--tv-scale, 1)) solid #354039;
   overflow-x: auto;
   white-space: nowrap;
-  margin-bottom: 24px;
+  margin-bottom: calc(24px * var(--tv-scale, 1));
   scrollbar-width: none;
 }
 .sports-tabs a {
-  padding: 12px 0 16px;
-  min-height: 48px;
+  padding: calc(12px * var(--tv-scale, 1)) 0 calc(16px * var(--tv-scale, 1));
+  min-height: calc(48px * var(--tv-scale, 1));
   color: #b3bbb5;
-  font-size: 15px;
-  border-bottom: 2px solid transparent;
+  font-size: calc(15px * var(--tv-scale, 1));
+  border-bottom: calc(2px * var(--tv-scale, 1)) solid transparent;
 }
 .sports-tabs a.selected {
   color: #edf1ed;
@@ -57,26 +74,26 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 20px;
-  margin-bottom: 24px;
+  gap: calc(20px * var(--tv-scale, 1));
+  margin-bottom: calc(24px * var(--tv-scale, 1));
 }
 .sports-search {
   display: flex;
   align-items: center;
-  width: min(480px, 55%);
-  border: 1px solid #39433d;
-  border-radius: 5px;
+  width: min(calc(480px * var(--tv-scale, 1)), 55%);
+  border: calc(1px * var(--tv-scale, 1)) solid #39433d;
+  border-radius: calc(5px * var(--tv-scale, 1));
   background: #1d221f;
-  padding: 0 14px;
+  padding: 0 calc(14px * var(--tv-scale, 1));
 }
 .sports-search svg {
-  width: 19px;
-  height: 19px;
+  width: calc(19px * var(--tv-scale, 1));
+  height: calc(19px * var(--tv-scale, 1));
   stroke: #b7c1b9;
   stroke-width: 1.7;
   fill: none;
   flex-shrink: 0;
-  margin-right: 10px;
+  margin-right: calc(10px * var(--tv-scale, 1));
 }
 .sports-search input {
   background: transparent;
@@ -84,14 +101,14 @@
   outline: 0;
   width: 100%;
   min-width: 0;
-  height: 44px;
+  height: calc(44px * var(--tv-scale, 1));
   color: var(--text);
   font: inherit;
-  font-size: 14px;
+  font-size: calc(14px * var(--tv-scale, 1));
 }
 .sports-search:focus-within {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+  outline: calc(2px * var(--tv-scale, 1)) solid var(--accent);
+  outline-offset: calc(2px * var(--tv-scale, 1));
 }
 .sports-search input::placeholder {
   color: #9da8a0;
@@ -99,19 +116,19 @@
 .sports-language {
   display: flex;
   align-items: center;
-  gap: 12px;
-  font-size: 13px;
+  gap: calc(12px * var(--tv-scale, 1));
+  font-size: calc(13px * var(--tv-scale, 1));
   color: #b5c0b8;
 }
 .sports-language select,
 .sports-dialog select,
 .live-player-sidebar select {
-  height: 44px;
+  height: calc(44px * var(--tv-scale, 1));
   background: #232b26;
-  border: 1px solid #4a554d;
-  border-radius: 5px;
+  border: calc(1px * var(--tv-scale, 1)) solid #4a554d;
+  border-radius: calc(5px * var(--tv-scale, 1));
   color: #e7ece7;
-  padding: 0 34px 0 12px;
+  padding: 0 calc(34px * var(--tv-scale, 1)) 0 calc(12px * var(--tv-scale, 1));
   font: inherit;
   max-width: 100%;
 }
@@ -119,15 +136,15 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 44px;
-  padding: 11px 19px;
-  border: 1px solid transparent;
-  border-radius: 5px;
+  min-height: calc(44px * var(--tv-scale, 1));
+  padding: calc(11px * var(--tv-scale, 1)) calc(19px * var(--tv-scale, 1));
+  border: calc(1px * var(--tv-scale, 1)) solid transparent;
+  border-radius: calc(5px * var(--tv-scale, 1));
   font: inherit;
-  font-size: 14px;
+  font-size: calc(14px * var(--tv-scale, 1));
   font-weight: 600;
   cursor: pointer;
-  gap: 8px;
+  gap: calc(8px * var(--tv-scale, 1));
   text-decoration: none;
 }
 .sports-button.primary {
@@ -152,27 +169,27 @@
   background: transparent;
   color: #bac7be;
   text-decoration: underline;
-  text-underline-offset: 4px;
+  text-underline-offset: calc(4px * var(--tv-scale, 1));
   font: inherit;
-  font-size: 13px;
-  min-height: 44px;
+  font-size: calc(13px * var(--tv-scale, 1));
+  min-height: calc(44px * var(--tv-scale, 1));
   cursor: pointer;
 }
 .sports-hero {
   position: relative;
-  min-height: 300px;
+  min-height: calc(300px * var(--tv-scale, 1));
   overflow: hidden;
-  border-radius: 8px;
+  border-radius: calc(8px * var(--tv-scale, 1));
   background: #242c27;
   display: flex;
   isolation: isolate;
-  margin-bottom: 32px;
-  border: 1px solid #354239;
+  margin-bottom: calc(32px * var(--tv-scale, 1));
+  border: calc(1px * var(--tv-scale, 1)) solid #354239;
 }
 .sports-hero-copy {
   position: relative;
   z-index: 2;
-  padding: 40px;
+  padding: calc(40px * var(--tv-scale, 1));
   width: 64%;
   align-self: center;
   background:
@@ -183,28 +200,28 @@
 }
 .sports-eyebrow {
   color: #c2d5c5;
-  font-size: 14px;
+  font-size: calc(14px * var(--tv-scale, 1));
   font-weight: 500;
 }
 .sports-hero h2 {
-  font-size: 46px;
+  font-size: calc(46px * var(--tv-scale, 1));
   line-height: 1.08;
-  letter-spacing: -1.4px;
+  letter-spacing: calc(-1.4px * var(--tv-scale, 1));
   font-weight: 650;
-  max-width: 630px;
-  margin: 12px 0 18px;
+  max-width: calc(630px * var(--tv-scale, 1));
+  margin: calc(12px * var(--tv-scale, 1)) 0 calc(18px * var(--tv-scale, 1));
   text-wrap: balance;
 }
 .sports-hero-meta {
-  font-size: 14px;
+  font-size: calc(14px * var(--tv-scale, 1));
   color: #c0c9c2;
   line-height: 1.6;
 }
 .sports-hero-actions {
   display: flex;
-  gap: 12px;
+  gap: calc(12px * var(--tv-scale, 1));
   flex-wrap: wrap;
-  margin-top: 26px;
+  margin-top: calc(26px * var(--tv-scale, 1));
 }
 .sports-hero-art {
   position: absolute;
@@ -220,20 +237,20 @@
   overflow: hidden;
 }
 .hero-competition-code {
-  font-size: clamp(90px, 12vw, 170px);
+  font-size: clamp(calc(90px * var(--tv-scale, 1)), 12vw, calc(170px * var(--tv-scale, 1)));
   line-height: 1;
   font-weight: 800;
-  letter-spacing: -8px;
+  letter-spacing: calc(-8px * var(--tv-scale, 1));
   color: #fff;
   position: relative;
   opacity: .94;
 }
 .hero-competition-name {
-  font-size: 15px;
+  font-size: calc(15px * var(--tv-scale, 1));
   color: #fff;
   opacity: .85;
   position: relative;
-  margin-top: 12px;
+  margin-top: calc(12px * var(--tv-scale, 1));
   font-weight: 500;
 }
 .pitch-lines {
@@ -242,7 +259,7 @@
   height: 145%;
   top: -15%;
   left: -10%;
-  border: 1px solid #ffffff26;
+  border: calc(1px * var(--tv-scale, 1)) solid #ffffff26;
   transform: rotate(-16deg);
 }
 .pitch-lines:before {
@@ -251,7 +268,7 @@
   top: 0;
   bottom: 0;
   left: 50%;
-  border-left: 1px solid #ffffff26;
+  border-left: calc(1px * var(--tv-scale, 1)) solid #ffffff26;
 }
 .pitch-lines i {
   position: absolute;
@@ -259,36 +276,36 @@
   top: 30%;
   width: 40%;
   height: 40%;
-  border: 1px solid #ffffff26;
+  border: calc(1px * var(--tv-scale, 1)) solid #ffffff26;
   border-radius: 50%;
 }
 .pitch-lines b {
   position: absolute;
-  left: -1px;
+  left: calc(-1px * var(--tv-scale, 1));
   top: 30%;
   width: 14%;
   height: 40%;
-  border: 1px solid #ffffff26;
+  border: calc(1px * var(--tv-scale, 1)) solid #ffffff26;
 }
 .sports-section {
-  margin: 32px 0 40px;
+  margin: calc(32px * var(--tv-scale, 1)) 0 calc(40px * var(--tv-scale, 1));
 }
 .sports-section-head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 16px;
+  gap: calc(12px * var(--tv-scale, 1));
+  margin-bottom: calc(16px * var(--tv-scale, 1));
 }
 .sports-section-head h2 {
-  font-size: 21px;
+  font-size: calc(21px * var(--tv-scale, 1));
   font-weight: 600;
-  letter-spacing: -.35px;
+  letter-spacing: calc(-.35px * var(--tv-scale, 1));
   margin: 0;
 }
 .sports-section-head > a,
 .sports-section-head > span {
-  font-size: 13px;
+  font-size: calc(13px * var(--tv-scale, 1));
   color: #afbbb2;
   white-space: nowrap;
 }
@@ -299,78 +316,78 @@
 .sports-channel-rail,
 .events-rail {
   display: flex;
-  gap: 16px;
+  gap: calc(16px * var(--tv-scale, 1));
   overflow-x: auto;
-  padding: 3px 3px 14px;
-  margin: 0 -3px;
+  padding: calc(3px * var(--tv-scale, 1)) calc(3px * var(--tv-scale, 1)) calc(14px * var(--tv-scale, 1));
+  margin: 0 calc(-3px * var(--tv-scale, 1));
   scroll-snap-type: x proximity;
   scrollbar-width: thin;
   scrollbar-color: #46564b transparent;
 }
 .competition-tile {
   position: relative;
-  flex: 0 0 158px;
+  flex: 0 0 calc(158px * var(--tv-scale, 1));
   background: #242b26;
-  border: 1px solid #3a453d;
-  border-radius: 6px;
+  border: calc(1px * var(--tv-scale, 1)) solid #3a453d;
+  border-radius: calc(6px * var(--tv-scale, 1));
   scroll-snap-align: start;
 }
 .competition-tile > a {
   display: flex;
   flex-direction: column;
-  padding: 18px 16px 16px;
-  min-height: 164px;
+  padding: calc(18px * var(--tv-scale, 1)) calc(16px * var(--tv-scale, 1)) calc(16px * var(--tv-scale, 1));
+  min-height: calc(164px * var(--tv-scale, 1));
 }
 .competition-tile strong {
-  font-size: 14px;
+  font-size: calc(14px * var(--tv-scale, 1));
   font-weight: 600;
-  margin: 12px 0 5px;
+  margin: calc(12px * var(--tv-scale, 1)) 0 calc(5px * var(--tv-scale, 1));
 }
 .competition-tile > a > span:last-child {
   color: #aeb9b1;
-  font-size: 12px;
+  font-size: calc(12px * var(--tv-scale, 1));
 }
 .competition-mark {
   align-self: flex-start;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 48px;
-  height: 40px;
-  border-left: 3px solid var(--competition);
-  padding-left: 9px;
-  font-size: 23px;
+  min-width: calc(48px * var(--tv-scale, 1));
+  height: calc(40px * var(--tv-scale, 1));
+  border-left: calc(3px * var(--tv-scale, 1)) solid var(--competition);
+  padding-left: calc(9px * var(--tv-scale, 1));
+  font-size: calc(23px * var(--tv-scale, 1));
   font-weight: 750;
   color: #edf2ed;
-  letter-spacing: -1px;
+  letter-spacing: calc(-1px * var(--tv-scale, 1));
 }
 .competition-follow {
   position: absolute;
-  top: 12px;
-  right: 6px;
-  width: 40px;
-  height: 40px;
+  top: calc(12px * var(--tv-scale, 1));
+  right: calc(6px * var(--tv-scale, 1));
+  width: calc(40px * var(--tv-scale, 1));
+  height: calc(40px * var(--tv-scale, 1));
   border: 0;
   background: transparent;
   color: #b4beb7;
-  font-size: 24px;
+  font-size: calc(24px * var(--tv-scale, 1));
   cursor: pointer;
 }
 .competition-follow.following {
   color: var(--accent);
-  font-size: 18px;
+  font-size: calc(18px * var(--tv-scale, 1));
 }
 .competition-tile:hover {
   border-color: #85968a;
 }
 .sports-channel-rail > .sports-channel {
-  flex: 0 0 226px;
+  flex: 0 0 calc(226px * var(--tv-scale, 1));
   scroll-snap-align: start;
 }
 .sports-channel-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(215px, 1fr));
-  gap: 26px 18px;
+  grid-template-columns: repeat(auto-fill, minmax(calc(215px * var(--tv-scale, 1)), 1fr));
+  gap: calc(26px * var(--tv-scale, 1)) calc(18px * var(--tv-scale, 1));
 }
 .sports-channel {
   position: relative;
@@ -390,14 +407,14 @@
 }
 .channel-art {
   position: relative;
-  height: 128px;
+  height: calc(128px * var(--tv-scale, 1));
   background: #242c27;
-  border: 1px solid #354038;
-  border-radius: 6px;
+  border: calc(1px * var(--tv-scale, 1)) solid #354038;
+  border-radius: calc(6px * var(--tv-scale, 1));
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 12px;
+  margin-bottom: calc(12px * var(--tv-scale, 1));
   overflow: hidden;
   transition: background .15s, border-color .15s;
 }
@@ -408,19 +425,19 @@
 .channel-logo {
   position: relative;
   display: inline-flex;
-  width: 110px;
-  height: 67px;
+  width: calc(110px * var(--tv-scale, 1));
+  height: calc(67px * var(--tv-scale, 1));
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  border-radius: 4px;
+  border-radius: calc(4px * var(--tv-scale, 1));
   background: #e7ebe6;
   color: #27352c;
   overflow: hidden;
   isolation: isolate;
 }
 .channel-logo > span {
-  font-size: 23px;
+  font-size: calc(23px * var(--tv-scale, 1));
   font-weight: 750;
   opacity: .45;
 }
@@ -433,25 +450,25 @@
   width: 100%;
   height: 100%;
   object-fit: contain;
-  padding: 8px;
+  padding: calc(8px * var(--tv-scale, 1));
   background: #e7ebe6;
 }
 .channel-quality {
   position: absolute;
-  right: 9px;
-  bottom: 9px;
-  font-size: 11px;
+  right: calc(9px * var(--tv-scale, 1));
+  bottom: calc(9px * var(--tv-scale, 1));
+  font-size: calc(11px * var(--tv-scale, 1));
   font-weight: 600;
   background: #172019c9;
-  padding: 3px 5px;
-  border-radius: 3px;
+  padding: calc(3px * var(--tv-scale, 1)) calc(5px * var(--tv-scale, 1));
+  border-radius: calc(3px * var(--tv-scale, 1));
   color: #d2ded5;
 }
 .channel-play {
   position: absolute;
-  left: 12px;
-  bottom: 9px;
-  font-size: 17px;
+  left: calc(12px * var(--tv-scale, 1));
+  bottom: calc(9px * var(--tv-scale, 1));
+  font-size: calc(17px * var(--tv-scale, 1));
   color: #b9cbbd;
   opacity: 0;
 }
@@ -461,41 +478,41 @@
 }
 .channel-line {
   display: block;
-  padding-right: 26px;
+  padding-right: calc(26px * var(--tv-scale, 1));
 }
 .channel-line strong {
-  font-size: 14px;
+  font-size: calc(14px * var(--tv-scale, 1));
   line-height: 1.35;
   font-weight: 550;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  min-height: 38px;
+  min-height: calc(38px * var(--tv-scale, 1));
 }
 .channel-meta,
 .channel-programme,
 .channel-times {
   display: block;
-  font-size: 12px;
+  font-size: calc(12px * var(--tv-scale, 1));
   line-height: 1.5;
   color: #aebbaf;
 }
 .channel-meta {
-  margin: 4px 0 10px;
+  margin: calc(4px * var(--tv-scale, 1)) 0 calc(10px * var(--tv-scale, 1));
 }
 .channel-programme {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   color: #d0d9d1;
-  min-height: 18px;
+  min-height: calc(18px * var(--tv-scale, 1));
 }
 .channel-progress {
   display: block;
-  height: 2px;
+  height: calc(2px * var(--tv-scale, 1));
   background: #39423b;
-  margin: 9px 0 5px;
+  margin: calc(9px * var(--tv-scale, 1)) 0 calc(5px * var(--tv-scale, 1));
 }
 .channel-progress i {
   height: 100%;
@@ -503,16 +520,16 @@
   background: #9dc49f;
 }
 .channel-times {
-  font-size: 11px;
+  font-size: calc(11px * var(--tv-scale, 1));
   color: #a8b5ac;
 }
 .channel-save {
   position: absolute;
-  right: -4px;
-  top: 139px;
-  width: 32px;
-  height: 40px;
-  font-size: 20px;
+  right: calc(-4px * var(--tv-scale, 1));
+  top: calc(139px * var(--tv-scale, 1));
+  width: calc(32px * var(--tv-scale, 1));
+  height: calc(40px * var(--tv-scale, 1));
+  font-size: calc(20px * var(--tv-scale, 1));
   color: #b3c0b6;
   border: 0;
   background: transparent;
@@ -523,16 +540,16 @@
 }
 .channel-details {
   font: inherit;
-  font-size: 12px;
+  font-size: calc(12px * var(--tv-scale, 1));
   color: #b7cbbd;
-  padding: 10px 0;
-  min-height: 36px;
+  padding: calc(10px * var(--tv-scale, 1)) 0;
+  min-height: calc(36px * var(--tv-scale, 1));
   cursor: pointer;
   border: 0;
   background: transparent;
 }
 .event-card {
-  flex: 0 0 302px;
+  flex: 0 0 calc(302px * var(--tv-scale, 1));
   scroll-snap-align: start;
   min-width: 0;
 }
@@ -547,13 +564,13 @@
   cursor: pointer;
 }
 .event-art {
-  height: 170px;
+  height: calc(170px * var(--tv-scale, 1));
   background: var(--competition);
-  border-radius: 7px;
+  border-radius: calc(7px * var(--tv-scale, 1));
   position: relative;
   overflow: hidden;
-  margin-bottom: 12px;
-  padding: 16px;
+  margin-bottom: calc(12px * var(--tv-scale, 1));
+  padding: calc(16px * var(--tv-scale, 1));
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -561,29 +578,29 @@
 .event-art:after {
   content: "";
   position: absolute;
-  width: 220px;
-  height: 220px;
-  right: -70px;
-  top: -30px;
-  border: 1px solid #ffffff30;
+  width: calc(220px * var(--tv-scale, 1));
+  height: calc(220px * var(--tv-scale, 1));
+  right: calc(-70px * var(--tv-scale, 1));
+  top: calc(-30px * var(--tv-scale, 1));
+  border: calc(1px * var(--tv-scale, 1)) solid #ffffff30;
   border-radius: 50%;
   pointer-events: none;
 }
 .event-code {
   position: absolute;
-  right: 12px;
-  top: 43px;
-  font-size: 69px;
-  letter-spacing: -4px;
+  right: calc(12px * var(--tv-scale, 1));
+  top: calc(43px * var(--tv-scale, 1));
+  font-size: calc(69px * var(--tv-scale, 1));
+  letter-spacing: calc(-4px * var(--tv-scale, 1));
   font-weight: 750;
   opacity: .6;
 }
 .event-label {
   align-self: flex-start;
-  padding: 4px 7px;
+  padding: calc(4px * var(--tv-scale, 1)) calc(7px * var(--tv-scale, 1));
   background: #101710bd;
-  border-radius: 3px;
-  font-size: 11px;
+  border-radius: calc(3px * var(--tv-scale, 1));
+  font-size: calc(11px * var(--tv-scale, 1));
   z-index: 1;
 }
 .event-label.on-now {
@@ -592,111 +609,111 @@
   font-weight: 650;
 }
 .event-art > span:last-child {
-  font-size: 13px;
+  font-size: calc(13px * var(--tv-scale, 1));
   position: relative;
 }
 .event-card > button > strong {
-  font-size: 16px;
+  font-size: calc(16px * var(--tv-scale, 1));
   line-height: 1.4;
   display: block;
-  max-height: 45px;
+  max-height: calc(45px * var(--tv-scale, 1));
   overflow: hidden;
 }
 .event-meta,
 .event-time {
   display: block;
-  font-size: 12px;
+  font-size: calc(12px * var(--tv-scale, 1));
   line-height: 1.7;
   color: #b1bdb4;
 }
 .event-meta {
-  margin-top: 7px;
+  margin-top: calc(7px * var(--tv-scale, 1));
 }
 .event-card button:hover .event-art {
   filter: brightness(1.13);
 }
 .sports-empty {
-  padding: 48px 20px;
+  padding: calc(48px * var(--tv-scale, 1)) calc(20px * var(--tv-scale, 1));
   text-align: center;
-  max-width: 680px;
-  margin: 20px auto;
+  max-width: calc(680px * var(--tv-scale, 1));
+  margin: calc(20px * var(--tv-scale, 1)) auto;
 }
 .sports-empty h2 {
-  font-size: 24px;
+  font-size: calc(24px * var(--tv-scale, 1));
   font-weight: 600;
-  margin-bottom: 12px;
+  margin-bottom: calc(12px * var(--tv-scale, 1));
 }
 .sports-empty p {
   color: #b1beb5;
-  font-size: 15px;
+  font-size: calc(15px * var(--tv-scale, 1));
   line-height: 1.7;
-  margin-bottom: 20px;
+  margin-bottom: calc(20px * var(--tv-scale, 1));
 }
 .sports-load {
   display: flex;
-  margin: 32px auto;
+  margin: calc(32px * var(--tv-scale, 1)) auto;
 }
 .sports-muted,
 .guide-coverage {
-  font-size: 13px;
+  font-size: calc(13px * var(--tv-scale, 1));
   color: #abb8ae;
   line-height: 1.7;
 }
 .sports-guide-warning {
-  padding: 16px;
-  border-left: 3px solid #b39459;
+  padding: calc(16px * var(--tv-scale, 1));
+  border-left: calc(3px * var(--tv-scale, 1)) solid #b39459;
   color: #dac9a9;
   background: #353027;
-  font-size: 13px;
+  font-size: calc(13px * var(--tv-scale, 1));
 }
 .guide-controls {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 20px;
-  margin: 8px 0 12px;
+  gap: calc(20px * var(--tv-scale, 1));
+  margin: calc(8px * var(--tv-scale, 1)) 0 calc(12px * var(--tv-scale, 1));
 }
 .guide-controls > div {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: calc(20px * var(--tv-scale, 1));
 }
 .guide-controls button {
   background: #29352d;
   color: #e2ebe4;
-  font-size: 24px;
-  width: 44px;
-  height: 44px;
-  border: 1px solid #46584b;
-  border-radius: 4px;
+  font-size: calc(24px * var(--tv-scale, 1));
+  width: calc(44px * var(--tv-scale, 1));
+  height: calc(44px * var(--tv-scale, 1));
+  border: calc(1px * var(--tv-scale, 1)) solid #46584b;
+  border-radius: calc(4px * var(--tv-scale, 1));
   cursor: pointer;
 }
 .guide-controls label {
   display: flex;
   align-items: center;
-  gap: 9px;
-  font-size: 13px;
+  gap: calc(9px * var(--tv-scale, 1));
+  font-size: calc(13px * var(--tv-scale, 1));
   color: #bac6bd;
-  min-height: 44px;
+  min-height: calc(44px * var(--tv-scale, 1));
 }
 .guide-controls input {
   accent-color: var(--accent);
-  width: 17px;
-  height: 17px;
+  width: calc(17px * var(--tv-scale, 1));
+  height: calc(17px * var(--tv-scale, 1));
 }
 .guide-coverage {
-  margin: 0 0 18px;
+  margin: 0 0 calc(18px * var(--tv-scale, 1));
 }
 .guide-scroll {
   overflow: auto;
-  border: 1px solid #35453a;
-  border-radius: 5px;
-  max-height: 650px;
+  border: calc(1px * var(--tv-scale, 1)) solid #35453a;
+  border-radius: calc(5px * var(--tv-scale, 1));
+  max-height: calc(650px * var(--tv-scale, 1));
   scrollbar-width: thin;
   scrollbar-color: #516659 #1b211d;
 }
 .guide-grid {
-  min-width: 1510px;
+  min-width: calc(1510px * var(--tv-scale, 1));
 }
 .guide-axis {
   position: sticky;
@@ -704,17 +721,17 @@
   z-index: 4;
   background: #202a23;
   display: flex;
-  height: 48px;
-  border-bottom: 1px solid #3d4b41;
+  height: calc(48px * var(--tv-scale, 1));
+  border-bottom: calc(1px * var(--tv-scale, 1)) solid #3d4b41;
 }
 .guide-axis > strong {
   position: sticky;
   left: 0;
-  min-width: 230px;
-  width: 230px;
+  min-width: calc(230px * var(--tv-scale, 1));
+  width: calc(230px * var(--tv-scale, 1));
   background: #202a23;
-  font-size: 13px;
-  padding: 17px;
+  font-size: calc(13px * var(--tv-scale, 1));
+  padding: calc(17px * var(--tv-scale, 1));
 }
 .guide-axis > div {
   display: flex;
@@ -722,28 +739,28 @@
 }
 .guide-axis span {
   width: 8.3333%;
-  font-size: 12px;
-  padding: 16px 8px;
-  border-left: 1px solid #344339;
+  font-size: calc(12px * var(--tv-scale, 1));
+  padding: calc(16px * var(--tv-scale, 1)) calc(8px * var(--tv-scale, 1));
+  border-left: calc(1px * var(--tv-scale, 1)) solid #344339;
   color: #c3d1c6;
 }
 .guide-row {
   display: flex;
-  height: 82px;
-  border-bottom: 1px solid #303d34;
+  height: calc(82px * var(--tv-scale, 1));
+  border-bottom: calc(1px * var(--tv-scale, 1)) solid #303d34;
 }
 .guide-channel {
   position: sticky;
   left: 0;
   z-index: 2;
-  width: 230px;
-  flex: 0 0 230px;
+  width: calc(230px * var(--tv-scale, 1));
+  flex: 0 0 calc(230px * var(--tv-scale, 1));
   display: flex;
   align-items: center;
-  padding: 12px;
-  gap: 10px;
+  padding: calc(12px * var(--tv-scale, 1));
+  gap: calc(10px * var(--tv-scale, 1));
   border: 0;
-  border-right: 1px solid #3d4b41;
+  border-right: calc(1px * var(--tv-scale, 1)) solid #3d4b41;
   background: #202a23;
   text-align: left;
   color: #e4ece5;
@@ -751,26 +768,26 @@
   cursor: pointer;
 }
 .guide-channel .channel-logo {
-  width: 58px;
-  height: 38px;
+  width: calc(58px * var(--tv-scale, 1));
+  height: calc(38px * var(--tv-scale, 1));
 }
 .guide-channel .channel-logo img {
-  padding: 4px;
+  padding: calc(4px * var(--tv-scale, 1));
 }
 .guide-channel .channel-logo > span {
-  font-size: 16px;
+  font-size: calc(16px * var(--tv-scale, 1));
 }
 .guide-channel strong {
-  font-size: 12px;
+  font-size: calc(12px * var(--tv-scale, 1));
   line-height: 1.3;
   display: block;
-  max-width: 145px;
+  max-width: calc(145px * var(--tv-scale, 1));
 }
 .guide-channel small {
-  font-size: 11px;
+  font-size: calc(11px * var(--tv-scale, 1));
   color: #aebfb1;
   display: block;
-  margin-top: 5px;
+  margin-top: calc(5px * var(--tv-scale, 1));
 }
 .guide-lane {
   position: relative;
@@ -779,46 +796,46 @@
     repeating-linear-gradient(
       90deg,
       transparent 0,
-      transparent calc(8.3333% - 1px),
-      #2b3930 calc(8.3333% - 1px),
+      transparent calc(8.3333% - calc(1px * var(--tv-scale, 1))),
+      #2b3930 calc(8.3333% - calc(1px * var(--tv-scale, 1))),
       #2b3930 8.3333%);
 }
 .guide-programme {
   position: absolute;
-  top: 5px;
-  height: 70px;
+  top: calc(5px * var(--tv-scale, 1));
+  height: calc(70px * var(--tv-scale, 1));
   background: #2a352d;
-  border: 1px solid #3d4c41;
-  border-radius: 4px;
+  border: calc(1px * var(--tv-scale, 1)) solid #3d4c41;
+  border-radius: calc(4px * var(--tv-scale, 1));
   text-align: left;
   color: #e1e9e2;
-  padding: 12px;
+  padding: calc(12px * var(--tv-scale, 1));
   font: inherit;
   overflow: hidden;
   cursor: pointer;
-  min-width: 1px;
+  min-width: calc(1px * var(--tv-scale, 1));
 }
 .guide-programme.current {
   background: #354b3c;
   border-color: #78987f;
 }
 .guide-programme strong {
-  font-size: 13px;
+  font-size: calc(13px * var(--tv-scale, 1));
   display: block;
   text-overflow: ellipsis;
   overflow: hidden;
   white-space: nowrap;
 }
 .guide-programme span {
-  font-size: 11px;
+  font-size: calc(11px * var(--tv-scale, 1));
   color: #b8cbbb;
   display: block;
-  margin-top: 7px;
+  margin-top: calc(7px * var(--tv-scale, 1));
 }
 .guide-no-listing {
   display: block;
-  padding: 30px 18px;
-  font-size: 12px;
+  padding: calc(30px * var(--tv-scale, 1)) calc(18px * var(--tv-scale, 1));
+  font-size: calc(12px * var(--tv-scale, 1));
   color: #819286;
 }
 .sports-modal {
@@ -832,209 +849,209 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px;
+  padding: calc(24px * var(--tv-scale, 1));
   overflow: auto;
 }
 .sports-dialog {
   background: #222a25;
   color: #e9eee9;
-  border: 1px solid #526157;
-  border-radius: 8px;
-  padding: 26px;
-  width: 680px;
+  border: calc(1px * var(--tv-scale, 1)) solid #526157;
+  border-radius: calc(8px * var(--tv-scale, 1));
+  padding: calc(26px * var(--tv-scale, 1));
+  width: calc(680px * var(--tv-scale, 1));
   max-width: 100%;
   max-height: 90vh;
   overflow: auto;
-  box-shadow: 0 20px 60px #0007;
+  box-shadow: 0 calc(20px * var(--tv-scale, 1)) calc(60px * var(--tv-scale, 1)) #0007;
 }
 .sports-dialog > header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 20px;
-  margin-bottom: 24px;
+  gap: calc(20px * var(--tv-scale, 1));
+  margin-bottom: calc(24px * var(--tv-scale, 1));
 }
 .sports-dialog h2 {
-  font-size: 22px;
+  font-size: calc(22px * var(--tv-scale, 1));
   line-height: 1.3;
   margin: 0;
 }
 .sports-dialog h3 {
-  font-size: 17px;
-  margin: 26px 0 14px;
+  font-size: calc(17px * var(--tv-scale, 1));
+  margin: calc(26px * var(--tv-scale, 1)) 0 calc(14px * var(--tv-scale, 1));
   font-weight: 600;
 }
 .sports-dialog-close {
-  width: 44px;
-  height: 44px;
+  width: calc(44px * var(--tv-scale, 1));
+  height: calc(44px * var(--tv-scale, 1));
   background: none;
   border: 0;
   color: #d5e0d8;
-  font-size: 28px;
+  font-size: calc(28px * var(--tv-scale, 1));
   flex-shrink: 0;
   cursor: pointer;
 }
 .sports-dialog form + form {
-  border-top: 1px solid #445147;
-  margin-top: 28px;
-  padding-top: 4px;
+  border-top: calc(1px * var(--tv-scale, 1)) solid #445147;
+  margin-top: calc(28px * var(--tv-scale, 1));
+  padding-top: calc(4px * var(--tv-scale, 1));
 }
 .sports-dialog form > label,
 .live-player-sidebar > label {
-  font-size: 13px;
+  font-size: calc(13px * var(--tv-scale, 1));
   color: #c9d6cc;
   display: block;
-  margin: 16px 0 8px;
+  margin: calc(16px * var(--tv-scale, 1)) 0 calc(8px * var(--tv-scale, 1));
 }
 .sports-dialog input:not([type=checkbox]) {
   display: block;
   background: #18221b;
-  border: 1px solid #56665a;
-  border-radius: 4px;
-  padding: 12px;
+  border: calc(1px * var(--tv-scale, 1)) solid #56665a;
+  border-radius: calc(4px * var(--tv-scale, 1));
+  padding: calc(12px * var(--tv-scale, 1));
   color: #e3ece4;
   font: inherit;
   width: 100%;
-  font-size: 14px;
-  min-height: 44px;
+  font-size: calc(14px * var(--tv-scale, 1));
+  min-height: calc(44px * var(--tv-scale, 1));
 }
 .sports-dialog input[type=file] {
-  padding: 9px;
+  padding: calc(9px * var(--tv-scale, 1));
 }
 .sports-dialog input[type=file]::file-selector-button {
   font: inherit;
-  padding: 5px 10px;
-  margin-right: 10px;
+  padding: calc(5px * var(--tv-scale, 1)) calc(10px * var(--tv-scale, 1));
+  margin-right: calc(10px * var(--tv-scale, 1));
   border: 0;
-  border-radius: 3px;
+  border-radius: calc(3px * var(--tv-scale, 1));
   background: #bed4c3;
   color: #1b2a20;
 }
 .sports-dialog form > button {
-  margin-top: 20px;
+  margin-top: calc(20px * var(--tv-scale, 1));
 }
 .sports-dialog fieldset {
   border: 0;
   padding: 0;
-  margin-top: 22px;
+  margin-top: calc(22px * var(--tv-scale, 1));
 }
 .sports-dialog legend {
-  font-size: 14px;
+  font-size: calc(14px * var(--tv-scale, 1));
   font-weight: 600;
-  margin-bottom: 14px;
+  margin-bottom: calc(14px * var(--tv-scale, 1));
 }
 .competition-checks {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
+  gap: calc(10px * var(--tv-scale, 1));
 }
 .competition-checks label {
   display: flex;
-  gap: 10px;
+  gap: calc(10px * var(--tv-scale, 1));
   align-items: center;
-  font-size: 13px;
-  min-height: 32px;
+  font-size: calc(13px * var(--tv-scale, 1));
+  min-height: calc(32px * var(--tv-scale, 1));
 }
 .competition-checks input {
-  width: 18px;
-  height: 18px;
+  width: calc(18px * var(--tv-scale, 1));
+  height: calc(18px * var(--tv-scale, 1));
   accent-color: #bdd4bc;
 }
 .sports-form-actions {
   display: flex;
-  gap: 12px;
+  gap: calc(12px * var(--tv-scale, 1));
   flex-wrap: wrap;
-  margin: 22px 0 10px;
+  margin: calc(22px * var(--tv-scale, 1)) 0 calc(10px * var(--tv-scale, 1));
 }
 .live-summary {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px 24px;
+  gap: calc(12px * var(--tv-scale, 1)) calc(24px * var(--tv-scale, 1));
   color: #aabdaf;
-  font-size: 13px;
-  margin-bottom: 24px;
+  font-size: calc(13px * var(--tv-scale, 1));
+  margin-bottom: calc(24px * var(--tv-scale, 1));
 }
 .live-summary strong {
   color: #e7ede8;
 }
 .sports-form-feedback {
-  font-size: 14px;
+  font-size: calc(14px * var(--tv-scale, 1));
   line-height: 1.6;
   color: #b4d9bd;
-  margin-top: 20px;
+  margin-top: calc(20px * var(--tv-scale, 1));
 }
 .sports-form-feedback.error {
   color: #edb6a7;
 }
 .channel-detail-heading {
   display: flex;
-  gap: 18px;
+  gap: calc(18px * var(--tv-scale, 1));
   align-items: center;
-  margin-bottom: 24px;
+  margin-bottom: calc(24px * var(--tv-scale, 1));
 }
 .channel-detail-heading p {
-  margin: 0 0 8px;
-  font-size: 14px;
+  margin: 0 0 calc(8px * var(--tv-scale, 1));
+  font-size: calc(14px * var(--tv-scale, 1));
 }
 .channel-detail-heading small {
   color: #aabbb0;
-  font-size: 12px;
+  font-size: calc(12px * var(--tv-scale, 1));
   line-height: 1.5;
   display: block;
 }
 .channel-slot {
   display: flex;
-  gap: 18px;
-  padding: 16px 0;
-  border-bottom: 1px solid #39473d;
+  gap: calc(18px * var(--tv-scale, 1));
+  padding: calc(16px * var(--tv-scale, 1)) 0;
+  border-bottom: calc(1px * var(--tv-scale, 1)) solid #39473d;
 }
 .channel-slot time {
-  font-size: 12px;
+  font-size: calc(12px * var(--tv-scale, 1));
   line-height: 1.7;
   color: #abbdb0;
-  flex: 0 0 128px;
+  flex: 0 0 calc(128px * var(--tv-scale, 1));
 }
 .channel-slot strong {
-  font-size: 14px;
+  font-size: calc(14px * var(--tv-scale, 1));
   font-weight: 500;
   display: block;
   line-height: 1.4;
 }
 .channel-slot span {
   display: block;
-  font-size: 12px;
+  font-size: calc(12px * var(--tv-scale, 1));
   color: #adbdaf;
-  margin-top: 6px;
+  margin-top: calc(6px * var(--tv-scale, 1));
 }
 .channel-slot .slot-current {
   color: #c3dfc8;
 }
 .channel-schedule {
-  margin-bottom: 24px;
+  margin-bottom: calc(24px * var(--tv-scale, 1));
 }
 .channel-schedule + .sports-button {
-  margin-top: 8px;
+  margin-top: calc(8px * var(--tv-scale, 1));
 }
 #live-guide-matches {
-  max-height: 240px;
+  max-height: calc(240px * var(--tv-scale, 1));
   overflow: auto;
 }
 #live-guide-matches button {
   display: block;
   background: #2e3d32;
   color: #e3ede5;
-  border: 1px solid #47594c;
-  padding: 12px;
+  border: calc(1px * var(--tv-scale, 1)) solid #47594c;
+  padding: calc(12px * var(--tv-scale, 1));
   text-align: left;
   width: 100%;
   cursor: pointer;
   font: inherit;
-  font-size: 13px;
+  font-size: calc(13px * var(--tv-scale, 1));
 }
 #live-guide-matches small {
   display: block;
   color: #adbeb2;
-  margin-top: 4px;
+  margin-top: calc(4px * var(--tv-scale, 1));
 }
 .live-player-open {
   overflow: hidden;
@@ -1051,13 +1068,13 @@
   overflow: auto;
 }
 .sports-player > header {
-  height: 82px;
-  padding: 14px 28px;
+  height: calc(82px * var(--tv-scale, 1));
+  padding: calc(14px * var(--tv-scale, 1)) calc(28px * var(--tv-scale, 1));
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 20px;
-  border-bottom: 1px solid #303e34;
+  gap: calc(20px * var(--tv-scale, 1));
+  border-bottom: calc(1px * var(--tv-scale, 1)) solid #303e34;
   background: #172019;
 }
 .sports-player > header > button {
@@ -1065,52 +1082,52 @@
   border: 0;
   color: #d9e5dc;
   cursor: pointer;
-  min-height: 44px;
-  padding: 8px 12px;
+  min-height: calc(44px * var(--tv-scale, 1));
+  padding: calc(8px * var(--tv-scale, 1)) calc(12px * var(--tv-scale, 1));
   font: inherit;
 }
 .sports-player > header > div {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: calc(20px * var(--tv-scale, 1));
   min-width: 0;
   flex: 1;
 }
 .sports-player > header strong {
-  font-size: 17px;
+  font-size: calc(17px * var(--tv-scale, 1));
   font-weight: 550;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .live-dot {
-  font-size: 10px;
-  letter-spacing: .7px;
+  font-size: calc(10px * var(--tv-scale, 1));
+  letter-spacing: calc(.7px * var(--tv-scale, 1));
   font-weight: 700;
-  padding: 5px 8px;
+  padding: calc(5px * var(--tv-scale, 1)) calc(8px * var(--tv-scale, 1));
   background: #b7d2b8;
   color: #16311e;
-  border-radius: 3px;
+  border-radius: calc(3px * var(--tv-scale, 1));
   white-space: nowrap;
 }
 .sports-player-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
-  min-height: calc(100vh - 82px);
+  grid-template-columns: minmax(0, 1fr) calc(320px * var(--tv-scale, 1));
+  min-height: calc(100vh - calc(82px * var(--tv-scale, 1)));
 }
 .live-video-wrap {
   position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 320px;
+  min-height: calc(320px * var(--tv-scale, 1));
   background: #030705;
   overflow: hidden;
 }
 .live-video-wrap video {
   width: 100%;
   height: 100%;
-  max-height: calc(100vh - 82px);
+  max-height: calc(100vh - calc(82px * var(--tv-scale, 1)));
   object-fit: contain;
   display: block;
 }
@@ -1119,12 +1136,12 @@
   left: 12%;
   right: 12%;
   top: 42%;
-  padding: 18px 24px;
-  border-radius: 5px;
+  padding: calc(18px * var(--tv-scale, 1)) calc(24px * var(--tv-scale, 1));
+  border-radius: calc(5px * var(--tv-scale, 1));
   background: #18231ddd;
   color: #d5e2d8;
   text-align: center;
-  font-size: 14px;
+  font-size: calc(14px * var(--tv-scale, 1));
   line-height: 1.6;
   pointer-events: none;
 }
@@ -1135,42 +1152,42 @@
   transform: translateX(-50%);
 }
 .live-player-sidebar {
-  padding: 26px 22px;
+  padding: calc(26px * var(--tv-scale, 1)) calc(22px * var(--tv-scale, 1));
   background: #1d2720;
-  max-height: calc(100vh - 82px);
+  max-height: calc(100vh - calc(82px * var(--tv-scale, 1)));
   overflow-y: auto;
 }
 .live-player-sidebar h2 {
-  font-size: 13px;
+  font-size: calc(13px * var(--tv-scale, 1));
   color: #afc2b4;
   font-weight: 500;
-  margin-bottom: 16px;
+  margin-bottom: calc(16px * var(--tv-scale, 1));
 }
 .live-player-sidebar h3 {
-  font-size: 15px;
+  font-size: calc(15px * var(--tv-scale, 1));
   font-weight: 550;
-  margin: 25px 0 12px;
+  margin: calc(25px * var(--tv-scale, 1)) 0 calc(12px * var(--tv-scale, 1));
 }
 #live-playing-programme > strong {
-  font-size: 22px;
+  font-size: calc(22px * var(--tv-scale, 1));
   line-height: 1.25;
   font-weight: 600;
 }
 #live-playing-programme > p {
-  font-size: 12px;
+  font-size: calc(12px * var(--tv-scale, 1));
   color: #b0c3b6;
   line-height: 1.65;
-  margin-top: 12px;
+  margin-top: calc(12px * var(--tv-scale, 1));
 }
 .live-player-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 20px;
+  gap: calc(8px * var(--tv-scale, 1));
+  margin-top: calc(20px * var(--tv-scale, 1));
 }
 .live-player-actions .sports-button {
-  font-size: 12px;
-  padding: 8px 11px;
+  font-size: calc(12px * var(--tv-scale, 1));
+  padding: calc(8px * var(--tv-scale, 1)) calc(11px * var(--tv-scale, 1));
 }
 .live-player-sidebar select {
   width: 100%;
@@ -1178,15 +1195,15 @@
 .live-channel-switch {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: calc(6px * var(--tv-scale, 1));
 }
 .live-channel-switch button {
   background: #26362b;
-  border: 1px solid #3c5143;
-  border-radius: 4px;
+  border: calc(1px * var(--tv-scale, 1)) solid #3c5143;
+  border-radius: calc(4px * var(--tv-scale, 1));
   text-align: left;
   color: #dce8df;
-  padding: 14px 12px;
+  padding: calc(14px * var(--tv-scale, 1)) calc(12px * var(--tv-scale, 1));
   cursor: pointer;
   font: inherit;
 }
@@ -1196,13 +1213,13 @@
 }
 .live-channel-switch strong {
   display: block;
-  font-size: 13px;
+  font-size: calc(13px * var(--tv-scale, 1));
   line-height: 1.4;
 }
 .live-channel-switch span {
   display: block;
-  font-size: 11px;
-  margin-top: 6px;
+  font-size: calc(11px * var(--tv-scale, 1));
+  margin-top: calc(6px * var(--tv-scale, 1));
   color: #a8c0b0;
 }
 .sports-page button:focus-visible,
@@ -1213,8 +1230,8 @@
 .sports-player button:focus-visible,
 .sports-player select:focus-visible,
 .sports-page select:focus-visible {
-  outline: 2px solid #d5ebd5;
-  outline-offset: 3px;
+  outline: calc(2px * var(--tv-scale, 1)) solid #d5ebd5;
+  outline-offset: calc(3px * var(--tv-scale, 1));
 }
 .sports-page [hidden],
 .sports-modal [hidden],
@@ -1223,24 +1240,24 @@
 }
 .library-hub-links {
   display: flex;
-  gap: 12px;
-  margin: 0 40px 28px;
+  gap: calc(12px * var(--tv-scale, 1));
+  margin: 0 calc(40px * var(--tv-scale, 1)) calc(28px * var(--tv-scale, 1));
   overflow: auto;
-  padding-bottom: 5px;
+  padding-bottom: calc(5px * var(--tv-scale, 1));
 }
 .library-hub-links a {
   display: flex;
   align-items: center;
-  gap: 12px;
-  min-width: 140px;
-  min-height: 70px;
+  gap: calc(12px * var(--tv-scale, 1));
+  min-width: calc(140px * var(--tv-scale, 1));
+  min-height: calc(70px * var(--tv-scale, 1));
   flex: 1;
-  border: 1px solid #3b483e;
-  border-radius: 5px;
+  border: calc(1px * var(--tv-scale, 1)) solid #3b483e;
+  border-radius: calc(5px * var(--tv-scale, 1));
   background: #222c25;
-  padding: 16px 20px;
+  padding: calc(16px * var(--tv-scale, 1)) calc(20px * var(--tv-scale, 1));
   color: #e0e9e1;
-  font-size: 15px;
+  font-size: calc(15px * var(--tv-scale, 1));
   font-weight: 550;
 }
 .library-hub-links a:last-child {
@@ -1251,74 +1268,74 @@
   border-color: #adc6b3;
 }
 .library-hub-links span {
-  font-size: 12px;
+  font-size: calc(12px * var(--tv-scale, 1));
   font-weight: 400;
   color: #acc1b2;
   display: block;
-  margin-top: 4px;
+  margin-top: calc(4px * var(--tv-scale, 1));
 }
 .library-hub-hero {
-  margin: 0 40px 30px;
-  min-height: 200px;
-  border-radius: 7px;
+  margin: 0 calc(40px * var(--tv-scale, 1)) calc(30px * var(--tv-scale, 1));
+  min-height: calc(200px * var(--tv-scale, 1));
+  border-radius: calc(7px * var(--tv-scale, 1));
   background: #243129;
-  padding: 35px;
+  padding: calc(35px * var(--tv-scale, 1));
   display: flex;
   flex-direction: column;
   justify-content: center;
 }
 .library-hub-hero h2 {
-  font-size: 34px;
+  font-size: calc(34px * var(--tv-scale, 1));
   line-height: 1.15;
-  letter-spacing: -.7px;
-  margin-bottom: 20px;
+  letter-spacing: calc(-.7px * var(--tv-scale, 1));
+  margin-bottom: calc(20px * var(--tv-scale, 1));
 }
 .library-hub-hero .sports-button {
   align-self: flex-start;
 }
 .library-hub-subnav {
   display: flex;
-  gap: 24px;
-  padding: 0 40px 24px;
+  gap: calc(24px * var(--tv-scale, 1));
+  padding: 0 calc(40px * var(--tv-scale, 1)) calc(24px * var(--tv-scale, 1));
   overflow: auto;
 }
 .library-hub-subnav a {
-  font-size: 14px;
+  font-size: calc(14px * var(--tv-scale, 1));
   color: #b9cdbc;
   white-space: nowrap;
-  min-height: 36px;
-  padding: 9px 0;
+  min-height: calc(36px * var(--tv-scale, 1));
+  padding: calc(9px * var(--tv-scale, 1)) 0;
 }
 @media (min-width: 1650px) {
   .sports-channel-grid {
     grid-template-columns: repeat(5, minmax(0, 1fr));
   }
   .channel-art {
-    height: 150px;
+    height: calc(150px * var(--tv-scale, 1));
   }
   .channel-save {
-    top: 160px;
+    top: calc(160px * var(--tv-scale, 1));
   }
 }
 @media (max-width: 1050px) {
   .sports-page {
-    padding: 28px;
+    padding: calc(28px * var(--tv-scale, 1));
   }
   .sports-hero-copy {
-    padding: 30px;
+    padding: calc(30px * var(--tv-scale, 1));
     width: 70%;
   }
   .sports-hero h2 {
-    font-size: 37px;
+    font-size: calc(37px * var(--tv-scale, 1));
   }
   .sports-hero-art {
     width: 40%;
   }
   .sports-player-layout {
-    grid-template-columns: minmax(0, 1fr) 270px;
+    grid-template-columns: minmax(0, 1fr) calc(270px * var(--tv-scale, 1));
   }
   .sports-tabs {
-    gap: 20px;
+    gap: calc(20px * var(--tv-scale, 1));
   }
   .sports-language > span {
     display: none;
@@ -1326,71 +1343,71 @@
 }
 @media (max-width: 720px) {
   .sports-page {
-    padding: 24px 16px 42px;
+    padding: calc(24px * var(--tv-scale, 1)) calc(16px * var(--tv-scale, 1)) calc(42px * var(--tv-scale, 1));
   }
   .sports-heading {
     align-items: flex-start;
-    margin-bottom: 12px;
+    margin-bottom: calc(12px * var(--tv-scale, 1));
   }
   .sports-heading h1 {
-    font-size: 28px;
+    font-size: calc(28px * var(--tv-scale, 1));
   }
   .sports-heading > div:last-child {
     flex-direction: column;
     align-items: flex-end;
-    gap: 2px;
+    gap: calc(2px * var(--tv-scale, 1));
   }
   .sports-settings {
-    font-size: 11px;
+    font-size: calc(11px * var(--tv-scale, 1));
     padding: 0;
   }
   .sports-heading .sports-button {
-    font-size: 11px;
-    padding: 8px;
+    font-size: calc(11px * var(--tv-scale, 1));
+    padding: calc(8px * var(--tv-scale, 1));
   }
   .sports-tabs {
-    gap: 22px;
-    margin-bottom: 18px;
+    gap: calc(22px * var(--tv-scale, 1));
+    margin-bottom: calc(18px * var(--tv-scale, 1));
   }
   .sports-tabs a {
-    font-size: 13px;
-    padding: 12px 0;
-    min-height: 44px;
+    font-size: calc(13px * var(--tv-scale, 1));
+    padding: calc(12px * var(--tv-scale, 1)) 0;
+    min-height: calc(44px * var(--tv-scale, 1));
   }
   .sports-tools {
-    gap: 10px;
-    margin-bottom: 18px;
+    gap: calc(10px * var(--tv-scale, 1));
+    margin-bottom: calc(18px * var(--tv-scale, 1));
     align-items: stretch;
   }
   .sports-search {
     width: auto;
     flex: 1;
-    padding: 0 10px;
+    padding: 0 calc(10px * var(--tv-scale, 1));
   }
   .sports-search svg {
-    width: 16px;
-    margin-right: 7px;
+    width: calc(16px * var(--tv-scale, 1));
+    margin-right: calc(7px * var(--tv-scale, 1));
   }
   .sports-search input {
-    font-size: 12px;
+    font-size: calc(12px * var(--tv-scale, 1));
     min-width: 0;
   }
   .sports-language {
-    max-width: 136px;
+    max-width: calc(136px * var(--tv-scale, 1));
   }
   .sports-language select {
-    font-size: 12px;
-    padding-left: 9px;
-    padding-right: 22px;
+    font-size: calc(12px * var(--tv-scale, 1));
+    padding-left: calc(9px * var(--tv-scale, 1));
+    padding-right: calc(22px * var(--tv-scale, 1));
     width: 100%;
   }
   .sports-hero {
-    min-height: 280px;
-    margin-bottom: 26px;
+    min-height: calc(280px * var(--tv-scale, 1));
+    margin-bottom: calc(26px * var(--tv-scale, 1));
   }
   .sports-hero-copy {
     width: 100%;
-    padding: 26px 22px;
+    padding: calc(26px * var(--tv-scale, 1)) calc(22px * var(--tv-scale, 1));
     background:
       linear-gradient(
         90deg,
@@ -1398,15 +1415,15 @@
         #242c2780);
   }
   .sports-hero h2 {
-    font-size: 34px;
+    font-size: calc(34px * var(--tv-scale, 1));
     max-width: 90%;
-    letter-spacing: -1px;
+    letter-spacing: calc(-1px * var(--tv-scale, 1));
   }
   .sports-eyebrow {
-    font-size: 12px;
+    font-size: calc(12px * var(--tv-scale, 1));
   }
   .sports-hero-meta {
-    font-size: 12px;
+    font-size: calc(12px * var(--tv-scale, 1));
     max-width: 90%;
   }
   .sports-hero-art {
@@ -1414,183 +1431,183 @@
     opacity: .65;
   }
   .hero-competition-code {
-    font-size: 108px;
-    letter-spacing: -5px;
+    font-size: calc(108px * var(--tv-scale, 1));
+    letter-spacing: calc(-5px * var(--tv-scale, 1));
   }
   .hero-competition-name {
-    font-size: 12px;
+    font-size: calc(12px * var(--tv-scale, 1));
   }
   .sports-hero-actions {
-    gap: 8px;
-    margin-top: 22px;
+    gap: calc(8px * var(--tv-scale, 1));
+    margin-top: calc(22px * var(--tv-scale, 1));
   }
   .sports-hero-actions .sports-button {
-    font-size: 12px;
-    padding: 10px 13px;
+    font-size: calc(12px * var(--tv-scale, 1));
+    padding: calc(10px * var(--tv-scale, 1)) calc(13px * var(--tv-scale, 1));
   }
   .sports-section {
-    margin: 24px 0 30px;
+    margin: calc(24px * var(--tv-scale, 1)) 0 calc(30px * var(--tv-scale, 1));
   }
   .sports-section-head h2 {
-    font-size: 18px;
+    font-size: calc(18px * var(--tv-scale, 1));
   }
   .sports-section-head > a,
   .sports-section-head > span {
-    font-size: 11px;
+    font-size: calc(11px * var(--tv-scale, 1));
   }
   .competition-rail {
-    gap: 10px;
+    gap: calc(10px * var(--tv-scale, 1));
   }
   .competition-tile {
-    flex-basis: 137px;
+    flex-basis: calc(137px * var(--tv-scale, 1));
   }
   .competition-tile > a {
-    min-height: 148px;
-    padding: 14px 12px;
+    min-height: calc(148px * var(--tv-scale, 1));
+    padding: calc(14px * var(--tv-scale, 1)) calc(12px * var(--tv-scale, 1));
   }
   .competition-tile strong {
-    font-size: 12px;
+    font-size: calc(12px * var(--tv-scale, 1));
   }
   .competition-tile > a > span:last-child {
-    font-size: 11px;
+    font-size: calc(11px * var(--tv-scale, 1));
   }
   .competition-mark {
-    font-size: 21px;
+    font-size: calc(21px * var(--tv-scale, 1));
   }
   .sports-channel-rail {
-    gap: 12px;
+    gap: calc(12px * var(--tv-scale, 1));
   }
   .sports-channel-rail > .sports-channel {
-    flex-basis: 196px;
+    flex-basis: calc(196px * var(--tv-scale, 1));
   }
   .sports-channel-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 20px 12px;
+    gap: calc(20px * var(--tv-scale, 1)) calc(12px * var(--tv-scale, 1));
   }
   .channel-art {
-    height: 105px;
+    height: calc(105px * var(--tv-scale, 1));
   }
   .channel-logo {
-    width: 86px;
-    height: 54px;
+    width: calc(86px * var(--tv-scale, 1));
+    height: calc(54px * var(--tv-scale, 1));
   }
   .channel-line strong {
-    font-size: 12px;
-    min-height: 33px;
+    font-size: calc(12px * var(--tv-scale, 1));
+    min-height: calc(33px * var(--tv-scale, 1));
   }
   .channel-meta {
-    font-size: 10px;
-    margin-bottom: 8px;
+    font-size: calc(10px * var(--tv-scale, 1));
+    margin-bottom: calc(8px * var(--tv-scale, 1));
   }
   .channel-programme {
-    font-size: 11px;
+    font-size: calc(11px * var(--tv-scale, 1));
   }
   .channel-save {
-    top: 115px;
-    font-size: 18px;
+    top: calc(115px * var(--tv-scale, 1));
+    font-size: calc(18px * var(--tv-scale, 1));
   }
   .event-card {
-    flex-basis: 258px;
+    flex-basis: calc(258px * var(--tv-scale, 1));
   }
   .event-art {
-    height: 146px;
+    height: calc(146px * var(--tv-scale, 1));
   }
   .event-card > button > strong {
-    font-size: 14px;
+    font-size: calc(14px * var(--tv-scale, 1));
   }
   .event-meta {
-    font-size: 11px;
+    font-size: calc(11px * var(--tv-scale, 1));
   }
   .guide-controls {
     align-items: flex-start;
     flex-direction: column;
-    gap: 8px;
+    gap: calc(8px * var(--tv-scale, 1));
   }
   .guide-coverage {
-    font-size: 11px;
+    font-size: calc(11px * var(--tv-scale, 1));
   }
   .guide-channel {
-    width: 180px;
-    flex-basis: 180px;
-    padding: 8px;
+    width: calc(180px * var(--tv-scale, 1));
+    flex-basis: calc(180px * var(--tv-scale, 1));
+    padding: calc(8px * var(--tv-scale, 1));
   }
   .guide-channel .channel-logo {
-    width: 40px;
-    height: 32px;
+    width: calc(40px * var(--tv-scale, 1));
+    height: calc(32px * var(--tv-scale, 1));
   }
   .guide-channel strong {
-    max-width: 110px;
-    font-size: 11px;
+    max-width: calc(110px * var(--tv-scale, 1));
+    font-size: calc(11px * var(--tv-scale, 1));
   }
   .guide-channel small {
-    font-size: 10px;
+    font-size: calc(10px * var(--tv-scale, 1));
   }
   .guide-axis > strong {
-    width: 180px;
-    min-width: 180px;
+    width: calc(180px * var(--tv-scale, 1));
+    min-width: calc(180px * var(--tv-scale, 1));
   }
   .sports-empty {
-    padding: 34px 8px;
+    padding: calc(34px * var(--tv-scale, 1)) calc(8px * var(--tv-scale, 1));
   }
   .sports-empty h2 {
-    font-size: 21px;
+    font-size: calc(21px * var(--tv-scale, 1));
   }
   .sports-empty p {
-    font-size: 13px;
+    font-size: calc(13px * var(--tv-scale, 1));
   }
   .sports-modal {
-    padding: 10px;
+    padding: calc(10px * var(--tv-scale, 1));
   }
   .sports-dialog {
-    padding: 20px;
+    padding: calc(20px * var(--tv-scale, 1));
     max-height: 94vh;
   }
   .sports-dialog h2 {
-    font-size: 19px;
+    font-size: calc(19px * var(--tv-scale, 1));
   }
   .competition-checks {
     grid-template-columns: 1fr 1fr;
-    gap: 6px;
+    gap: calc(6px * var(--tv-scale, 1));
   }
   .competition-checks label {
-    font-size: 11px;
+    font-size: calc(11px * var(--tv-scale, 1));
   }
   .channel-detail-heading {
     align-items: flex-start;
-    gap: 12px;
+    gap: calc(12px * var(--tv-scale, 1));
   }
   .channel-detail-heading .channel-logo {
-    width: 70px;
-    height: 44px;
+    width: calc(70px * var(--tv-scale, 1));
+    height: calc(44px * var(--tv-scale, 1));
   }
   .channel-slot {
-    gap: 12px;
+    gap: calc(12px * var(--tv-scale, 1));
   }
   .channel-slot time {
-    flex-basis: 100px;
-    font-size: 10px;
+    flex-basis: calc(100px * var(--tv-scale, 1));
+    font-size: calc(10px * var(--tv-scale, 1));
   }
   .channel-slot strong {
-    font-size: 12px;
+    font-size: calc(12px * var(--tv-scale, 1));
   }
   .sports-player > header {
-    height: 66px;
-    padding: 10px 12px;
-    gap: 8px;
+    height: calc(66px * var(--tv-scale, 1));
+    padding: calc(10px * var(--tv-scale, 1)) calc(12px * var(--tv-scale, 1));
+    gap: calc(8px * var(--tv-scale, 1));
   }
   .sports-player > header > button {
-    font-size: 12px;
-    padding: 6px;
+    font-size: calc(12px * var(--tv-scale, 1));
+    padding: calc(6px * var(--tv-scale, 1));
   }
   .sports-player > header > div {
-    gap: 8px;
+    gap: calc(8px * var(--tv-scale, 1));
   }
   .sports-player > header strong {
-    font-size: 12px;
+    font-size: calc(12px * var(--tv-scale, 1));
   }
   .live-dot {
-    font-size: 8px;
-    padding: 4px;
+    font-size: calc(8px * var(--tv-scale, 1));
+    padding: calc(4px * var(--tv-scale, 1));
   }
   .sports-player-layout {
     display: flex;
@@ -1598,7 +1615,7 @@
     min-height: 0;
   }
   .live-video-wrap {
-    min-height: 220px;
+    min-height: calc(220px * var(--tv-scale, 1));
     aspect-ratio: 16/9;
   }
   .live-video-wrap video {
@@ -1608,51 +1625,51 @@
   }
   .live-player-sidebar {
     max-height: none;
-    padding: 22px 18px;
+    padding: calc(22px * var(--tv-scale, 1)) calc(18px * var(--tv-scale, 1));
   }
   .live-player-status {
-    font-size: 12px;
+    font-size: calc(12px * var(--tv-scale, 1));
     left: 5%;
     right: 5%;
     top: 24%;
-    padding: 14px;
+    padding: calc(14px * var(--tv-scale, 1));
   }
   .live-retry {
-    font-size: 11px;
+    font-size: calc(11px * var(--tv-scale, 1));
     top: 68%;
-    min-height: 38px;
+    min-height: calc(38px * var(--tv-scale, 1));
   }
   .live-channel-switch {
-    max-height: 400px;
+    max-height: calc(400px * var(--tv-scale, 1));
     overflow: auto;
   }
   .library-hub-links {
-    margin: 0 16px 22px;
-    gap: 10px;
+    margin: 0 calc(16px * var(--tv-scale, 1)) calc(22px * var(--tv-scale, 1));
+    gap: calc(10px * var(--tv-scale, 1));
   }
   .library-hub-links a {
-    min-width: 145px;
-    min-height: 64px;
-    padding: 12px 15px;
-    font-size: 13px;
+    min-width: calc(145px * var(--tv-scale, 1));
+    min-height: calc(64px * var(--tv-scale, 1));
+    padding: calc(12px * var(--tv-scale, 1)) calc(15px * var(--tv-scale, 1));
+    font-size: calc(13px * var(--tv-scale, 1));
   }
   .library-hub-links span {
-    font-size: 10px;
+    font-size: calc(10px * var(--tv-scale, 1));
   }
   .library-hub-hero {
-    margin: 0 16px 24px;
-    padding: 24px;
-    min-height: 180px;
+    margin: 0 calc(16px * var(--tv-scale, 1)) calc(24px * var(--tv-scale, 1));
+    padding: calc(24px * var(--tv-scale, 1));
+    min-height: calc(180px * var(--tv-scale, 1));
   }
   .library-hub-hero h2 {
-    font-size: 27px;
+    font-size: calc(27px * var(--tv-scale, 1));
   }
   .library-hub-subnav {
-    padding: 0 16px 18px;
-    gap: 20px;
+    padding: 0 calc(16px * var(--tv-scale, 1)) calc(18px * var(--tv-scale, 1));
+    gap: calc(20px * var(--tv-scale, 1));
   }
   .library-hub-subnav a {
-    font-size: 12px;
+    font-size: calc(12px * var(--tv-scale, 1));
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -1662,103 +1679,103 @@
   }
 }
 html.tv .sports-page {
-  padding: 40px 64px;
+  padding: calc(40px * var(--tv-scale, 1)) calc(64px * var(--tv-scale, 1));
 }
 html.tv .sports-heading h1 {
-  font-size: 40px;
+  font-size: calc(40px * var(--tv-scale, 1));
 }
 html.tv .sports-tabs a {
-  font-size: 22px;
-  padding: 18px 0;
+  font-size: calc(22px * var(--tv-scale, 1));
+  padding: calc(18px * var(--tv-scale, 1)) 0;
 }
 html.tv .sports-section-head h2 {
-  font-size: 30px;
+  font-size: calc(30px * var(--tv-scale, 1));
 }
 html.tv .sports-tools input,
 html.tv .sports-tools select {
-  font-size: 20px;
-  height: 60px;
+  font-size: calc(20px * var(--tv-scale, 1));
+  height: calc(60px * var(--tv-scale, 1));
 }
 html.tv .competition-tile {
-  flex-basis: 210px;
+  flex-basis: calc(210px * var(--tv-scale, 1));
 }
 html.tv .competition-tile > a {
-  min-height: 210px;
+  min-height: calc(210px * var(--tv-scale, 1));
 }
 html.tv .competition-tile strong {
-  font-size: 21px;
+  font-size: calc(21px * var(--tv-scale, 1));
 }
 html.tv .competition-tile > a > span:last-child {
-  font-size: 17px;
+  font-size: calc(17px * var(--tv-scale, 1));
 }
 html.tv .competition-mark {
-  font-size: 34px;
+  font-size: calc(34px * var(--tv-scale, 1));
 }
 html.tv .sports-channel-rail > .sports-channel {
-  flex-basis: 310px;
+  flex-basis: calc(310px * var(--tv-scale, 1));
 }
 html.tv .sports-channel-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 html.tv .channel-art {
-  height: 174px;
+  height: calc(174px * var(--tv-scale, 1));
 }
 html.tv .channel-line strong {
-  font-size: 20px;
-  min-height: 54px;
+  font-size: calc(20px * var(--tv-scale, 1));
+  min-height: calc(54px * var(--tv-scale, 1));
 }
 html.tv .channel-meta,
 html.tv .channel-programme {
-  font-size: 16px;
+  font-size: calc(16px * var(--tv-scale, 1));
 }
 html.tv .channel-save {
-  top: 184px;
+  top: calc(184px * var(--tv-scale, 1));
 }
 html.tv .channel-details {
-  font-size: 17px;
-  min-height: 48px;
+  font-size: calc(17px * var(--tv-scale, 1));
+  min-height: calc(48px * var(--tv-scale, 1));
 }
 html.tv .sports-button {
-  font-size: 20px;
-  min-height: 58px;
+  font-size: calc(20px * var(--tv-scale, 1));
+  min-height: calc(58px * var(--tv-scale, 1));
 }
 html.tv .sports-player-layout {
-  grid-template-columns: minmax(0, 1fr) 400px;
+  grid-template-columns: minmax(0, 1fr) calc(400px * var(--tv-scale, 1));
 }
 html.tv .live-channel-switch strong {
-  font-size: 20px;
+  font-size: calc(20px * var(--tv-scale, 1));
 }
 html.tv .live-channel-switch span {
-  font-size: 16px;
+  font-size: calc(16px * var(--tv-scale, 1));
 }
 html.tv .sports-hero h2 {
-  font-size: 55px;
+  font-size: calc(55px * var(--tv-scale, 1));
 }
 html.tv .sports-hero-meta {
-  font-size: 19px;
+  font-size: calc(19px * var(--tv-scale, 1));
 }
 html.tv .sports-hero {
-  min-height: 330px;
+  min-height: calc(330px * var(--tv-scale, 1));
 }
 html.tv .sports-player button.tv-focus,
 html.tv .sports-page button.tv-focus,
 html.tv .sports-page a.tv-focus,
 html.tv .sports-dialog button.tv-focus {
-  outline: 4px solid #c5e3cd;
-  outline-offset: 3px;
+  outline: calc(4px * var(--tv-scale, 1)) solid #c5e3cd;
+  outline-offset: calc(3px * var(--tv-scale, 1));
   background-color: #3c5744;
 }
 html.tv .sports-tabs > a + a {
-  margin-left: 28px;
+  margin-left: calc(28px * var(--tv-scale, 1));
 }
 html.tv .competition-rail > .competition-tile + .competition-tile,
 html.tv .sports-channel-rail > .sports-channel + .sports-channel,
 html.tv .events-rail > .event-card + .event-card {
-  margin-left: 20px;
+  margin-left: calc(20px * var(--tv-scale, 1));
 }
 html.tv .sports-hero-actions > * + *,
 html.tv .sports-tools > * + * {
-  margin-left: 16px;
+  margin-left: calc(16px * var(--tv-scale, 1));
 }
 .rail-mobile-search {
   display: none;
@@ -1766,20 +1783,20 @@ html.tv .sports-tools > * + * {
 .library-hub-hero {
   display: flex;
   justify-content: space-between;
-  gap: 32px;
+  gap: calc(32px * var(--tv-scale, 1));
   overflow: hidden;
 }
 .library-hub-hero > div {
   align-self: center;
 }
 .library-hub-hero img {
-  width: 150px;
-  height: 215px;
+  width: calc(150px * var(--tv-scale, 1));
+  height: calc(215px * var(--tv-scale, 1));
   object-fit: cover;
-  border-radius: 6px;
+  border-radius: calc(6px * var(--tv-scale, 1));
 }
 .library-hub-hero h2 {
-  margin: 12px 0 24px;
+  margin: calc(12px * var(--tv-scale, 1)) 0 calc(24px * var(--tv-scale, 1));
 }
 .library-hub-links strong {
   font: inherit;
@@ -1792,18 +1809,18 @@ html.tv .sports-tools > * + * {
     display: flex;
   }
   .library-hub-hero img {
-    width: 90px;
-    height: 135px;
+    width: calc(90px * var(--tv-scale, 1));
+    height: calc(135px * var(--tv-scale, 1));
   }
   .library-hub-hero h2 {
-    font-size: 24px;
+    font-size: calc(24px * var(--tv-scale, 1));
   }
   .library-hub-hero {
-    gap: 15px;
-    padding: 20px;
+    gap: calc(15px * var(--tv-scale, 1));
+    padding: calc(20px * var(--tv-scale, 1));
   }
   .library-hub-hero .sports-button {
-    font-size: 13px;
+    font-size: calc(13px * var(--tv-scale, 1));
   }
 }
 .library-hub-hero {
@@ -1818,17 +1835,17 @@ html.tv .sports-tools > * + * {
 .guide-controls select {
   background: #242b26;
   color: #eef4ef;
-  border: 1px solid #4d5d50;
-  padding: 8px 14px;
-  border-radius: 4px;
+  border: calc(1px * var(--tv-scale, 1)) solid #4d5d50;
+  padding: calc(8px * var(--tv-scale, 1)) calc(14px * var(--tv-scale, 1));
+  border-radius: calc(4px * var(--tv-scale, 1));
   font: inherit;
 }
 .sports-search .sr-only {
   position: absolute;
-  width: 1px;
-  height: 1px;
+  width: calc(1px * var(--tv-scale, 1));
+  height: calc(1px * var(--tv-scale, 1));
   padding: 0;
-  margin: -1px;
+  margin: calc(-1px * var(--tv-scale, 1));
   overflow: hidden;
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
@@ -1836,4 +1853,564 @@ html.tv .sports-tools > * + * {
 }
 .sports-search input {
   width: 100%;
+}
+html.tv .sports-page {
+  max-width: none;
+  padding: calc(40px * var(--tv-scale, 1)) calc(64px * var(--tv-scale, 1)) calc(80px * var(--tv-scale, 1));
+}
+html.tv .sports-heading {
+  gap: 0;
+  margin-bottom: calc(28px * var(--tv-scale, 1));
+}
+html.tv .sports-heading > * + * {
+  margin-left: calc(24px * var(--tv-scale, 1));
+}
+html.tv .sports-heading h1 {
+  font-size: calc(44px * var(--tv-scale, 1));
+}
+html.tv .sports-heading > div:last-child {
+  gap: 0;
+}
+html.tv .sports-heading > div:last-child > * + * {
+  margin-left: calc(20px * var(--tv-scale, 1));
+}
+html.tv .sports-breadcrumb {
+  font-size: calc(22px * var(--tv-scale, 1));
+  padding: calc(12px * var(--tv-scale, 1)) 0;
+}
+html.tv .sports-tabs {
+  gap: 0;
+  padding: calc(6px * var(--tv-scale, 1));
+  margin-left: calc(-6px * var(--tv-scale, 1));
+  margin-right: calc(-6px * var(--tv-scale, 1));
+}
+html.tv .sports-tabs > * + * {
+  margin-left: calc(32px * var(--tv-scale, 1));
+}
+html.tv .sports-tabs a {
+  font-size: calc(24px * var(--tv-scale, 1));
+  min-height: calc(68px * var(--tv-scale, 1));
+  padding: calc(18px * var(--tv-scale, 1)) calc(4px * var(--tv-scale, 1));
+}
+html.tv .sports-tools {
+  gap: 0;
+  margin-bottom: calc(36px * var(--tv-scale, 1));
+}
+html.tv .sports-tools > * + * {
+  margin-left: calc(28px * var(--tv-scale, 1));
+}
+html.tv .sports-search {
+  width: 56%;
+  padding: 0 calc(18px * var(--tv-scale, 1));
+}
+html.tv .sports-search svg {
+  width: calc(28px * var(--tv-scale, 1));
+  height: calc(28px * var(--tv-scale, 1));
+}
+html.tv .sports-search input {
+  font-size: calc(24px * var(--tv-scale, 1));
+  height: calc(68px * var(--tv-scale, 1));
+}
+html.tv .sports-language,
+html.tv .sports-settings {
+  font-size: calc(22px * var(--tv-scale, 1));
+}
+html.tv .sports-language {
+  gap: 0;
+}
+html.tv .sports-language > * + * {
+  margin-left: calc(16px * var(--tv-scale, 1));
+}
+html.tv .sports-language > span {
+  display: inline;
+}
+html.tv .sports-language select,
+html.tv .sports-dialog select,
+html.tv .live-player-sidebar select,
+html.tv .guide-controls select {
+  min-height: calc(64px * var(--tv-scale, 1));
+  font-size: calc(22px * var(--tv-scale, 1));
+  padding: calc(12px * var(--tv-scale, 1)) calc(18px * var(--tv-scale, 1));
+}
+html.tv .sports-button {
+  min-height: calc(64px * var(--tv-scale, 1));
+  padding: calc(16px * var(--tv-scale, 1)) calc(24px * var(--tv-scale, 1));
+  font-size: calc(22px * var(--tv-scale, 1));
+}
+html.tv .sports-settings {
+  min-height: calc(64px * var(--tv-scale, 1));
+  padding: calc(12px * var(--tv-scale, 1)) calc(8px * var(--tv-scale, 1));
+}
+html.tv .sports-hero {
+  min-height: calc(360px * var(--tv-scale, 1));
+  margin-bottom: calc(44px * var(--tv-scale, 1));
+}
+html.tv .sports-hero-copy {
+  width: 68%;
+  padding: calc(40px * var(--tv-scale, 1));
+}
+html.tv .sports-hero h2 {
+  font-size: calc(54px * var(--tv-scale, 1));
+  max-width: calc(820px * var(--tv-scale, 1));
+}
+html.tv .sports-eyebrow,
+html.tv .sports-hero-meta,
+html.tv .hero-competition-name {
+  font-size: calc(22px * var(--tv-scale, 1));
+}
+html.tv .sports-hero-actions {
+  gap: 0;
+}
+html.tv .sports-hero-actions > * {
+  margin-right: calc(20px * var(--tv-scale, 1));
+  margin-bottom: calc(12px * var(--tv-scale, 1));
+}
+html.tv .sports-section {
+  margin: calc(44px * var(--tv-scale, 1)) 0 calc(52px * var(--tv-scale, 1));
+}
+html.tv .sports-section-head h2 {
+  font-size: calc(32px * var(--tv-scale, 1));
+}
+html.tv .sports-section-head > a,
+html.tv .sports-section-head > span {
+  font-size: calc(22px * var(--tv-scale, 1));
+}
+html.tv .sports-section-head > a {
+  min-height: calc(64px * var(--tv-scale, 1));
+  display: inline-flex;
+  align-items: center;
+  padding: calc(8px * var(--tv-scale, 1));
+}
+html.tv .competition-rail,
+html.tv .sports-channel-rail,
+html.tv .events-rail {
+  gap: 0;
+  padding: calc(8px * var(--tv-scale, 1)) calc(8px * var(--tv-scale, 1)) calc(24px * var(--tv-scale, 1));
+  margin: 0 calc(-8px * var(--tv-scale, 1));
+  scroll-padding: calc(12px * var(--tv-scale, 1));
+}
+html.tv .competition-rail > * + *,
+html.tv .sports-channel-rail > * + *,
+html.tv .events-rail > * + * {
+  margin-left: calc(24px * var(--tv-scale, 1));
+}
+html.tv .competition-tile {
+  flex-basis: calc(248px * var(--tv-scale, 1));
+}
+html.tv .competition-tile > a {
+  min-height: calc(244px * var(--tv-scale, 1));
+  padding: calc(26px * var(--tv-scale, 1)) calc(20px * var(--tv-scale, 1));
+}
+html.tv .competition-tile strong {
+  font-size: calc(24px * var(--tv-scale, 1));
+  margin-top: calc(24px * var(--tv-scale, 1));
+}
+html.tv .competition-tile > a > span:last-child {
+  font-size: calc(22px * var(--tv-scale, 1));
+}
+html.tv .competition-mark {
+  height: calc(60px * var(--tv-scale, 1));
+  font-size: calc(32px * var(--tv-scale, 1));
+  padding-right: calc(54px * var(--tv-scale, 1));
+}
+html.tv .competition-follow {
+  top: calc(16px * var(--tv-scale, 1));
+  right: calc(8px * var(--tv-scale, 1));
+  width: calc(64px * var(--tv-scale, 1));
+  height: calc(64px * var(--tv-scale, 1));
+  font-size: calc(34px * var(--tv-scale, 1));
+}
+html.tv .competition-follow.following {
+  font-size: calc(28px * var(--tv-scale, 1));
+}
+html.tv .sports-channel-rail > .sports-channel {
+  flex-basis: calc(330px * var(--tv-scale, 1));
+}
+html.tv .sports-channel-grid {
+  grid-template-columns: repeat(auto-fill, minmax(calc(300px * var(--tv-scale, 1)), 1fr));
+  gap: calc(36px * var(--tv-scale, 1)) calc(28px * var(--tv-scale, 1));
+}
+html.tv .channel-art {
+  height: calc(190px * var(--tv-scale, 1));
+  margin-bottom: calc(18px * var(--tv-scale, 1));
+}
+html.tv .channel-logo {
+  width: calc(148px * var(--tv-scale, 1));
+  height: calc(94px * var(--tv-scale, 1));
+}
+html.tv .channel-quality {
+  font-size: calc(22px * var(--tv-scale, 1));
+  padding: calc(6px * var(--tv-scale, 1)) calc(9px * var(--tv-scale, 1));
+}
+html.tv .channel-play {
+  opacity: 1;
+  font-size: calc(28px * var(--tv-scale, 1));
+  left: calc(20px * var(--tv-scale, 1));
+  bottom: calc(16px * var(--tv-scale, 1));
+}
+html.tv .channel-line {
+  padding-right: 0;
+}
+html.tv .channel-line strong {
+  font-size: calc(24px * var(--tv-scale, 1));
+  min-height: calc(64px * var(--tv-scale, 1));
+  line-height: 1.35;
+}
+html.tv .channel-meta,
+html.tv .channel-programme,
+html.tv .channel-times {
+  font-size: calc(22px * var(--tv-scale, 1));
+}
+html.tv .channel-programme {
+  min-height: calc(33px * var(--tv-scale, 1));
+}
+html.tv .channel-progress {
+  height: calc(5px * var(--tv-scale, 1));
+  margin-top: calc(14px * var(--tv-scale, 1));
+}
+html.tv .channel-save {
+  position: static;
+  display: inline-block;
+  vertical-align: middle;
+  width: calc(64px * var(--tv-scale, 1));
+  height: calc(64px * var(--tv-scale, 1));
+  font-size: calc(32px * var(--tv-scale, 1));
+  margin: calc(12px * var(--tv-scale, 1)) calc(16px * var(--tv-scale, 1)) 0 0;
+}
+html.tv .channel-details {
+  display: inline-block;
+  vertical-align: middle;
+  font-size: calc(22px * var(--tv-scale, 1));
+  min-height: calc(64px * var(--tv-scale, 1));
+  padding: calc(16px * var(--tv-scale, 1)) calc(12px * var(--tv-scale, 1));
+  margin-top: calc(12px * var(--tv-scale, 1));
+}
+html.tv .event-card {
+  flex-basis: calc(430px * var(--tv-scale, 1));
+}
+html.tv .event-art {
+  height: calc(244px * var(--tv-scale, 1));
+  padding: calc(22px * var(--tv-scale, 1));
+}
+html.tv .event-label,
+html.tv .event-art > span:last-child,
+html.tv .event-meta,
+html.tv .event-time {
+  font-size: calc(22px * var(--tv-scale, 1));
+}
+html.tv .event-card > button > strong {
+  font-size: calc(28px * var(--tv-scale, 1));
+  max-height: calc(80px * var(--tv-scale, 1));
+}
+html.tv .event-code {
+  font-size: calc(100px * var(--tv-scale, 1));
+  top: calc(72px * var(--tv-scale, 1));
+}
+html.tv .sports-empty {
+  max-width: calc(1000px * var(--tv-scale, 1));
+}
+html.tv .sports-empty h2 {
+  font-size: calc(32px * var(--tv-scale, 1));
+}
+html.tv .sports-empty p,
+html.tv .sports-muted,
+html.tv .guide-coverage,
+html.tv .sports-guide-warning {
+  font-size: calc(22px * var(--tv-scale, 1));
+}
+html.tv .guide-controls {
+  gap: 0;
+  margin: calc(16px * var(--tv-scale, 1)) 0 calc(24px * var(--tv-scale, 1));
+}
+html.tv .guide-controls > div {
+  gap: 0;
+}
+html.tv .guide-controls > div > * + * {
+  margin-left: calc(24px * var(--tv-scale, 1));
+}
+html.tv .guide-controls button {
+  width: calc(64px * var(--tv-scale, 1));
+  height: calc(64px * var(--tv-scale, 1));
+  font-size: calc(32px * var(--tv-scale, 1));
+}
+html.tv .guide-controls .sports-button {
+  width: auto;
+  min-width: calc(120px * var(--tv-scale, 1));
+  font-size: calc(22px * var(--tv-scale, 1));
+}
+html.tv .guide-controls label {
+  min-height: calc(64px * var(--tv-scale, 1));
+  font-size: calc(22px * var(--tv-scale, 1));
+}
+html.tv .guide-controls input {
+  width: calc(28px * var(--tv-scale, 1));
+  height: calc(28px * var(--tv-scale, 1));
+  margin-right: calc(14px * var(--tv-scale, 1));
+}
+html.tv .guide-scroll {
+  max-height: calc(690px * var(--tv-scale, 1));
+  scroll-padding-top: calc(76px * var(--tv-scale, 1));
+  padding: calc(4px * var(--tv-scale, 1));
+}
+html.tv .guide-grid {
+  min-width: calc(2460px * var(--tv-scale, 1));
+}
+html.tv .guide-axis {
+  height: calc(68px * var(--tv-scale, 1));
+}
+html.tv .guide-axis > strong {
+  width: calc(310px * var(--tv-scale, 1));
+  min-width: calc(310px * var(--tv-scale, 1));
+  font-size: calc(22px * var(--tv-scale, 1));
+  padding: calc(18px * var(--tv-scale, 1));
+}
+html.tv .guide-axis span {
+  font-size: calc(22px * var(--tv-scale, 1));
+  padding: calc(18px * var(--tv-scale, 1)) calc(10px * var(--tv-scale, 1));
+}
+html.tv .guide-row {
+  height: calc(122px * var(--tv-scale, 1));
+}
+html.tv .guide-channel {
+  width: calc(310px * var(--tv-scale, 1));
+  flex-basis: calc(310px * var(--tv-scale, 1));
+  padding: calc(16px * var(--tv-scale, 1));
+}
+html.tv .guide-channel .channel-logo {
+  width: calc(76px * var(--tv-scale, 1));
+  height: calc(56px * var(--tv-scale, 1));
+}
+html.tv .guide-channel strong {
+  font-size: calc(22px * var(--tv-scale, 1));
+  max-width: calc(194px * var(--tv-scale, 1));
+}
+html.tv .guide-channel small {
+  font-size: calc(22px * var(--tv-scale, 1));
+}
+html.tv .guide-programme {
+  height: calc(108px * var(--tv-scale, 1));
+  top: calc(6px * var(--tv-scale, 1));
+  padding: calc(18px * var(--tv-scale, 1)) calc(14px * var(--tv-scale, 1));
+}
+html.tv .guide-programme strong,
+html.tv .guide-programme span,
+html.tv .guide-no-listing {
+  font-size: calc(22px * var(--tv-scale, 1));
+}
+html.tv .guide-programme:focus,
+html.tv .guide-programme.tv-focus {
+  z-index: 3;
+}
+html.tv .guide-no-listing {
+  padding: calc(40px * var(--tv-scale, 1)) calc(24px * var(--tv-scale, 1));
+}
+html.tv .sports-modal {
+  padding: calc(40px * var(--tv-scale, 1)) calc(64px * var(--tv-scale, 1));
+}
+html.tv .sports-dialog {
+  width: calc(1020px * var(--tv-scale, 1));
+  padding: calc(40px * var(--tv-scale, 1));
+  max-height: 88vh;
+}
+html.tv .sports-dialog h2 {
+  font-size: calc(34px * var(--tv-scale, 1));
+}
+html.tv .sports-dialog h3 {
+  font-size: calc(28px * var(--tv-scale, 1));
+}
+html.tv .sports-dialog-close {
+  width: calc(64px * var(--tv-scale, 1));
+  height: calc(64px * var(--tv-scale, 1));
+  font-size: calc(40px * var(--tv-scale, 1));
+}
+html.tv .sports-dialog form > label,
+html.tv .live-player-sidebar > label,
+html.tv .sports-dialog legend,
+html.tv .competition-checks label,
+html.tv .live-summary,
+html.tv .sports-form-feedback,
+html.tv .channel-detail-heading p,
+html.tv .channel-detail-heading small,
+html.tv .channel-slot time,
+html.tv .channel-slot strong,
+html.tv .channel-slot span,
+html.tv #live-guide-matches button,
+html.tv #live-guide-matches small {
+  font-size: calc(22px * var(--tv-scale, 1));
+}
+html.tv .sports-dialog input:not([type=checkbox]) {
+  min-height: calc(64px * var(--tv-scale, 1));
+  font-size: calc(24px * var(--tv-scale, 1));
+  padding: calc(16px * var(--tv-scale, 1));
+}
+html.tv .sports-dialog input[type=file]::file-selector-button {
+  min-height: calc(54px * var(--tv-scale, 1));
+  padding: calc(12px * var(--tv-scale, 1)) calc(16px * var(--tv-scale, 1));
+}
+html.tv .competition-checks {
+  gap: calc(16px * var(--tv-scale, 1));
+}
+html.tv .competition-checks label {
+  min-height: calc(64px * var(--tv-scale, 1));
+}
+html.tv .competition-checks input {
+  width: calc(28px * var(--tv-scale, 1));
+  height: calc(28px * var(--tv-scale, 1));
+  flex-shrink: 0;
+}
+html.tv .sports-form-actions {
+  gap: 0;
+}
+html.tv .sports-form-actions > * {
+  margin: 0 calc(18px * var(--tv-scale, 1)) calc(12px * var(--tv-scale, 1)) 0;
+}
+html.tv .channel-schedule {
+  max-height: calc(460px * var(--tv-scale, 1));
+  overflow: auto;
+  padding: calc(8px * var(--tv-scale, 1)) calc(12px * var(--tv-scale, 1));
+}
+html.tv .channel-slot {
+  gap: 0;
+  padding: calc(22px * var(--tv-scale, 1)) 0;
+}
+html.tv .channel-slot time {
+  flex-basis: calc(220px * var(--tv-scale, 1));
+  margin-right: calc(24px * var(--tv-scale, 1));
+}
+html.tv #live-guide-matches {
+  max-height: calc(360px * var(--tv-scale, 1));
+  padding: calc(6px * var(--tv-scale, 1));
+}
+html.tv #live-guide-matches button {
+  min-height: calc(64px * var(--tv-scale, 1));
+  margin-top: calc(8px * var(--tv-scale, 1));
+}
+html.tv .sports-player > header {
+  height: calc(108px * var(--tv-scale, 1));
+  padding: calc(16px * var(--tv-scale, 1)) calc(40px * var(--tv-scale, 1));
+  gap: 0;
+}
+html.tv .sports-player > header > button {
+  min-width: calc(64px * var(--tv-scale, 1));
+  min-height: calc(64px * var(--tv-scale, 1));
+  font-size: calc(24px * var(--tv-scale, 1));
+}
+html.tv .sports-player > header > * + * {
+  margin-left: calc(28px * var(--tv-scale, 1));
+}
+html.tv .sports-player > header > div {
+  gap: 0;
+}
+html.tv .sports-player > header > div > * + * {
+  margin-left: calc(24px * var(--tv-scale, 1));
+}
+html.tv .sports-player > header strong {
+  font-size: calc(28px * var(--tv-scale, 1));
+}
+html.tv .live-dot {
+  font-size: calc(22px * var(--tv-scale, 1));
+  padding: calc(10px * var(--tv-scale, 1)) calc(14px * var(--tv-scale, 1));
+}
+html.tv .sports-player-layout {
+  grid-template-columns: minmax(0, 1fr) calc(470px * var(--tv-scale, 1));
+  min-height: calc(100vh - calc(108px * var(--tv-scale, 1)));
+}
+html.tv .live-video-wrap video {
+  max-height: calc(100vh - calc(108px * var(--tv-scale, 1)));
+}
+html.tv .live-player-status {
+  font-size: calc(24px * var(--tv-scale, 1));
+}
+html.tv .live-player-sidebar {
+  padding: calc(28px * var(--tv-scale, 1));
+  max-height: calc(100vh - calc(108px * var(--tv-scale, 1)));
+  scroll-padding: calc(20px * var(--tv-scale, 1));
+}
+html.tv .live-player-sidebar h2,
+html.tv .live-player-sidebar h3 {
+  font-size: calc(24px * var(--tv-scale, 1));
+}
+html.tv #live-playing-programme {
+  max-height: calc(270px * var(--tv-scale, 1));
+  overflow: auto;
+  padding: calc(6px * var(--tv-scale, 1));
+  margin: calc(-6px * var(--tv-scale, 1));
+}
+html.tv #live-playing-programme > strong {
+  font-size: calc(30px * var(--tv-scale, 1));
+}
+html.tv #live-playing-programme > p {
+  font-size: calc(22px * var(--tv-scale, 1));
+}
+html.tv .live-player-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: calc(12px * var(--tv-scale, 1));
+  margin-top: calc(28px * var(--tv-scale, 1));
+}
+html.tv .live-player-actions .sports-button {
+  font-size: calc(22px * var(--tv-scale, 1));
+  padding: calc(14px * var(--tv-scale, 1)) calc(12px * var(--tv-scale, 1));
+}
+html.tv .live-player-volume {
+  gap: 0;
+  margin-top: calc(20px * var(--tv-scale, 1));
+}
+html.tv .live-player-volume > * + * {
+  margin-left: calc(12px * var(--tv-scale, 1));
+}
+html.tv .live-player-volume .sports-button {
+  font-size: calc(22px * var(--tv-scale, 1));
+  padding: calc(14px * var(--tv-scale, 1)) calc(10px * var(--tv-scale, 1));
+}
+html.tv .live-player-volume output {
+  font-size: calc(22px * var(--tv-scale, 1));
+  min-width: calc(70px * var(--tv-scale, 1));
+}
+html.tv .live-channel-switch {
+  gap: 0;
+  padding: calc(8px * var(--tv-scale, 1));
+  margin: calc(-8px * var(--tv-scale, 1));
+}
+html.tv .live-channel-switch > * + * {
+  margin-top: calc(14px * var(--tv-scale, 1));
+}
+html.tv .live-channel-switch button {
+  min-height: calc(92px * var(--tv-scale, 1));
+  padding: calc(20px * var(--tv-scale, 1)) calc(16px * var(--tv-scale, 1));
+}
+html.tv .live-channel-switch strong,
+html.tv .live-channel-switch span {
+  font-size: calc(22px * var(--tv-scale, 1));
+}
+@media (max-width: 1300px) {
+  html.tv .sports-page {
+    padding: calc(32px * var(--tv-scale, 1)) calc(40px * var(--tv-scale, 1)) calc(64px * var(--tv-scale, 1));
+  }
+  html.tv .sports-heading,
+  html.tv .sports-tools {
+    flex-wrap: wrap;
+  }
+  html.tv .sports-heading > * + *,
+  html.tv .sports-tools > * + * {
+    margin: calc(16px * var(--tv-scale, 1)) 0 0;
+  }
+  html.tv .sports-search {
+    width: 100%;
+  }
+  html.tv .sports-hero h2 {
+    font-size: calc(42px * var(--tv-scale, 1));
+  }
+  html.tv .sports-player-layout {
+    grid-template-columns: minmax(0, 1fr) calc(410px * var(--tv-scale, 1));
+  }
+  html.tv .live-player-sidebar {
+    padding: calc(24px * var(--tv-scale, 1)) calc(20px * var(--tv-scale, 1));
+  }
+  html.tv .guide-controls {
+    flex-wrap: wrap;
+  }
+  html.tv .guide-controls > * + * {
+    margin-top: calc(16px * var(--tv-scale, 1));
+  }
 }

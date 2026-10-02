@@ -29,6 +29,7 @@ import { serveCachedFile } from "./lib/cache/serve.mjs";
 import { mountLiveRoutes } from "./lib/live/routes.mjs";
 import { startGuideRefresh } from "./lib/live/store.mjs";
 import { startLiveReaper, stopAllLive } from "./lib/live/sessions.mjs";
+import { mountWatchTogetherRoutes } from "./lib/watch-together-routes.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -165,6 +166,7 @@ app.post("/api/invite/:token", (req, res) => {
 
 // ---------- admin panel ----------
 mountLiveRoutes(app, { requireAuth, requireAdmin });
+mountWatchTogetherRoutes(app, { requireAuth });
 app.use("/api/admin", requireAuth, requireAdmin);
 app.get("/api/admin/pipeline", ah(async (_req, res) => {
   res.setHeader("Cache-Control", "no-store");
@@ -1523,7 +1525,7 @@ app.get("/healthz", (req, res) =>
 // public/tv-build; serve those to Tizen webviews and the untouched originals to
 // every other browser. Missing build directory → everyone gets the originals,
 // so a desktop-only checkout behaves exactly as before.
-const TV_ASSETS = new Set(["/app.js", "/tv.js", "/config.js", "/styles.css", "/tv.css", "/sports.js", "/sports.css", "/admin.js", "/admin.css"]);
+const TV_ASSETS = new Set(["/app.js", "/tv.js", "/config.js", "/styles.css", "/tv.css", "/sports.js", "/sports.css", "/watch-together.js", "/watch-together.css", "/admin.js", "/admin.css"]);
 const TV_BUILD = path.join(__dirname, "public", "tv-build");
 const hasTvBuild = fs.existsSync(TV_BUILD);
 if (!hasTvBuild) console.warn("  [tv] public/tv-build missing — old Samsung TVs will fail to boot. Run: npm run build:tv");

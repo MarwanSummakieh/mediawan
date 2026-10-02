@@ -8,6 +8,7 @@
   <meta name="theme-color" content="#171a19" />
   <link rel="stylesheet" href="/styles.css" />
   <link rel="stylesheet" href="/sports.css" />
+  <link rel="stylesheet" href="/watch-together.css" />
   <!-- 10-foot overrides; every rule is scoped to html.tv, which tv.js sets -->
   <link rel="stylesheet" href="/tv.css" />
   <script src="/config.js"></script>
@@ -52,6 +53,9 @@
          moves, from the foot of the column to a popover on a phone. -->
     <div class="rail-tail" id="railTail">
       <button class="rail-btn rail-mobile-search" data-act="search"><span>Search library</span></button>
+      <button class="rail-btn" id="railTogether" data-act="together">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3 20v-2a6 6 0 0 1 12 0v2M16 5a3 3 0 0 1 0 6m2 3a5 5 0 0 1 3 4v2"/></svg><span>Watch together</span>
+      </button>
       <button class="rail-btn anime-tool" data-act="schedule">
         <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 3h-1V1h-2v2H8V1H6v2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2zm0 16H5V9h14v10zM5 7V5h14v2H5zm2 4h5v5H7z"/></svg><span>Schedule</span>
       </button>
@@ -86,7 +90,7 @@
   <!-- ===== detail modal (info + episode list) ===== -->
   <div class="overlay" id="detail">
     <div class="sheet">
-      <button class="sheet-back" id="detailClose" title="Back">
+      <button class="sheet-back" id="detailClose" title="Back" aria-label="Back to library">
         <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20z"/></svg>
       </button>
       <div class="detail-hero" id="detailHero">
@@ -128,7 +132,7 @@
        Films hide the season/episode block; TV hides nothing. -->
   <div class="overlay" id="mDetail">
     <div class="sheet">
-      <button class="sheet-back" id="mDetailClose" title="Back">
+      <button class="sheet-back" id="mDetailClose" title="Back" aria-label="Back to library">
         <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20z"/></svg>
       </button>
       <div class="detail-hero" id="mHero">
@@ -185,6 +189,7 @@
         <div class="p-title-main" id="pTitleMain"></div>
         <div class="p-title-sub" id="pTitleSub"></div>
       </div>
+      <button class="p-icon wide" id="pTogether" aria-controls="watchMenu" aria-expanded="false">Watch together</button>
     </div>
 
     <!-- next-episode toast -->
@@ -232,6 +237,28 @@
     </div>
 
     <!-- collapsible: audio menu -->
+    <section class="p-menu watch-menu" id="watchMenu" aria-label="Watch together" hidden>
+      <div class="watch-heading"><h2>Watch together</h2><button class="p-icon" id="watchClose" aria-label="Close watch together">×</button></div>
+      <div id="watchSetup">
+        <button class="btn" id="watchCreate">Create room</button>
+        <p class="watch-note">The host controls playback. Everyone uses their own signed-in account.</p>
+        <form data-watch-join>
+          <label for="watchCode">Room code</label>
+          <div class="watch-input-row"><input id="watchCode" name="code" maxlength="16" autocomplete="off" spellcheck="false" placeholder="ABCDEFGH" required /><button class="btn ghost" type="submit">Join room</button></div>
+        </form>
+      </div>
+      <div id="watchRoom" hidden>
+        <div class="watch-code-row"><span>Room code</span><strong id="watchRoomCode"></strong></div>
+        <label for="watchLink">Invite link</label>
+        <div class="watch-input-row"><input id="watchLink" readonly /><button class="btn ghost" id="watchCopy">Copy link</button></div>
+        <p class="watch-note" id="watchRole"></p>
+        <ul class="watch-members" id="watchMembers" aria-label="Participants"></ul>
+        <button class="btn" id="watchStart" hidden>Start playback</button>
+        <button class="btn ghost" id="watchLeave">Leave room</button>
+      </div>
+      <p class="watch-feedback" id="watchFeedback" role="status" aria-live="polite"></p>
+    </section>
+
     <div class="p-menu aud-menu" id="audMenu" hidden>
       <div class="p-menu-title">Audio</div>
       <div class="p-menu-section" id="audList"></div>
@@ -314,7 +341,32 @@
     </div>
   </div>
 
+  <div class="overlay watch-lobby" id="watchLobby" role="dialog" aria-modal="true" aria-labelledby="watchLobbyTitle">
+    <div class="sheet watch-lobby-sheet">
+      <div class="watch-heading"><h2 id="watchLobbyTitle">Watch together</h2><button class="p-icon" id="watchLobbyClose" data-close-modal aria-label="Close watch together">×</button></div>
+      <form data-watch-join>
+        <label for="watchLobbyCode">Room code</label>
+        <div class="watch-input-row"><input id="watchLobbyCode" name="code" maxlength="16" autocomplete="off" spellcheck="false" placeholder="ABCDEFGH" required /><button class="btn" type="submit">Join room</button></div>
+      </form>
+      <p class="watch-note">To host, play a title and select Watch together → Create room.</p>
+      <p class="watch-feedback" id="watchLobbyFeedback" role="status" aria-live="polite"></p>
+    </div>
+  </div>
+
+  <div class="overlay watch-lobby collection-delete" id="collectionDeleteDialog" role="dialog" aria-modal="true" aria-labelledby="collectionDeleteTitle" aria-describedby="collectionDeleteNote" hidden>
+    <div class="sheet watch-lobby-sheet">
+      <div class="watch-heading"><h2 id="collectionDeleteTitle">Delete collection?</h2></div>
+      <p class="watch-note" id="collectionDeleteNote">Titles stay in your library.</p>
+      <div class="empty-actions">
+        <button class="btn ghost" id="collectionDeleteCancel" data-tv-key="collection-delete-cancel" data-close-modal>Cancel</button>
+        <button class="btn" id="collectionDeleteConfirm" data-tv-key="collection-delete-confirm">Delete collection</button>
+      </div>
+      <p class="watch-feedback" id="collectionDeleteFeedback" role="alert"></p>
+    </div>
+  </div>
+
   <script src="/sports.js"></script>
+  <script src="/watch-together.js"></script>
   <script src="/app.js"></script>
   <script src="/tv.js"></script>
 </body>

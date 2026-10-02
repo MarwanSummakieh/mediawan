@@ -14,6 +14,44 @@
     $(id).textContent = message;
     $(id).hidden = !message;
   }
+  function confirmDeleteMember(name) {
+    return new Promise((resolve) => {
+      const previousFocus = document.activeElement;
+      const overlay = document.createElement("div");
+      overlay.className = "admin-confirm-overlay";
+      overlay.innerHTML = `<section class="admin-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="admin-confirm-title" aria-describedby="admin-confirm-detail"><h2 id="admin-confirm-title">Delete ${esc(name)}?</h2><p id="admin-confirm-detail">They will lose access immediately.</p><div class="admin-confirm-actions"><button class="button secondary" type="button" data-close-modal data-tv-key="admin-delete-cancel">Cancel</button><button class="button danger" type="button" data-confirm-delete data-tv-key="admin-delete-confirm">Delete member</button></div></section>`;
+      function finish(confirmed) {
+        document.removeEventListener("keydown", onKey, true);
+        overlay.remove();
+        if (previousFocus == null ? void 0 : previousFocus.isConnected) previousFocus.focus();
+        resolve(confirmed);
+      }
+      function onKey(event) {
+        if (!document.documentElement.classList.contains("tv") && (event.key === "Escape" || event.key === "Backspace" && !["INPUT", "TEXTAREA"].includes(event.target.tagName) || event.keyCode === 10009)) {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          finish(false);
+        } else if (event.key === "Tab") {
+          const buttons = [...overlay.querySelectorAll("button")];
+          const first = buttons[0], last = buttons[buttons.length - 1];
+          if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault();
+            last.focus();
+          } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault();
+            first.focus();
+          }
+        }
+      }
+      overlay.addEventListener("click", (event) => {
+        if (event.target.closest("[data-close-modal]")) finish(false);
+        else if (event.target.closest("[data-confirm-delete]")) finish(true);
+      });
+      document.body.appendChild(overlay);
+      document.addEventListener("keydown", onKey, true);
+      overlay.querySelector("[data-close-modal]").focus();
+    });
+  }
   async function request(url, options = {}) {
     var _a;
     const controller = new AbortController();
@@ -193,8 +231,8 @@
       const invites = (data.invites || []).filter((invite) => !invite.used);
       $("member-count").textContent = String(users.length);
       $("invite-count").textContent = String(invites.length);
-      $("users").innerHTML = users.map((user) => `<tr><td>${esc(user.name)}${String(user.email).toLowerCase() === currentUserEmail ? ' <span class="count">(you)</span>' : ""}</td><td class="member-email">${esc(user.email)}</td><td>${user.role === "admin" ? "Admin" : "Member"}</td><td><span class="status ${user.active ? "" : "neutral"}">${user.active ? "Active" : "Disabled"}</span></td><td><div class="member-actions"><button class="button text-button" type="button" data-action="toggle" data-id="${esc(user.id)}" data-active="${user.active ? 0 : 1}" aria-label="${user.active ? "Disable" : "Enable"} ${esc(user.name)}">${user.active ? "Disable" : "Enable"}</button><button class="button text-button danger" type="button" data-action="delete" data-id="${esc(user.id)}" data-name="${esc(user.name)}" aria-label="Delete ${esc(user.name)}">Delete</button></div></td></tr>`).join("") || `<tr><td colspan="5" class="empty-state">No members found.</td></tr>`;
-      $("invites").innerHTML = invites.map((invite) => `<tr><td>${esc(invite.name)}</td><td class="member-email">${esc(invite.email)}</td><td>${invite.role === "admin" ? "Admin" : "Member"}</td><td><a class="table-link" href="/invite.html?token=${encodeURIComponent(invite.token)}" aria-label="Open invite for ${esc(invite.name)}">Open invite</a></td></tr>`).join("") || `<tr><td colspan="4" class="empty-state">No pending invites.</td></tr>`;
+      $("users").innerHTML = users.map((user) => `<tr><td>${esc(user.name)}${String(user.email).toLowerCase() === currentUserEmail ? ' <span class="count">(you)</span>' : ""}</td><td class="member-email">${esc(user.email)}</td><td>${user.role === "admin" ? "Admin" : "Member"}</td><td><span class="status ${user.active ? "" : "neutral"}">${user.active ? "Active" : "Disabled"}</span></td><td><div class="member-actions"><button class="button text-button" type="button" data-action="toggle" data-tv-key="admin-member-toggle-${esc(user.id)}" data-id="${esc(user.id)}" data-active="${user.active ? 0 : 1}" aria-label="${user.active ? "Disable" : "Enable"} ${esc(user.name)}">${user.active ? "Disable" : "Enable"}</button><button class="button text-button danger" type="button" data-action="delete" data-tv-key="admin-member-delete-${esc(user.id)}" data-id="${esc(user.id)}" data-name="${esc(user.name)}" aria-label="Delete ${esc(user.name)}">Delete</button></div></td></tr>`).join("") || `<tr><td colspan="5" class="empty-state">No members found.</td></tr>`;
+      $("invites").innerHTML = invites.map((invite) => `<tr><td>${esc(invite.name)}</td><td class="member-email">${esc(invite.email)}</td><td>${invite.role === "admin" ? "Admin" : "Member"}</td><td><a class="table-link" data-tv-key="admin-invite-${esc(invite.token)}" href="/invite.html?token=${encodeURIComponent(invite.token)}" aria-label="Open invite for ${esc(invite.name)}">Open invite</a></td></tr>`).join("") || `<tr><td colspan="4" class="empty-state">No pending invites.</td></tr>`;
     } catch (error) {
       feedback("members-error", `Could not load members and invites. ${error.message} Use Refresh members to retry.`);
       $("member-count").textContent = "\u2014";
@@ -210,7 +248,7 @@
     const button = event.target.closest("button[data-action]");
     if (!button) return;
     const { action, id, active, name } = button.dataset;
-    if (action === "delete" && !confirm(`Delete ${name}? They will lose access immediately.`)) return;
+    if (action === "delete" && !await confirmDeleteMember(name)) return;
     const buttons = [...button.closest("tr").querySelectorAll("button")];
     buttons.forEach((item) => {
       item.disabled = true;

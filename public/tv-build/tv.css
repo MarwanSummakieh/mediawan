@@ -1,13 +1,18 @@
 html.tv {
-  --tv-pad: 80px;
-  --tv-pad-y: 44px;
-  --tv-card-w: 330px;
-  --tv-card-h: 470px;
-  --tv-grid-card-w: 250px;
-  --tv-grid-card-h: 375px;
-  --tv-gap: 26px;
-  --tv-row-title: 36px;
-  --rail-w: 148px;
+  --tv-scale: 1;
+  --bg2: #202725;
+  --accent-dim: rgba(190,212,195,.18);
+  --radius: calc(4px * var(--tv-scale, 1));
+  --radius-lg: calc(8px * var(--tv-scale, 1));
+  --tv-pad: calc(80px * var(--tv-scale, 1));
+  --tv-pad-y: calc(44px * var(--tv-scale, 1));
+  --tv-card-w: calc(330px * var(--tv-scale, 1));
+  --tv-card-h: calc(470px * var(--tv-scale, 1));
+  --tv-grid-card-w: calc(250px * var(--tv-scale, 1));
+  --tv-grid-card-h: calc(375px * var(--tv-scale, 1));
+  --tv-gap: calc(26px * var(--tv-scale, 1));
+  --tv-row-title: calc(36px * var(--tv-scale, 1));
+  --rail-w: calc(148px * var(--tv-scale, 1));
 }
 html.tv .rail,
 html.tv .rail-tail,
@@ -34,141 +39,160 @@ html.tv .card-scrim {
   gap: 0;
 }
 html.tv .rail > * + * {
-  margin-top: 10px;
+  margin-top: calc(10px * var(--tv-scale, 1));
 }
 html.tv .rail-tail > * + * {
-  margin-top: 10px;
+  margin-top: calc(10px * var(--tv-scale, 1));
 }
 html.tv .rail-btn > * + * {
-  margin-top: 8px;
+  margin-top: calc(8px * var(--tv-scale, 1));
 }
 html.tv .searchbar > * + * {
-  margin-left: 16px;
+  margin-left: calc(16px * var(--tv-scale, 1));
 }
 html.tv .picker-btn > * + * {
-  margin-left: 14px;
+  margin-left: calc(14px * var(--tv-scale, 1));
 }
 html.tv .p-top > * + * {
-  margin-left: 22px;
+  margin-left: calc(22px * var(--tv-scale, 1));
 }
 html.tv .cards > * + * {
   margin-left: var(--tv-gap);
 }
 html.tv .filter-bar > * + * {
-  margin-left: 10px;
+  margin-left: calc(10px * var(--tv-scale, 1));
 }
 html.tv .genres > * + * {
-  margin-left: 8px;
+  margin-left: calc(8px * var(--tv-scale, 1));
 }
 html.tv .card-actions > * + * {
-  margin-left: 8px;
+  margin-left: calc(8px * var(--tv-scale, 1));
 }
 html.tv .sheet-actions > * + * {
-  margin-left: 10px;
+  margin-left: calc(10px * var(--tv-scale, 1));
 }
 html.tv .p-controls > * + * {
-  margin-left: 8px;
+  margin-left: calc(8px * var(--tv-scale, 1));
 }
 html.tv .p-titles > * + * {
   margin-left: 0;
 }
 html.tv .up-next-actions > * + * {
-  margin-left: 8px;
+  margin-left: calc(8px * var(--tv-scale, 1));
 }
 html.tv .srv-row > * + * {
-  margin-left: 12px;
+  margin-left: calc(12px * var(--tv-scale, 1));
 }
 html.tv .p-drawer-ep > * + * {
-  margin-left: 14px;
+  margin-left: calc(14px * var(--tv-scale, 1));
 }
 html.tv .p-drawer-head > * + * {
-  margin-left: 12px;
+  margin-left: calc(12px * var(--tv-scale, 1));
 }
 html.tv .eps > * + * {
-  margin-top: 10px;
+  margin-top: calc(10px * var(--tv-scale, 1));
 }
 html.tv .p-drawer-list > * + * {
-  margin-top: 8px;
+  margin-top: calc(8px * var(--tv-scale, 1));
 }
 html.tv .srv-foot > * + * {
-  margin-top: 12px;
+  margin-top: calc(12px * var(--tv-scale, 1));
 }
 html.tv .card-scrim > * + * {
-  margin-top: 4px;
+  margin-top: calc(4px * var(--tv-scale, 1));
 }
 html.tv .rows > * + * {
   margin-top: 0;
 }
 html.tv body {
-  font-size: 26px;
+  font-size: calc(26px * var(--tv-scale, 1));
 }
 html.tv .rail {
-  padding: 40px 0 34px;
+  padding: calc(40px * var(--tv-scale, 1)) 0 calc(34px * var(--tv-scale, 1));
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+html.tv .rail-tail {
+  flex: 0 0 auto;
 }
 html.tv .rail-mark {
-  width: 26px;
-  height: 32px;
-  margin-bottom: 26px;
+  width: calc(26px * var(--tv-scale, 1));
+  height: calc(32px * var(--tv-scale, 1));
+  margin-bottom: calc(26px * var(--tv-scale, 1));
 }
 html.tv .rail-btn {
-  width: calc(var(--rail-w) - 26px);
-  padding: 16px 4px;
-  font-size: 17px;
+  width: calc(var(--rail-w) - calc(26px * var(--tv-scale, 1)));
+  padding: calc(16px * var(--tv-scale, 1)) calc(4px * var(--tv-scale, 1));
+  font-size: calc(17px * var(--tv-scale, 1));
 }
 html.tv .rail-btn svg {
-  width: 40px;
-  height: 40px;
+  width: calc(40px * var(--tv-scale, 1));
+  height: calc(40px * var(--tv-scale, 1));
 }
 html.tv .rail-who {
-  font-size: 15px;
-  padding: 12px 6px 0;
+  font-size: calc(15px * var(--tv-scale, 1));
+  padding: calc(12px * var(--tv-scale, 1)) calc(6px * var(--tv-scale, 1)) 0;
 }
 html.tv .searchbar {
-  padding: 24px var(--tv-pad);
+  padding: calc(24px * var(--tv-scale, 1)) var(--tv-pad);
 }
 html.tv .searchbar-ic {
-  width: 30px;
-  height: 30px;
+  width: calc(30px * var(--tv-scale, 1));
+  height: calc(30px * var(--tv-scale, 1));
 }
 html.tv .searchbar .search {
-  font-size: 26px;
-  padding: 18px 26px;
-  max-width: 900px;
+  font-size: calc(26px * var(--tv-scale, 1));
+  padding: calc(18px * var(--tv-scale, 1)) calc(26px * var(--tv-scale, 1));
+  max-width: calc(900px * var(--tv-scale, 1));
 }
 html.tv .searchbar-close {
-  width: 68px;
-  height: 68px;
+  width: calc(68px * var(--tv-scale, 1));
+  height: calc(68px * var(--tv-scale, 1));
 }
 html.tv .searchbar-close svg {
-  width: 30px;
-  height: 30px;
+  width: calc(30px * var(--tv-scale, 1));
+  height: calc(30px * var(--tv-scale, 1));
+}
+html.tv .sheet-back svg,
+html.tv .hero-pg-btn svg {
+  width: calc(30px * var(--tv-scale, 1));
+  height: calc(30px * var(--tv-scale, 1));
+}
+html.tv .hero-btn svg,
+html.tv .act-btn svg,
+html.tv .icon-btn svg {
+  width: calc(24px * var(--tv-scale, 1));
+  height: calc(24px * var(--tv-scale, 1));
+}
+html.tv .hero-competition-code {
+  font-size: calc(170px * var(--tv-scale, 1));
 }
 html.tv .picker-btn {
-  font-size: 21px;
-  padding: 15px 22px;
+  font-size: calc(21px * var(--tv-scale, 1));
+  padding: calc(15px * var(--tv-scale, 1)) calc(22px * var(--tv-scale, 1));
 }
 html.tv .picker-caret {
-  font-size: 16px;
+  font-size: calc(16px * var(--tv-scale, 1));
 }
 html.tv .picker-menu {
-  min-width: 420px;
-  max-width: 620px;
-  max-height: 620px;
-  padding: 10px;
+  min-width: calc(420px * var(--tv-scale, 1));
+  max-width: calc(620px * var(--tv-scale, 1));
+  max-height: calc(620px * var(--tv-scale, 1));
+  padding: calc(10px * var(--tv-scale, 1));
 }
 html.tv .picker-opt {
-  font-size: 21px;
-  padding: 15px 18px;
+  font-size: calc(21px * var(--tv-scale, 1));
+  padding: calc(15px * var(--tv-scale, 1)) calc(18px * var(--tv-scale, 1));
 }
 html.tv .rows {
-  padding: 0 var(--tv-pad) 80px;
+  padding: 0 var(--tv-pad) calc(80px * var(--tv-scale, 1));
 }
 html.tv .row {
-  margin: 40px 0;
+  margin: calc(40px * var(--tv-scale, 1)) 0;
 }
 html.tv .row h2 {
   font-size: var(--tv-row-title);
-  margin-bottom: 14px;
+  margin-bottom: calc(14px * var(--tv-scale, 1));
 }
 html.tv .card {
   width: var(--tv-card-w);
@@ -180,33 +204,33 @@ html.tv .movie-noart {
   height: var(--tv-card-h);
 }
 html.tv .movie-noart span {
-  font-size: 22px;
+  font-size: calc(22px * var(--tv-scale, 1));
 }
 html.tv .card .cap {
-  font-size: 20px;
-  padding-top: 12px;
+  font-size: calc(20px * var(--tv-scale, 1));
+  padding-top: calc(12px * var(--tv-scale, 1));
 }
 html.tv .card-t {
-  font-size: 22px;
+  font-size: calc(22px * var(--tv-scale, 1));
 }
 html.tv .card-sub {
-  font-size: 18px;
+  font-size: calc(18px * var(--tv-scale, 1));
 }
 html.tv .card .badge {
-  font-size: 17px;
-  padding: 5px 12px;
+  font-size: calc(17px * var(--tv-scale, 1));
+  padding: calc(5px * var(--tv-scale, 1)) calc(12px * var(--tv-scale, 1));
 }
 html.tv .card-act {
-  width: 46px;
-  height: 46px;
-  font-size: 20px;
+  width: calc(46px * var(--tv-scale, 1));
+  height: calc(46px * var(--tv-scale, 1));
+  font-size: calc(20px * var(--tv-scale, 1));
 }
 html.tv .card .prog-track {
-  height: 5px;
+  height: calc(5px * var(--tv-scale, 1));
 }
 html.tv .cards-grid {
   grid-template-columns: repeat(auto-fill, var(--tv-grid-card-w));
-  gap: 30px var(--tv-gap);
+  gap: calc(30px * var(--tv-scale, 1)) var(--tv-gap);
   justify-content: start;
 }
 html.tv .cards-grid .card {
@@ -217,11 +241,11 @@ html.tv .cards-grid .movie-noart {
   height: var(--tv-grid-card-h);
 }
 html.tv .grid-empty {
-  font-size: 22px;
-  padding: 46px 2px;
+  font-size: calc(22px * var(--tv-scale, 1));
+  padding: calc(46px * var(--tv-scale, 1)) calc(2px * var(--tv-scale, 1));
 }
 html.tv .cards {
-  padding: 26px 2px 32px;
+  padding: calc(26px * var(--tv-scale, 1)) calc(2px * var(--tv-scale, 1)) calc(32px * var(--tv-scale, 1));
   scroll-behavior: auto;
   scroll-padding-left: var(--tv-pad);
   scroll-padding-right: var(--tv-pad);
@@ -240,41 +264,45 @@ html.tv #pCast {
 }
 html.tv #pBack {
   flex: 0 0 auto;
-  margin-right: 12px;
+  margin-right: calc(12px * var(--tv-scale, 1));
 }
 html.tv .facts {
-  gap: 16px 34px;
+  gap: calc(16px * var(--tv-scale, 1)) calc(34px * var(--tv-scale, 1));
 }
 html.tv .fact dt {
-  font-size: 15px;
+  font-size: calc(15px * var(--tv-scale, 1));
 }
 html.tv .fact dd {
-  font-size: 20px;
+  font-size: calc(20px * var(--tv-scale, 1));
 }
 html.tv .card-actions {
   display: none;
 }
 html.tv .eps-split > * + * {
-  margin-left: 34px;
+  margin-left: calc(34px * var(--tv-scale, 1));
 }
 html.tv .season-list {
-  flex: 0 0 340px;
-  max-width: 340px;
+  flex: 0 0 calc(340px * var(--tv-scale, 1));
+  max-width: calc(340px * var(--tv-scale, 1));
+}
+html.tv .season-list,
+html.tv .eps {
+  max-height: 62vh;
 }
 html.tv .season-list > * + * {
-  margin-top: 10px;
+  margin-top: calc(10px * var(--tv-scale, 1));
 }
 html.tv .season-item {
-  padding: 16px 18px;
-  scroll-margin-top: 170px;
-  scroll-margin-bottom: 60px;
+  padding: calc(16px * var(--tv-scale, 1)) calc(18px * var(--tv-scale, 1));
+  scroll-margin-top: calc(170px * var(--tv-scale, 1));
+  scroll-margin-bottom: calc(60px * var(--tv-scale, 1));
 }
 html.tv .season-item .t {
-  font-size: 22px;
+  font-size: calc(22px * var(--tv-scale, 1));
 }
 html.tv .season-item .s {
-  font-size: 16px;
-  margin-top: 3px;
+  font-size: calc(16px * var(--tv-scale, 1));
+  margin-top: calc(3px * var(--tv-scale, 1));
 }
 html.tv .season-item.tv-focus {
   background: var(--accent);
@@ -296,38 +324,38 @@ html.tv .genres button,
 html.tv .sheet-back,
 html.tv .filter-bar .btn,
 html.tv #catMore {
-  scroll-margin-top: 170px;
-  scroll-margin-bottom: 60px;
+  scroll-margin-top: calc(170px * var(--tv-scale, 1));
+  scroll-margin-bottom: calc(60px * var(--tv-scale, 1));
 }
 html.tv .hero-car {
-  min-height: 420px;
-  margin: 0 var(--tv-pad) 32px;
+  min-height: calc(420px * var(--tv-scale, 1));
+  margin: 0 var(--tv-pad) calc(32px * var(--tv-scale, 1));
 }
 html.tv .hero {
-  min-height: 420px;
-  padding-bottom: 88px;
+  min-height: calc(420px * var(--tv-scale, 1));
+  padding-bottom: calc(88px * var(--tv-scale, 1));
 }
 html.tv .hero-content {
-  max-width: 760px;
+  max-width: calc(760px * var(--tv-scale, 1));
 }
 html.tv .hero-title {
-  font-size: 58px;
+  font-size: calc(58px * var(--tv-scale, 1));
 }
 html.tv .hero-btn {
-  font-size: 22px;
-  padding: 16px 34px;
+  font-size: calc(22px * var(--tv-scale, 1));
+  padding: calc(16px * var(--tv-scale, 1)) calc(34px * var(--tv-scale, 1));
   background: rgba(14, 14, 14, .78);
 }
 html.tv .hero-btn.primary {
   background: var(--accent);
 }
 html.tv .hero-badge {
-  font-size: 18px;
+  font-size: calc(18px * var(--tv-scale, 1));
   padding: 0;
 }
 html.tv .hero-chip,
 html.tv button.hero-chip {
-  font-size: 18px;
+  font-size: calc(18px * var(--tv-scale, 1));
   padding: 0;
   background: none;
 }
@@ -335,11 +363,11 @@ html.tv .hero-pager {
   display: flex;
 }
 html.tv .hero-pg-btn {
-  width: 58px;
-  height: 58px;
+  width: calc(58px * var(--tv-scale, 1));
+  height: calc(58px * var(--tv-scale, 1));
 }
 html.tv .hero-count {
-  font-size: 20px;
+  font-size: calc(20px * var(--tv-scale, 1));
 }
 html.tv .hero-content,
 html.tv .hero-chips,
@@ -347,147 +375,147 @@ html.tv .hero-actions {
   gap: 0;
 }
 html.tv .hero-content > * + * {
-  margin-top: 18px;
+  margin-top: calc(18px * var(--tv-scale, 1));
 }
 html.tv .hero-chips > * {
-  margin: 5px;
+  margin: calc(5px * var(--tv-scale, 1));
 }
 html.tv .hero-actions > * + * {
-  margin-left: 14px;
+  margin-left: calc(14px * var(--tv-scale, 1));
 }
 html.tv .hero .hero-btn,
 html.tv .hero button.hero-chip {
-  scroll-margin-top: 520px;
-  scroll-margin-bottom: 250px;
+  scroll-margin-top: calc(520px * var(--tv-scale, 1));
+  scroll-margin-bottom: calc(250px * var(--tv-scale, 1));
 }
 html.tv .sheet-back {
-  width: 58px;
-  height: 58px;
+  width: calc(58px * var(--tv-scale, 1));
+  height: calc(58px * var(--tv-scale, 1));
 }
 html.tv .sheet-meta {
-  font-size: 20px;
+  font-size: calc(20px * var(--tv-scale, 1));
 }
 html.tv .d-desc {
-  font-size: 21px;
+  font-size: calc(21px * var(--tv-scale, 1));
   line-height: 1.5;
 }
 html.tv .genres span,
 html.tv .genres button {
-  font-size: 18px;
-  padding: 8px 18px;
+  font-size: calc(18px * var(--tv-scale, 1));
+  padding: calc(8px * var(--tv-scale, 1)) calc(18px * var(--tv-scale, 1));
 }
 html.tv .act-btn {
-  font-size: 20px;
-  padding: 14px 24px;
+  font-size: calc(20px * var(--tv-scale, 1));
+  padding: calc(14px * var(--tv-scale, 1)) calc(24px * var(--tv-scale, 1));
 }
 html.tv .detail-play {
-  font-size: 22px;
-  padding: 16px 32px;
+  font-size: calc(22px * var(--tv-scale, 1));
+  padding: calc(16px * var(--tv-scale, 1)) calc(32px * var(--tv-scale, 1));
 }
 html.tv .ep-row {
-  padding: 16px;
+  padding: calc(16px * var(--tv-scale, 1));
 }
 html.tv .ep-row-t {
-  font-size: 21px;
+  font-size: calc(21px * var(--tv-scale, 1));
 }
 html.tv .ep-row-date {
-  font-size: 17px;
+  font-size: calc(17px * var(--tv-scale, 1));
 }
 html.tv .mode-pill {
-  font-size: 19px;
-  padding: 12px 22px;
+  font-size: calc(19px * var(--tv-scale, 1));
+  padding: calc(12px * var(--tv-scale, 1)) calc(22px * var(--tv-scale, 1));
 }
 html.tv .p-top {
-  padding: 34px var(--tv-pad);
+  padding: calc(34px * var(--tv-scale, 1)) var(--tv-pad);
 }
 html.tv .p-bottom {
-  padding: 0 var(--tv-pad) 34px;
+  padding: 0 var(--tv-pad) calc(34px * var(--tv-scale, 1));
 }
 html.tv .p-title-main {
-  font-size: 38px;
+  font-size: calc(38px * var(--tv-scale, 1));
 }
 html.tv .p-title-sub {
-  font-size: 24px;
+  font-size: calc(24px * var(--tv-scale, 1));
 }
 html.tv .p-icon {
-  width: 68px;
-  height: 68px;
-  font-size: 28px;
+  width: calc(68px * var(--tv-scale, 1));
+  height: calc(68px * var(--tv-scale, 1));
+  font-size: calc(28px * var(--tv-scale, 1));
 }
 html.tv .p-icon svg {
-  width: 34px;
-  height: 34px;
+  width: calc(34px * var(--tv-scale, 1));
+  height: calc(34px * var(--tv-scale, 1));
 }
 html.tv .p-icon.wide {
-  padding: 0 24px;
-  font-size: 24px;
+  padding: 0 calc(24px * var(--tv-scale, 1));
+  font-size: calc(24px * var(--tv-scale, 1));
 }
 html.tv .p-time {
-  font-size: 24px;
+  font-size: calc(24px * var(--tv-scale, 1));
 }
 html.tv .p-status {
-  font-size: 26px;
-  padding: 20px 32px;
+  font-size: calc(26px * var(--tv-scale, 1));
+  padding: calc(20px * var(--tv-scale, 1)) calc(32px * var(--tv-scale, 1));
 }
 html.tv .scrub-track {
-  height: 8px;
+  height: calc(8px * var(--tv-scale, 1));
 }
 html.tv .scrub-knob {
-  width: 24px;
-  height: 24px;
+  width: calc(24px * var(--tv-scale, 1));
+  height: calc(24px * var(--tv-scale, 1));
 }
 html.tv .scrub {
-  padding-bottom: 10px;
+  padding-bottom: calc(10px * var(--tv-scale, 1));
 }
 html.tv .scrub.tv-focus {
   transform: none;
   background: var(--accent-dim);
   border-radius: var(--radius);
-  box-shadow: 0 0 0 4px var(--accent-dim);
+  box-shadow: 0 0 0 calc(4px * var(--tv-scale, 1)) var(--accent-dim);
 }
 html.tv .scrub.tv-focus .scrub-track {
-  height: 18px;
+  height: calc(18px * var(--tv-scale, 1));
   background: rgba(255, 255, 255, .32);
 }
 html.tv .scrub.tv-focus .scrub-knob {
   transform: translate(-50%, -50%) scale(1);
-  width: 32px;
-  height: 32px;
-  box-shadow: 0 0 0 8px var(--accent-dim);
+  width: calc(32px * var(--tv-scale, 1));
+  height: calc(32px * var(--tv-scale, 1));
+  box-shadow: 0 0 0 calc(8px * var(--tv-scale, 1)) var(--accent-dim);
 }
 html.tv .p-seek-osd {
-  font-size: 34px;
-  padding: 20px 36px;
+  font-size: calc(34px * var(--tv-scale, 1));
+  padding: calc(20px * var(--tv-scale, 1)) calc(36px * var(--tv-scale, 1));
 }
 html.tv .sub-sync {
   gap: 0;
-  padding: 8px 14px 12px;
+  padding: calc(8px * var(--tv-scale, 1)) calc(14px * var(--tv-scale, 1)) calc(12px * var(--tv-scale, 1));
 }
 html.tv .sub-sync > * + * {
-  margin-left: 10px;
+  margin-left: calc(10px * var(--tv-scale, 1));
 }
 html.tv .sub-sync .p-icon {
-  width: 52px;
-  height: 52px;
-  font-size: 26px;
+  width: calc(52px * var(--tv-scale, 1));
+  height: calc(52px * var(--tv-scale, 1));
+  font-size: calc(26px * var(--tv-scale, 1));
 }
 html.tv .sub-sync-val {
-  font-size: 18px;
-  min-width: 78px;
+  font-size: calc(18px * var(--tv-scale, 1));
+  min-width: calc(78px * var(--tv-scale, 1));
 }
 html.tv .up-next {
-  width: 440px;
+  width: calc(440px * var(--tv-scale, 1));
 }
 html.tv .up-next-title {
-  font-size: 24px;
+  font-size: calc(24px * var(--tv-scale, 1));
 }
 html.tv .auth-card input {
-  font-size: 22px;
-  padding: 16px 18px;
+  font-size: calc(22px * var(--tv-scale, 1));
+  padding: calc(16px * var(--tv-scale, 1)) calc(18px * var(--tv-scale, 1));
 }
 html.tv .auth-card .btn {
-  font-size: 22px;
-  padding: 16px 28px;
+  font-size: calc(22px * var(--tv-scale, 1));
+  padding: calc(16px * var(--tv-scale, 1)) calc(28px * var(--tv-scale, 1));
 }
 html.tv .player-overlay.show {
   animation: none;
@@ -511,20 +539,20 @@ html.tv .hero-pg-btn {
 }
 html.tv .searchbar {
   background: var(--bg);
-  border-bottom: 1px solid var(--line);
+  border-bottom: calc(1px * var(--tv-scale, 1)) solid var(--line);
 }
 html.tv .p-menu {
-  background: #171a20;
+  background: var(--bg2);
 }
 html.tv .up-next {
-  background: #171a20;
+  background: var(--bg2);
 }
 html.tv #video {
   background: #000;
 }
 html.tv .tv-focus {
-  outline: none !important;
-  position: relative;
+  outline: calc(3px * var(--tv-scale, 1)) solid var(--accent) !important;
+  outline-offset: calc(4px * var(--tv-scale, 1));
   z-index: 20;
   transform: scale(1.04);
   transition:
@@ -545,7 +573,7 @@ html.tv .fr-card.tv-focus {
   background: var(--accent);
   color: var(--on-accent);
   border-color: var(--accent);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, .55);
+  box-shadow: 0 calc(10px * var(--tv-scale, 1)) calc(30px * var(--tv-scale, 1)) rgba(0, 0, 0, .55);
 }
 html.tv .srv-row.tv-focus .srv-s,
 html.tv .srv-row.tv-focus .srv-t,
@@ -556,7 +584,8 @@ html.tv .ep-row.tv-focus .ep-row-t,
 html.tv .ep-row.tv-focus .ep-row-date,
 html.tv .sched-item.tv-focus .sched-time,
 html.tv .p-menu-item.tv-focus::after,
-html.tv .p-menu-val {
+html.tv .p-menu-item.tv-focus .p-menu-val,
+html.tv .p-menu-row.tv-focus .p-menu-val {
   color: var(--on-accent);
 }
 html.tv .srv-row.tv-focus::before {
@@ -599,15 +628,171 @@ html.tv .rail-btn.active:not(.tv-focus) {
 }
 html.tv #search.tv-focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 4px var(--accent-dim);
+  box-shadow: 0 0 0 calc(4px * var(--tv-scale, 1)) var(--accent-dim);
   transform: none;
+}
+html.tv button,
+html.tv input,
+html.tv select,
+html.tv textarea {
+  font: inherit;
+}
+html.tv input:not([type=checkbox]):not([type=radio]):not([type=hidden]),
+html.tv select,
+html.tv textarea {
+  min-height: calc(54px * var(--tv-scale, 1));
+}
+html.tv input.tv-focus,
+html.tv select.tv-focus,
+html.tv textarea.tv-focus,
+html.tv [data-tv-scroll].tv-focus {
+  transform: none;
+}
+html.tv input[type=checkbox],
+html.tv input[type=radio] {
+  width: calc(28px * var(--tv-scale, 1));
+  height: calc(28px * var(--tv-scale, 1));
+  flex: 0 0 auto;
+}
+html.tv .tv-editing {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 calc(6px * var(--tv-scale, 1)) var(--accent-dim);
+}
+html.tv .col-menu {
+  min-width: calc(520px * var(--tv-scale, 1));
+  max-height: 70vh;
+  overflow-y: auto;
+  background: var(--bg2);
+}
+html.tv .col-row {
+  padding: calc(18px * var(--tv-scale, 1));
+  font-size: calc(24px * var(--tv-scale, 1));
+}
+html.tv .col-row input {
+  margin-right: calc(14px * var(--tv-scale, 1));
+}
+html.tv .col-new {
+  padding: calc(14px * var(--tv-scale, 1));
+}
+html.tv .col-new input {
+  min-width: 0;
+  font-size: calc(24px * var(--tv-scale, 1));
+}
+html.tv .row-del {
+  width: calc(56px * var(--tv-scale, 1));
+  height: calc(56px * var(--tv-scale, 1));
+  font-size: calc(26px * var(--tv-scale, 1));
+}
+html.tv .page-heading {
+  padding: calc(34px * var(--tv-scale, 1)) var(--tv-pad) calc(24px * var(--tv-scale, 1));
+}
+html.tv .page-heading h1 {
+  font-size: calc(38px * var(--tv-scale, 1));
+}
+html.tv .text-link,
+html.tv .row-see {
+  font-size: calc(22px * var(--tv-scale, 1));
+  padding: calc(12px * var(--tv-scale, 1));
+}
+html.tv .library-hub-links {
+  margin-left: var(--tv-pad);
+  margin-right: var(--tv-pad);
+}
+html.tv .library-hub-links a {
+  font-size: calc(24px * var(--tv-scale, 1));
+  min-height: calc(72px * var(--tv-scale, 1));
+  padding: calc(22px * var(--tv-scale, 1)) calc(26px * var(--tv-scale, 1));
+}
+html.tv .library-hub-hero {
+  margin-left: var(--tv-pad);
+  margin-right: var(--tv-pad);
+  padding: calc(40px * var(--tv-scale, 1));
+}
+html.tv .library-hub-hero h2 {
+  font-size: calc(44px * var(--tv-scale, 1));
+}
+html.tv .library-hub-hero .sports-button {
+  min-height: calc(64px * var(--tv-scale, 1));
+  font-size: calc(24px * var(--tv-scale, 1));
+}
+html.tv .library-empty {
+  padding: calc(40px * var(--tv-scale, 1)) var(--tv-pad);
+  font-size: calc(24px * var(--tv-scale, 1));
+}
+html.tv .auth-card {
+  width: calc(620px * var(--tv-scale, 1));
+  max-width: 90vw;
+  padding: calc(44px * var(--tv-scale, 1));
+}
+html.tv .auth-card h1 {
+  font-size: calc(38px * var(--tv-scale, 1));
+}
+html.tv .auth-card label,
+html.tv .auth-card .err {
+  font-size: calc(22px * var(--tv-scale, 1));
+}
+html.tv [hidden] {
+  display: none !important;
+}
+html.tv .tv-select-overlay {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, .82);
+}
+html.tv .tv-select-dialog {
+  width: calc(620px * var(--tv-scale, 1));
+  max-width: 86vw;
+  max-height: 78vh;
+  overflow-y: auto;
+  padding: calc(30px * var(--tv-scale, 1));
+  background: var(--bg2);
+  border: calc(1px * var(--tv-scale, 1)) solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 calc(24px * var(--tv-scale, 1)) calc(70px * var(--tv-scale, 1)) rgba(0, 0, 0, .5);
+}
+html.tv .tv-select-dialog h2 {
+  margin: 0 0 calc(24px * var(--tv-scale, 1));
+  font-size: calc(30px * var(--tv-scale, 1));
+}
+html.tv .tv-select-option {
+  display: block;
+  width: 100%;
+  min-height: calc(62px * var(--tv-scale, 1));
+  text-align: left;
+  padding: calc(16px * var(--tv-scale, 1)) calc(20px * var(--tv-scale, 1));
+  margin: calc(12px * var(--tv-scale, 1)) 0;
+  background: var(--bg);
+  color: var(--text);
+  border: calc(1px * var(--tv-scale, 1)) solid var(--line);
+  border-radius: var(--radius);
+  font-size: calc(24px * var(--tv-scale, 1));
+  cursor: pointer;
+}
+html.tv .tv-select-option[aria-pressed=true] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+html.tv .tv-select-option.tv-focus {
+  background: var(--accent);
+  color: var(--on-accent);
+  transform: none;
+}
+html.tv .tv-select-option:disabled {
+  opacity: .45;
 }
 html.tv .card.tv-focus {
   transform: none;
 }
 html.tv .card.tv-focus .card-art {
   transform: scale(1.12);
-  box-shadow: 0 22px 55px rgba(0, 0, 0, .8);
+  box-shadow: 0 calc(22px * var(--tv-scale, 1)) calc(55px * var(--tv-scale, 1)) rgba(0, 0, 0, .8);
   transition: transform .14s ease, box-shadow .14s ease;
 }
 html.tv .card.tv-focus .card-scrim {
@@ -632,50 +817,31 @@ html.tv .card:hover .cap {
 html.tv .card-actions {
   opacity: 0;
 }
-@media (min-width: 2400px) {
+@media (min-width: 2400px) and (max-width: 2999px) {
   html.tv {
-    --rail-w: 240px;
-    --tv-pad: 120px;
-    --tv-card-w: 520px;
-    --tv-card-h: 760px;
-    --tv-grid-card-w: 420px;
-    --tv-grid-card-h: 630px;
-    --tv-gap: 32px;
-    --tv-row-title: 54px;
+    --tv-scale: 1.5;
   }
-  html.tv body {
-    font-size: 40px;
-  }
-  html.tv .hero-title {
-    font-size: 130px;
-  }
-  html.tv .p-icon {
-    width: 96px;
-    height: 96px;
-  }
-  html.tv .p-icon svg {
-    width: 48px;
-    height: 48px;
-  }
-  html.tv .p-drawer {
-    width: 900px;
+}
+@media (min-width: 3000px) {
+  html.tv {
+    --tv-scale: 2;
   }
 }
 @media (max-width: 1400px) {
   html.tv {
-    --rail-w: 104px;
-    --tv-pad: 40px;
-    --tv-card-w: 200px;
-    --tv-card-h: 290px;
-    --tv-grid-card-w: 165px;
-    --tv-grid-card-h: 248px;
-    --tv-gap: 14px;
-    --tv-row-title: 24px;
+    --rail-w: calc(104px * var(--tv-scale, 1));
+    --tv-pad: calc(40px * var(--tv-scale, 1));
+    --tv-card-w: calc(200px * var(--tv-scale, 1));
+    --tv-card-h: calc(290px * var(--tv-scale, 1));
+    --tv-grid-card-w: calc(165px * var(--tv-scale, 1));
+    --tv-grid-card-h: calc(248px * var(--tv-scale, 1));
+    --tv-gap: calc(14px * var(--tv-scale, 1));
+    --tv-row-title: calc(24px * var(--tv-scale, 1));
   }
   html.tv body {
-    font-size: 18px;
+    font-size: calc(18px * var(--tv-scale, 1));
   }
   html.tv .hero-title {
-    font-size: 48px;
+    font-size: calc(48px * var(--tv-scale, 1));
   }
 }

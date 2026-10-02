@@ -154,16 +154,23 @@ Break either of these and the install dies with a bare `Parsing error`
 
 ## The 10-foot UI
 
-`public/tv.css` holds every TV-only rule, scoped to `html.tv` — desktop loads
-the file and matches nothing in it.
+`public/tv.css` provides shared TV sizing, scoped to `html.tv`, with matching
+styles for sports, Watch together and administration. Desktop browsing retains
+its usual layout.
 
-The webview is **1920×1080 whatever the panel is** (the TV upscales to 4K), so
-this is not "4K styling": it's a 1920 canvas read from across a room on a 65"
-screen. Roughly double the desktop scale — 22px base text, 280px posters,
-30px row titles, six cards across, a 60px safe-area inset for overscan. A
-`min-width: 2400px` branch doubles it again in case a newer set really does
-hand us a 3840 viewport, and a `max-width: 1400px` branch covers older 1280
-webviews.
+The shared `--tv-scale` follows the actual browser viewport: **1** below
+2400px, **1.5** at 2400–2999px, and **2** at 3000px and above, including
+3840×2160. All website surfaces scale their text, controls, spacing and focus
+highlights together. Remote navigation uses the same scale for row positioning
+and scroll distances. The existing narrow-TV layout covers 1280×720 at scale 1.
+
+Samsung's packaged UHD TV apps usually have a **1920×1080 application canvas**;
+this is separate from the panel's physical resolution. Browsers that expose a
+native 3840×2160 viewport use the 4K layout. See Samsung's
+[screen resolution guide](https://developer.samsung.com/smarttv/develop/guides/fundamentals/managing-screen-resolution.html).
+The player offers **2160p (4K)** output, but actual UHD playback depends on the
+source, supported codecs and TV hardware, independently of the UI canvas. See
+Samsung's [UHD video guide](https://developer.samsung.com/smarttv/develop/guides/multimedia/4k-8k-uhd-video.html).
 
 That file also carries the **flexbox `gap` fallbacks**. `gap` only works in
 flexbox from Chromium 84; styles.css has 49 gap declarations and every one is
@@ -270,5 +277,6 @@ instead of reloading it.
 - **AVPlay**: playback uses `hls.js`, which works in Tizen's webview. If a
   particular set stutters, switch the player to Samsung's native
   `webapis.avplay` — the privilege is already declared in `config.xml`.
-- Test on the real TV. The verification here drives synthetic D-pad events in a
-  desktop browser at 1920×1080; it proves the navigation graph, not the decoder.
+- Test on the real TV. The 418-test suite includes navigation and viewport
+  resize regressions; browser checks cover 3840×2160, 1920×1080 and 1280×720.
+  Physical remote/IME behavior and UHD decoding still need a hardware check.

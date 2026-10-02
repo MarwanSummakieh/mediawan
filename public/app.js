@@ -207,6 +207,7 @@ async function boot() {
   $("#railWho").textContent = ME.name;
   if (ME.role === "admin") $("#railAdmin").hidden = false;
   initRouter();
+  window.WatchTogether?.init();
 }
 
 // ---------------- router ----------------
@@ -280,6 +281,7 @@ function syncRail() {
 }
 
 async function route() {
+  window.WatchTogether?.onRoute();
   if (APP_VIEW === 'sports' && !location.pathname.startsWith('/sports')) window.MediawanSports.leave();
   const qs = new URLSearchParams(location.search);
   setActiveTab(activeTabFor(location.pathname));
@@ -481,7 +483,7 @@ function heroNav(d) { heroGo(heroIdx + d); }
 
 function rowHtml(label, items, opts = {}) {
   const del = opts.collection
-    ? `<button class="row-del" title="Delete collection" onclick="deleteCollection(${opts.collection}, event)">✕</button>` : "";
+    ? `<button class="row-del" data-tv-key="collection-delete:${opts.collection}" title="Delete collection" aria-label="Delete ${esc(label)} collection" onclick="deleteCollection(${opts.collection}, event)">✕</button>` : "";
   return `<div class="row ${opts.cls || ""}"><h2>${esc(label)}${del}</h2>
     ${scrollerHtml("cards", items.map(cardHtml).join(""))}</div>`;
 }
@@ -518,7 +520,7 @@ function continueCardHtml(p) {
   const art = p.cover
     ? `<img loading="lazy" src="${p.cover}" alt="" />`
     : `<div class="movie-noart"><span>${esc(p.title)}</span></div>`;
-  return `<div class="card" role="link" tabindex="0" aria-label="Resume ${esc(p.title)}" onclick="${continueHref(p)}">
+  return `<div class="card" role="link" tabindex="0" data-tv-key="resume:${esc(p.kind || 'anime')}:${esc(p.id || p.anilistId)}" aria-label="Resume ${esc(p.title)}" onclick="${continueHref(p)}">
     <div class="card-art">${art}
       ${badge ? `<span class="badge">${esc(badge)}</span>` : ""}
       <div class="card-scrim">
@@ -586,7 +588,7 @@ function cardHtml(m) {
   // hover scrim: title + whatever meta this row's payload carries
   const sub = [m.year, m.episodes ? m.episodes + " eps" : null, m.score ? m.score + "%" : null]
     .filter(Boolean).join(" · ");
-  return `<div class="card" role="link" tabindex="0" aria-label="${esc(m.title)}" onclick="openTitle(${id})">
+  return `<div class="card" role="link" tabindex="0" data-tv-key="anime:${id}" aria-label="${esc(m.title)}" onclick="openTitle(${id})">
     <div class="card-art">
       <img loading="lazy" src="${m.cover}" alt="" />
       ${badge ? `<span class="badge${airing ? " airing" : ""}">${badge}</span>` : ""}
@@ -596,8 +598,8 @@ function cardHtml(m) {
       </div>
       ${m.progress ? `<div class="prog-track"><div class="prog" style="width:${m.progress}%"></div></div>` : ""}
       <div class="card-actions">
-        <button class="card-act ${fav?'on':''}" title="Favorite" onclick="toggleFav(${id}, this, event)">${ICON_HEART}</button>
-        <button class="card-act ${inList?'on':''}" title="My List" onclick="toggleList(${id}, this, event)">${inList?ICON_CHECK:ICON_PLUS}</button>
+        <button class="card-act ${fav?'on':''}" data-tv-key="favorite:${id}" title="Favorite" aria-label="Favorite ${esc(m.title)}" aria-pressed="${fav}" onclick="toggleFav(${id}, this, event)">${ICON_HEART}</button>
+        <button class="card-act ${inList?'on':''}" data-tv-key="watchlist:${id}" title="My List" aria-label="My List: ${esc(m.title)}" aria-pressed="${inList}" onclick="toggleList(${id}, this, event)">${inList?ICON_CHECK:ICON_PLUS}</button>
       </div>
     </div>
     <div class="cap">${esc(m.title)}</div>
@@ -610,6 +612,7 @@ async function toggleFav(id, btn, e) {
   e?.stopPropagation();
   const r = await (await fetch("/api/favorite/" + id, { method: "POST" })).json();
   btn.classList.toggle("on", r.favorite);
+  btn.setAttribute("aria-pressed", String(r.favorite));
   r.favorite ? FAV.add(id) : FAV.delete(id);
   BROWSE.at = 0; // Favorites row changed — refetch on next home paint
 }
@@ -617,17 +620,76 @@ async function toggleList(id, btn, e) {
   e?.stopPropagation();
   const r = await (await fetch("/api/watchlist/" + id, { method: "POST" })).json();
   btn.classList.toggle("on", r.inList);
+  btn.setAttribute("aria-pressed", String(r.inList));
   btn.innerHTML = r.inList ? ICON_CHECK : ICON_PLUS;
   r.inList ? LIST.add(id) : LIST.delete(id);
   BROWSE.at = 0; // My List row changed — refetch on next home paint
 }
-async function deleteCollection(id, e) {
+let collectionDelete = null;
+function deleteCollection(id, e) {
   e?.stopPropagation();
-  if (!confirm("Delete this collection? (Titles stay in your library.)")) return;
-  await fetch("/api/collections/" + id, { method: "DELETE" });
-  BROWSE.at = 0;
-  renderHome();
+  if (collectionDelete?.busy) return;
+  const collection = BROWSE.data?.collections?.find((c) => String(c.id) === String(id));
+  const dialog = $("#collectionDeleteDialog");
+  collectionDelete = { id, returnFocus: e?.target.closest(".row-del") || document.activeElement, busy: false };
+  $("#collectionDeleteTitle").textContent = collection ? `Delete ${collection.name}?` : "Delete collection?";
+  $("#collectionDeleteFeedback").textContent = "";
+  $("#collectionDeleteCancel").disabled = false;
+  $("#collectionDeleteConfirm").disabled = false;
+  dialog.hidden = false;
+  dialog.classList.add("show");
+  document.body.style.overflow = "hidden";
+  if (document.documentElement.classList.contains("tv")) window.TVNav?.setFocus($("#collectionDeleteCancel"));
+  else $("#collectionDeleteCancel").focus();
 }
+function closeCollectionDelete() {
+  if (!collectionDelete || collectionDelete.busy) return;
+  const returnFocus = collectionDelete.returnFocus;
+  collectionDelete = null;
+  const dialog = $("#collectionDeleteDialog");
+  dialog.classList.remove("show");
+  dialog.hidden = true;
+  if (!document.querySelector(".overlay.show")) document.body.style.overflow = "";
+  if (returnFocus?.isConnected) {
+    if (document.documentElement.classList.contains("tv")) window.TVNav?.setFocus(returnFocus);
+    else returnFocus.focus();
+  }
+}
+$("#collectionDeleteCancel").onclick = closeCollectionDelete;
+$("#collectionDeleteDialog").addEventListener("click", (e) => {
+  if (e.target.id === "collectionDeleteDialog") closeCollectionDelete();
+});
+$("#collectionDeleteConfirm").onclick = async () => {
+  if (!collectionDelete || collectionDelete.busy) return;
+  collectionDelete.busy = true;
+  $("#collectionDeleteCancel").disabled = true;
+  $("#collectionDeleteConfirm").disabled = true;
+  $("#collectionDeleteFeedback").textContent = "Deleting collection…";
+  try {
+    const response = await fetch("/api/collections/" + collectionDelete.id, { method: "DELETE" });
+    if (!response.ok) throw new Error("Delete failed");
+    collectionDelete.busy = false;
+    closeCollectionDelete();
+    BROWSE.at = 0;
+    renderHome();
+  } catch {
+    collectionDelete.busy = false;
+    $("#collectionDeleteCancel").disabled = false;
+    $("#collectionDeleteConfirm").disabled = false;
+    $("#collectionDeleteFeedback").textContent = "Couldn't delete the collection. Try again.";
+  }
+};
+document.addEventListener("keydown", (e) => {
+  if (document.documentElement.classList.contains("tv") || !collectionDelete) return;
+  if (e.key === "Escape") {
+    e.preventDefault(); e.stopImmediatePropagation(); closeCollectionDelete();
+  } else if (e.key === "Tab") {
+    const buttons = [...$("#collectionDeleteDialog").querySelectorAll("button:not(:disabled)")];
+    if (!buttons.length) { e.preventDefault(); return; }
+    if (e.shiftKey && document.activeElement === buttons[0]) { e.preventDefault(); buttons[buttons.length - 1].focus(); }
+    else if (!e.shiftKey && document.activeElement === buttons[buttons.length - 1]) { e.preventDefault(); buttons[0].focus(); }
+  }
+}, true);
 
 // ---------------- detail page ----------------
 let detail = null; // { meta, episodes, dubEpisodes, hasDub, playable, progress }
@@ -658,6 +720,7 @@ async function showDetail(anilistId) {
     else renderDetailEps(); // back from the player — refresh episode progress bars
   } else if (isNew) {
     detail = null;
+    $("#detailPlay").disabled = true;
     $("#d-title").textContent = "";
     $("#d-meta").textContent = ""; $("#d-genres").innerHTML = ""; $("#d-desc").textContent = "";
     $("#detailActions").innerHTML = ""; $("#d-modePills").innerHTML = "";
@@ -669,7 +732,7 @@ async function showDetail(anilistId) {
   if (!cached || Date.now() - cached._at > 60_000) {
     const res = await fetch("/api/title/" + anilistId).catch(() => null);
     if (!res || !res.ok) {
-      if (!cached && DETAIL_ID === anilistId) $("#d-eps").innerHTML = "Couldn't load this title.";
+      if (!cached && DETAIL_ID === anilistId) $("#d-eps").innerHTML = `<div class="grid-empty" role="alert">Couldn't load this title.</div><button class="btn" data-tv-key="retry-detail" onclick="retryDetail()">Retry title</button>`;
       return;
     }
     const fresh = await res.json();
@@ -689,6 +752,7 @@ async function showDetail(anilistId) {
 
 function paintDetail() {
   const m = detail.meta;
+  $("#detailPlay").disabled = !detail.playable || !(detailMode === "dub" ? detail.dubEpisodes : detail.episodes).length;
   document.title = m.title + " · " + appName();
   // Wide banner art when the title has it; otherwise a blurred cover backdrop
   // with the sharp poster on top (portrait covers look terrible stretched).
@@ -702,7 +766,7 @@ function paintDetail() {
   $("#d-meta").textContent = `${seasonPos}${m.year || ""} · ${m.format || ""} · ${m.episodes || detail.episodes.length || "?"} episodes${m.score ? " · " + m.score + "%" : ""}`;
   // clickable chips — tapping a genre jumps to that category page
   $("#d-genres").innerHTML = (m.genres || []).map((g) =>
-    `<button onclick="openCategory('${esc(g)}')">${esc(g)}</button>`).join("");
+    `<button data-tv-key="genre:${esc(g)}" onclick="openCategory('${esc(g)}')">${esc(g)}</button>`).join("");
   $("#d-desc").textContent = m.description;
   renderDetailActions();
   renderSeasonSelect();
@@ -771,7 +835,7 @@ function renderFranchise() {
 }
 function frCardHtml(m, cur, num) {
   const active = m.anilistId === cur;
-  return `<div class="fr-card ${active ? "active" : ""}" ${active ? "" : `onclick="openTitle(${m.anilistId})"`}>
+  return `<div class="fr-card ${active ? "active" : ""}" ${active ? 'aria-current="page"' : `role="link" tabindex="0" data-tv-key="franchise:${m.anilistId}" aria-label="${esc(m.title)}" onclick="openTitle(${m.anilistId})"`}>
     <img loading="lazy" src="${m.cover}" alt="" />
     <div class="fr-info">
       <div class="fr-num">${num ? `Season ${num}` : esc(m.format || "")}</div>
@@ -785,10 +849,10 @@ function frCardHtml(m, cur, num) {
 function renderDetailActions() {
   const id = detail.meta.anilistId;
   $("#detailActions").innerHTML = `
-    <button class="act-btn icon-btn ${detail.favorite ? "on" : ""}" id="actFav">${ICON_HEART}<span>${detail.favorite ? "Favorited" : "Favorite"}</span></button>
-    <button class="act-btn icon-btn ${detail.inList ? "on" : ""}" id="actList">${detail.inList ? ICON_CHECK : ICON_PLUS}<span>${detail.inList ? "In My List" : "My List"}</span></button>
+    <button class="act-btn icon-btn ${detail.favorite ? "on" : ""}" id="actFav" aria-pressed="${detail.favorite}">${ICON_HEART}<span>${detail.favorite ? "Favorited" : "Favorite"}</span></button>
+    <button class="act-btn icon-btn ${detail.inList ? "on" : ""}" id="actList" aria-pressed="${detail.inList}">${detail.inList ? ICON_CHECK : ICON_PLUS}<span>${detail.inList ? "In My List" : "My List"}</span></button>
     <div class="act-col-wrap">
-      <button class="act-btn icon-btn" id="actCol">${ICON_COLLECTION}<span>Collections ▾</span></button>
+      <button class="act-btn icon-btn" id="actCol" aria-controls="colMenu" aria-expanded="false">${ICON_COLLECTION}<span>Collections ▾</span></button>
       <div class="col-menu" id="colMenu" hidden></div>
     </div>`;
   $("#actFav").onclick = async () => {
@@ -799,17 +863,21 @@ function renderDetailActions() {
     const r = await (await fetch("/api/watchlist/" + id, { method: "POST" })).json();
     detail.inList = r.inList; renderDetailActions();
   };
-  $("#actCol").onclick = (e) => { e.stopPropagation(); const menu = $("#colMenu"); menu.hidden = !menu.hidden; if (!menu.hidden) renderColMenu(id); };
+  $("#actCol").onclick = (e) => {
+    e.stopPropagation(); const menu = $("#colMenu"); menu.hidden = !menu.hidden;
+    $("#actCol").setAttribute("aria-expanded", String(!menu.hidden));
+    if (!menu.hidden) renderColMenu(id);
+  };
 }
 
 function renderColMenu(id) {
   const menu = $("#colMenu");
   const rows = detail.collections.map((c) =>
-    `<label class="col-row"><input type="checkbox" data-col="${c.id}" ${c.has ? "checked" : ""}/> ${esc(c.name)}</label>`
+    `<label class="col-row"><input type="checkbox" data-col="${c.id}" data-tv-key="collection:${c.id}" aria-label="${esc(c.name)}" ${c.has ? "checked" : ""}/> ${esc(c.name)}</label>`
   ).join("") || `<div class="col-empty">No collections yet</div>`;
   menu.innerHTML = rows + `
     <div class="col-new">
-      <input id="colNewName" placeholder="New collection…" maxlength="60" />
+      <input id="colNewName" aria-label="New collection name" placeholder="New collection…" maxlength="60" />
       <button id="colNewBtn" class="btn mini">Create</button>
     </div>`;
   menu.querySelectorAll('input[type="checkbox"]').forEach((cb) => cb.onchange = async () => {
@@ -828,8 +896,8 @@ function renderColMenu(id) {
 }
 function renderModePills() {
   $("#d-modePills").innerHTML = `
-    <button class="mode-pill ${detailMode==='sub'?'active':''}" onclick="setDetailMode('sub')">Sub</button>
-    <button class="mode-pill ${detailMode==='dub'?'active':''}" onclick="setDetailMode('dub')" ${detail.hasDub?'':'disabled title="No dub available"'}>Dub</button>`;
+    <button class="mode-pill ${detailMode==='sub'?'active':''}" data-tv-key="detail-mode:sub" aria-pressed="${detailMode==='sub'}" onclick="setDetailMode('sub')">Sub</button>
+    <button class="mode-pill ${detailMode==='dub'?'active':''}" data-tv-key="detail-mode:dub" aria-pressed="${detailMode==='dub'}" onclick="setDetailMode('dub')" ${detail.hasDub?'':'disabled title="No dub available"'}>Dub</button>`;
 }
 function setDetailMode(mode) {
   if (mode === "dub" && !detail.hasDub) return;
@@ -837,6 +905,7 @@ function setDetailMode(mode) {
 }
 function renderDetailEps() {
   const eps = detailMode === "dub" ? detail.dubEpisodes : detail.episodes;
+  $("#detailPlay").disabled = !detail.playable || !eps.length;
   if (!detail.playable || !eps.length) {
     $("#d-eps").innerHTML = `<div style="color:var(--muted)">No ${detailMode} source matched for this title.</div>`;
     return;
@@ -852,7 +921,7 @@ function renderDetailEps() {
       ? `<div class="ep-row-thumb"><img loading="lazy" src="${meta.thumbnail}" alt="" onerror="epThumbFallback(this)"><span class="ep-row-badge">${ep}</span></div>`
       : `<div class="ep-row-thumb ph" style="background-image:url('${detail.meta.cover}')"><span class="ep-row-badge">${ep}</span></div>`;
     const title = meta.title ? `Ep ${ep} · ${esc(meta.title)}` : `Episode ${ep}`;
-    return `<div class="ep-row" onclick="launchPlayer('${ep}')">
+    return `<div class="ep-row" role="button" tabindex="0" data-tv-key="episode:${detail.meta.anilistId}:${detailMode}:${esc(ep)}" aria-label="Play ${title}" onclick="launchPlayer('${ep}')">
       ${thumb}
       <div class="ep-row-body">
         <div class="ep-row-t">${title}</div>
@@ -868,6 +937,14 @@ function renderDetailEps() {
 // User-initiated back: walk browser history when we pushed the entry, else
 // (deep link / reload) rewrite to home so back never leaves the site.
 function closeDetail() { goBack("/"); }
+function retryDetail() { if (DETAIL_ID != null) showDetail(DETAIL_ID); }
+function closeCollections() {
+  const menu = $("#colMenu");
+  if (!menu || menu.hidden) return false;
+  menu.hidden = true;
+  $("#actCol")?.setAttribute("aria-expanded", "false");
+  return true;
+}
 // Router-driven hide — pure DOM, never touches history.
 function hideDetail() {
   DETAIL_ID = null;
@@ -879,17 +956,19 @@ $("#detail").addEventListener("click", (e) => { if (e.target.id === "detail") cl
 // tap/click anywhere outside the Collections dropdown dismisses it (no Esc on phones)
 document.addEventListener("click", (e) => {
   const menu = $("#colMenu");
-  if (menu && !menu.hidden && !e.target.closest(".act-col-wrap")) menu.hidden = true;
+  if (menu && !menu.hidden && !e.target.closest(".act-col-wrap")) closeCollections();
 });
 document.addEventListener("keydown", (e) => {
+  if (document.documentElement.classList.contains("tv")) return;
   if (e.key !== "Escape") return;
   if (!$("#detail").classList.contains("show") || $("#player").classList.contains("show")) return;
   if (["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName)) return;
   const colMenu = $("#colMenu");
-  if (colMenu && !colMenu.hidden) { colMenu.hidden = true; return; }
+  if (colMenu && !colMenu.hidden) { closeCollections(); $("#actCol").focus(); return; }
   closeDetail();
 });
 $("#detailPlay").addEventListener("click", () => {
+  if (!detail) return;
   const eps = detailMode === "dub" ? detail.dubEpisodes : detail.episodes;
   const resume = detail.progress && eps.includes(detail.progress.episode) ? detail.progress.episode : eps[0];
   if (resume) launchPlayer(resume);
@@ -1227,6 +1306,7 @@ const Player = {
   meta: null, playable: null, episodes: [], mode: "sub",
   ep: null, streams: [], quality: null, hideTimer: null, progressTimer: null,
   upNextTimer: null, resumeAt: 0,
+  _playGeneration: 0,
   // Virtual timeline over a live transcode session. The media element's clock
   // starts at zero wherever the session started (tShift = the session's start
   // offset in the real runtime) and its duration only covers what has been
@@ -1234,7 +1314,23 @@ const Player = {
   // scrubber shows the whole film, not the encoder's progress bar.
   tShift: 0, fullDur: null,
 
+  // A new resolve (including settings reloads) retires every pending response
+  // from the previous play, even when its title or episode happens to match.
+  _beginPlay() {
+    this._closing = false;
+    clearTimeout(this._altsTimer);
+    this.cancelUpgrade(); this.cancelDebridDownload();
+    return ++this._playGeneration;
+  },
+  _isCurrentPlay(generation) {
+    return generation === this._playGeneration && !this._closing;
+  },
+
   async launch(ep) {
+    if (this.movieMode) {
+      this.movieMode = false; this._track = null;
+      this._toggleMovieChrome(false);
+    }
     this.meta = detail.meta; this.playable = detail.playable;
     this.mode = detailMode;
     this._serversUrl = null; this._streamBase = null; // anime servers come from the resolved streams
@@ -1284,6 +1380,7 @@ const Player = {
   // `meta.anilistId` is null in this mode, which is why films used to record
   // nothing at all and never appeared in Continue Watching.
   async launchStream({ endpoint, subsUrl, altsUrl, serversUrl, title, sub, back, track = null }) {
+    const generation = this._beginPlay();
     this.movieMode = true;
     this._track = track;
     this._streamBase = endpoint;
@@ -1305,7 +1402,9 @@ const Player = {
     $("#pTitleMain").textContent = this.meta.title;
     this.bindOnce();
     this._toggleMovieChrome(true);
-    await this.playStream({ seek: await this._trackResume(), resume: true });
+    const seek = await this._trackResume();
+    if (!this._isCurrentPlay(generation)) return;
+    await this.playStream({ seek, resume: true });
   },
 
   // The saved position for whatever this player is about to open, or 0.
@@ -1345,7 +1444,7 @@ const Player = {
   // status and no subtitles.
   async playStream({ seek = 0, resume = false } = {}) {
     const fresh = !seek || resume;
-    this._closing = false;
+    const generation = this._beginPlay();
     document.title = `${this.meta.title} · ${appName()}`;
     $("#pTitleSub").textContent = this._streamSub;
     if (fresh) this.showStatus("Finding a cached stream on Real-Debrid…", true);
@@ -1366,11 +1465,13 @@ const Player = {
         res: resParam(),
         replaces: leaving?.[1] || null, replacesT: leaving?.[2] || null,
       }));
+      if (!this._isCurrentPlay(generation)) return;
       // 202 = nothing was cached, so Real-Debrid is fetching the best release.
       // A wait, not a failure — show progress instead of the dead end this
       // used to be.
       if (res.status === 202) {
         const j = await res.json();
+        if (!this._isCurrentPlay(generation)) return;
         if (j.downloading?.torrentId) { this.watchDebridDownload(j.downloading); return; }
       }
       if (!res.ok) {
@@ -1381,6 +1482,7 @@ const Player = {
       }
       data = await res.json();
     } catch (e) {
+      if (!this._isCurrentPlay(generation)) return;
       // Busy, not broken, and it clears in seconds — so this offers the retry
       // rather than sending the viewer off to hunt through the Servers panel
       // for a release that was never the problem. It is also the ONLY thing
@@ -1407,6 +1509,7 @@ const Player = {
         () => this.openServers());
       return;
     }
+    if (!this._isCurrentPlay(generation)) return;
     if (data.title) {
       this.meta.title = data.title;
       $("#pTitleMain").textContent = data.title;
@@ -1421,7 +1524,9 @@ const Player = {
     // other quality bands arrive in the background — after a breather, so the
     // probing never competes with this play's own Real-Debrid calls (429s)
     clearTimeout(this._altsTimer);
-    this._altsTimer = setTimeout(() => this.loadAlts(), 6000);
+    this._altsTimer = setTimeout(() => {
+      if (this._isCurrentPlay(generation)) this.loadAlts();
+    }, 6000);
   },
 
   // Lazy quality alternatives (movies/TV): playback already started on the
@@ -1429,13 +1534,14 @@ const Player = {
   // add them to the Quality menu. The endpoint doubles as the staleness guard.
   async loadAlts() {
     if (!this._altsUrl) return;
+    const generation = this._playGeneration;
     const token = this._streamEndpoint;
     let alts = [];
     try {
       const q = this.quality?.quality ? `?have=${encodeURIComponent(this.quality.quality)}` : "";
       alts = (await (await fetch(this._altsUrl + q)).json()).streams || [];
     } catch { return; }
-    if (!this.movieMode || this._streamEndpoint !== token || this._closing) return;
+    if (!this.movieMode || this._streamEndpoint !== token || !this._isCurrentPlay(generation)) return;
     const known = new Set(this.streams.map((s) => s.quality));
     const fresh = alts.filter((s) => !known.has(s.quality));
     if (!fresh.length) return;
@@ -1447,7 +1553,7 @@ const Player = {
   },
 
   async play(ep, resumeAt = 0) {
-    this._closing = false;
+    const generation = this._beginPlay();
     this.ep = String(ep); this.resumeAt = resumeAt;
     // keep the URL in sync (replace, not push — back skips episode hops)
     if (location.pathname.startsWith("/watch/"))
@@ -1461,7 +1567,6 @@ const Player = {
     this.loadSkipTimes(ep); // in parallel with stream resolution
     this.loadSubs(ep);      // ditto — external subtitle tracks
 
-    this.cancelUpgrade();
     let data;
     try {
       // Resuming? Ask for a session that STARTS at the resume point — the
@@ -1474,12 +1579,14 @@ const Player = {
       const left = this._sessRef(this.quality);
       const leaving = left ? `&replaces=${left[1]}&replacesT=${encodeURIComponent(left[2])}` : "";
       const res = await fetch(`/api/stream/${this.meta.anilistId}/${ep}?mode=${this.mode}${seek}${wantRes}${leaving}`);
+      if (!this._isCurrentPlay(generation)) return;
       // 202 = nothing playable YET, but the quality release is on its way.
       // Two flavours: an upgrade key (local delivery is preparing a file it
       // already has) or a debrid download (nothing was cached, Real-Debrid is
       // fetching the release — the brand-new-episode case).
       if (res.status === 202) {
         data = await res.json();
+        if (!this._isCurrentPlay(generation)) return;
         if (data.downloading?.torrentId) { this.watchDebridDownload(data.downloading); return; }
         this.showStatus("Fetching the best available release…", true);
         this.watchUpgrade(data.upgrade, resumeAt, { primary: true });
@@ -1487,7 +1594,9 @@ const Player = {
       }
       if (!res.ok) throw new Error((await res.json()).error || "no source");
       data = await res.json();
-    } catch (e) { this._noSource(); return; }
+    } catch (e) { if (this._isCurrentPlay(generation)) this._noSource(); return; }
+
+    if (!this._isCurrentPlay(generation)) return;
 
     this.streams = data.streams;
     // The server may have served a different mode than we asked for: dub is a
@@ -1538,6 +1647,7 @@ const Player = {
   },
 
   watchDebridDownload(dl) {
+    const generation = this._playGeneration;
     this._dlTorrent = dl.torrentId;
     const id = dl.torrentId;
     const started = Date.now();
@@ -1546,7 +1656,7 @@ const Player = {
       this._serversUrl ? "Choose a different release" : null, () => this.openServers());
 
     const poll = async () => {
-      if (this._closing || this._dlTorrent !== id) return;
+      if (!this._isCurrentPlay(generation) || this._dlTorrent !== id) return;
       // 20 minutes is long enough for anything RD is realistically going to
       // finish; past that it is stalled on seeders, not slow.
       if (Date.now() - started > 20 * 60 * 1000) {
@@ -1556,7 +1666,11 @@ const Player = {
       }
       let st;
       try { st = await (await fetch(`/api/debrid/progress/${encodeURIComponent(id)}`)).json(); }
-      catch { this._dlTimer = setTimeout(poll, 5000); return; }
+      catch {
+        if (this._isCurrentPlay(generation) && this._dlTorrent === id) this._dlTimer = setTimeout(poll, 5000);
+        return;
+      }
+      if (!this._isCurrentPlay(generation) || this._dlTorrent !== id) return;
 
       if (st.error) {
         this.cancelDebridDownload();
@@ -1590,18 +1704,23 @@ const Player = {
 
   watchUpgrade(upgrade, resumeAt, { primary }) {
     if (!upgrade?.key) return;
+    const generation = this._playGeneration;
     this._upgradeKey = upgrade.key;
     const key = upgrade.key;
     const started = Date.now();
 
     const poll = async () => {
-      if (this._closing || this._upgradeKey !== key) return;
+      if (!this._isCurrentPlay(generation) || this._upgradeKey !== key) return;
       // Give up after 15 minutes: something that hasn't landed by then isn't
       // coming, and a timer that runs forever is a leak.
       if (Date.now() - started > 15 * 60 * 1000) return this.cancelUpgrade();
       let st;
       try { st = await (await fetch(`/api/upgrade/${encodeURIComponent(key)}`)).json(); }
-      catch { this._upgradeTimer = setTimeout(poll, 5000); return; }
+      catch {
+        if (this._isCurrentPlay(generation) && this._upgradeKey === key) this._upgradeTimer = setTimeout(poll, 5000);
+        return;
+      }
+      if (!this._isCurrentPlay(generation) || this._upgradeKey !== key) return;
 
       if (st?.total && !st.ready && primary) {
         const pct = Math.min(99, Math.round((st.bytes / st.total) * 100));
@@ -1616,7 +1735,11 @@ const Player = {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ anilistId: this.meta.anilistId, ep: this.ep, mode: this.mode, res: resParam() }),
         })).json();
-      } catch { this._upgradeTimer = setTimeout(poll, 5000); return; }
+      } catch {
+        if (this._isCurrentPlay(generation) && this._upgradeKey === key) this._upgradeTimer = setTimeout(poll, 5000);
+        return;
+      }
+      if (!this._isCurrentPlay(generation) || this._upgradeKey !== key) return;
 
       if (!up?.ready || !up.playUrl) {
         if (up?.available === false && primary) return this._noSource();
@@ -1651,8 +1774,6 @@ const Player = {
     const n = document.createElement("div");
     n.className = "p-note";
     n.textContent = text;
-    n.style.cssText = "position:absolute;left:24px;bottom:96px;background:rgba(0,0,0,.72);color:#fff;" +
-      "padding:8px 14px;border-radius:8px;font-size:13px;z-index:40;transition:opacity .4s";
     this.el.appendChild(n);
     setTimeout(() => { n.style.opacity = "0"; setTimeout(() => n.remove(), 500); }, 4000);
   },
@@ -1696,6 +1817,7 @@ const Player = {
   // seconds chases only the LAST target; a expired session falls back to a
   // full stream re-request at the timestamp.
   async _jumpTo(t, wasPlaying = null) {
+    const generation = this._playGeneration;
     this._jumpTarget = t;
     if (this._jumping) return;
     this._jumping = true;
@@ -1712,7 +1834,7 @@ const Player = {
           const r = await fetch(media(`/media/hls/${m[1]}/seek?to=${Math.floor(target)}&t=${m[2]}`));
           j = r.ok ? await r.json() : null;
         } catch {}
-        if (this._closing || this.quality !== s) break; // the world moved on mid-jump
+        if (!this._isCurrentPlay(generation) || this.quality !== s) break; // the world moved on mid-jump
         if (!j) {
           // Session gone (idled out overnight). Re-resolve the whole stream at
           // the timestamp — slower, but it recovers instead of erroring.
@@ -1731,6 +1853,8 @@ const Player = {
   // becomes this.tShift for everything that displays or saves time.
   _attachStream(stream, relSeek = 0, wasPlaying = false) {
     const v = this.video;
+    const generation = this._playGeneration;
+    const current = () => this._isCurrentPlay(generation) && this.quality === stream;
     this.tShift = this._streamIsSession(stream) ? (Number(stream.seekBase) || 0) : 0;
     this.fullDur = this._streamIsSession(stream) && Number(stream.durationSec) > 0 ? Number(stream.durationSec) : null;
     this._applySubSync?.(); // cue times are absolute; the shift moved under them
@@ -1764,14 +1888,15 @@ const Player = {
       this._hlsRecoveries = 0;
       this.hls.loadSource(media(stream.playUrl));
       this.hls.attachMedia(v);
-      this.hls.on(Hls.Events.MANIFEST_PARSED, () => this._onStreamReady(at, wasPlaying));
+      this.hls.on(Hls.Events.MANIFEST_PARSED, () => { if (current()) this._onStreamReady(at, wasPlaying); });
       // Alternate audio renditions arrive with (and can be updated after) the
       // manifest. The menu is built from whatever the source actually offers.
-      const rebuildAudio = () => this.buildAudMenu();
+      const rebuildAudio = () => { if (current()) this.buildAudMenu(); };
       this.hls.on(Hls.Events.MANIFEST_PARSED, rebuildAudio);
       if (Hls.Events.AUDIO_TRACKS_UPDATED) this.hls.on(Hls.Events.AUDIO_TRACKS_UPDATED, rebuildAudio);
       if (Hls.Events.AUDIO_TRACK_SWITCHED) this.hls.on(Hls.Events.AUDIO_TRACK_SWITCHED, rebuildAudio);
       this.hls.on(Hls.Events.ERROR, (_e, d) => {
+        if (!current()) return;
         if (!d.fatal) return;              // non-fatal errors are hls.js's own business
         // Even a FATAL error is usually recoverable, and abandoning the source
         // for one is why a brief stall used to end playback. Try to heal it a
@@ -1793,7 +1918,10 @@ const Player = {
       });
     } else {
       v.src = media(stream.playUrl);
-      v.addEventListener("loadedmetadata", () => { this._onStreamReady(at, wasPlaying); this.buildAudMenu(); }, { once: true });
+      v.addEventListener("loadedmetadata", () => {
+        if (!current()) return;
+        this._onStreamReady(at, wasPlaying); this.buildAudMenu();
+      }, { once: true });
     }
     this.startProgress();
   },
@@ -2040,12 +2168,12 @@ const Player = {
       ? rows.map((r, i) => {
           const on = srvIsFav(r.key);
           const busy = this._srvBusyId && r.id === this._srvBusyId;
-          return `<div class="srv-row ${r.live ? "live" : ""} ${on ? "fav" : ""}" data-i="${i}" title="${esc(r.title || r.label)}">
+          return `<div class="srv-row ${r.live ? "live" : ""} ${on ? "fav" : ""}" role="button" tabindex="0" data-tv-key="server:${esc(r.id)}" data-i="${i}" aria-label="Play ${esc([r.res, r.label, r.detail].filter(Boolean).join(' · '))}" title="${esc(r.title || r.label)}">
             <div class="srv-body">
               <div class="srv-t">${r.res ? `<span class="srv-res">${esc(r.res)}</span>` : ""}<span class="srv-name">${esc(r.label)}</span>${r.stream ? srcBadge(r.stream) : ""}</div>
               <div class="srv-s">${busy ? "Starting…" : esc(r.detail)}</div>
             </div>
-            <button class="srv-fav ${on ? "on" : ""}" data-fav="${i}"
+            <button class="srv-fav ${on ? "on" : ""}" data-fav="${i}" data-tv-key="server-favorite:${esc(r.id)}" aria-pressed="${on}"
               title="${on ? "Stop preferring" : "Always prefer"} ${esc(srvFavLabel(r.key))}">${on ? ICON_HEART : ICON_HEART_O}</button>
             ${r.live ? `<span class="srv-live">${ICON_PLAY_SM} LIVE</span>` : ""}
           </div>`;
@@ -2401,6 +2529,7 @@ const Player = {
     }
   },
   loadSubs(ep) {
+    const generation = this._playGeneration;
     this._subsExternal = []; this._subsEmbedded = []; this._subsProvider = [];
     this.video.querySelectorAll("track").forEach((t) => t.remove()); // stale cues from the previous episode
     SubStyle.detach();
@@ -2408,7 +2537,7 @@ const Player = {
     fetch(`/api/subs/${this.meta.anilistId}/${ep}`)
       .then((r) => (r.ok ? r.json() : { tracks: [] }))
       .then(({ tracks }) => {
-        if (this.ep !== String(ep)) return;
+        if (!this._isCurrentPlay(generation) || this.ep !== String(ep)) return;
         this._subsExternal = tracks || [];
         this._composeSubs();
         // Carry the viewer's language across episodes — but never steal the
@@ -2432,7 +2561,7 @@ const Player = {
     fetch(this._subsUrl)
       .then((r) => (r.ok ? r.json() : { tracks: [] }))
       .then(({ tracks }) => {
-        if (!this.movieMode || this._streamEndpoint !== token) return; // moved on
+        if (!this.movieMode || this._streamEndpoint !== token || this._closing) return; // moved on
         this._subsExternal = tracks || [];
         this._composeSubs();
         if (this.subLang && !(this.subId || "").startsWith("emb:")) this.setSubtitle(this.subLang, true);
@@ -2607,7 +2736,7 @@ const Player = {
     const p = detail.progress;
     $("#epsDrawerList").innerHTML = this.episodes.map((ep) => {
       const pct = p && p.episode === String(ep) && p.duration ? Math.min(100, p.seconds/p.duration*100) : 0;
-      return `<div class="p-drawer-ep ${ep===this.ep?"active":""}" data-ep="${ep}">
+      return `<div class="p-drawer-ep ${ep===this.ep?"active":""}" role="button" tabindex="0" data-tv-key="drawer-episode:${esc(ep)}" aria-label="Play episode ${esc(ep)} ${this.mode.toUpperCase()}" data-ep="${ep}">
         <div class="p-drawer-num">${ep}</div>
         <div class="p-drawer-meta"><div class="t">Episode ${ep}</div>
           <div class="s">${this.mode.toUpperCase()}</div>
@@ -2653,7 +2782,6 @@ const Player = {
     if (actionLabel) {
       const b = document.createElement("button");
       b.className = "btn";
-      b.style.marginTop = "12px";
       b.textContent = actionLabel;
       b.onclick = () => onAction();
       s.appendChild(b);
@@ -2685,7 +2813,7 @@ const Player = {
         const bad = (h?.providers || []).filter((p) => p.status !== "ok" && p.status !== "unknown");
         if (!bad.length) return;
         const note = document.createElement("div");
-        note.style.cssText = "margin-top:10px;font-size:13px;opacity:.65";
+        note.className = "p-source-note";
         // lastError carries the per-candidate tally for a no-sources result
         // ("4 blocked (takedown), 6 not cached of 19 found"), which is the only
         // line here a viewer can actually act on: blocked means try another
@@ -2798,10 +2926,11 @@ const Player = {
 
   // ---- skip intro/outro (AniSkip community timestamps, proxied by the server) ----
   loadSkipTimes(ep) {
+    const generation = this._playGeneration;
     this.skip = null;
     fetch(`/api/skip/${this.meta.anilistId}/${ep}`)
       .then((r) => (r.ok ? r.json() : {}))
-      .then((s) => { if (this.ep === String(ep)) this.skip = s; })
+      .then((s) => { if (this._isCurrentPlay(generation) && this.ep === String(ep)) this.skip = s; })
       .catch(() => {});
   },
   // The interval (op or ed) the playhead is currently inside, if any.
@@ -3051,8 +3180,9 @@ const Player = {
 
   // Router-driven teardown — pure DOM/media cleanup, never touches history.
   hide() {
+    ++this._playGeneration;
+    this._closing = true; // suppress pending responses and teardown error events
     if (!this.el.classList.contains("show")) return;
-    this._closing = true; // suppress the teardown 'error' event from triggering fallback
     this.cancelUpgrade(); // a poll loop must not outlive the player
     this.cancelDebridDownload();
     clearTimeout(this._subRefreshTimer); this._subRefreshTimer = null; // sidecar refresh dies with the player
@@ -3230,6 +3360,13 @@ const Player = {
     // keyboard
     document.addEventListener("keydown", (e) => {
       if (!el.classList.contains("show")) return;
+      // TV remote keys belong to the shared focus manager, including while a
+      // menu or drawer is open. Letting these shortcuts run as well would
+      // seek or change volume while the viewer is moving the focus.
+      if (document.documentElement.classList.contains("tv") &&
+          (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Enter", "Escape"].includes(e.key) ||
+           e.target.closest(".p-menu, .p-drawer"))) return;
+      if (e.key === " " && e.target.closest('button, [role="button"], [role="link"]')) return;
       if (["INPUT","TEXTAREA"].includes(document.activeElement.tagName)) return;
       switch (e.key) {
         case " ": case "k": e.preventDefault(); this.togglePlay(); break;
@@ -3326,8 +3463,10 @@ function launchPlayer(ep) {
 // Router-driven player open. On a deep link (reload on /watch/…) the title
 // data isn't loaded yet — fetch it first, then start playback.
 async function showPlayer(anilistId, ep, mode) {
+  const requestedRoute = location.pathname + location.search;
   if (!detail || detail.meta.anilistId !== anilistId) {
     const ok = await loadTitleData(anilistId);
+    if (location.pathname + location.search !== requestedRoute) return;
     if (!ok) { nav("/", true); return; }
   }
   detailMode = mode === "dub" && detail.hasDub ? "dub" : "sub";
@@ -3384,12 +3523,12 @@ function renderPicker(id, opts) {
   box.hidden = false;
   box.dataset.open = "false";
   box.innerHTML = `
-    <button class="picker-btn" type="button" aria-haspopup="listbox" aria-expanded="false"${opts.label ? ` aria-label="${esc(opts.label)}"` : ""}>
+    <button class="picker-btn" data-tv-key="picker:${esc(id)}" type="button" aria-haspopup="listbox" aria-expanded="false"${opts.label ? ` aria-label="${esc(opts.label)}"` : ""}>
       <span class="picker-val">${esc(cur.label)}</span><span class="picker-caret">▾</span>
     </button>
     <div class="picker-menu" role="listbox" hidden>
       ${options.map((o) => `<button class="picker-opt ${String(o.value) === String(cur.value) ? "active" : ""}" type="button"
-        role="option" data-value="${esc(String(o.value))}">${esc(o.label)}</button>`).join("")}
+        role="option" aria-selected="${String(o.value) === String(cur.value)}" data-tv-key="picker-option:${esc(id)}:${esc(String(o.value))}" data-value="${esc(String(o.value))}">${esc(o.label)}</button>`).join("")}
     </div>`;
   PICKERS.set(id, opts.onPick);
 }
@@ -3413,7 +3552,7 @@ function renderSeasonTabs(id, opts) {
   // so a film's episode list is not left indented past an empty gutter.
   if (options.length < 2) { box.innerHTML = ""; SEASON_PICK.delete(id); return; }
   box.innerHTML = options.map((o) => `<button class="season-item${String(o.value) === String(opts.value) ? " active" : ""}"
-    type="button" data-value="${esc(String(o.value))}" title="${esc(o.sub || o.label)}">
+    type="button" data-tv-key="season:${esc(id)}:${esc(String(o.value))}" aria-pressed="${String(o.value) === String(opts.value)}" data-value="${esc(String(o.value))}" title="${esc(o.sub || o.label)}">
       <span class="t">${esc(o.label)}</span>${o.sub ? `<span class="s">${esc(o.sub)}</span>` : ""}
     </button>`).join("");
   SEASON_PICK.set(id, opts.onPick);
@@ -3424,8 +3563,11 @@ function renderSeasonTabs(id, opts) {
 function setSeasonTab(id, value) {
   const box = $("#" + id);
   if (!box) return;
-  box.querySelectorAll(".season-item").forEach((b) =>
-    b.classList.toggle("active", String(b.dataset.value) === String(value)));
+  box.querySelectorAll(".season-item").forEach((b) => {
+    const active = String(b.dataset.value) === String(value);
+    b.classList.toggle("active", active);
+    b.setAttribute("aria-pressed", String(active));
+  });
 }
 
 // Delegated, like the picker: both lists are re-rendered constantly, and
@@ -3470,6 +3612,7 @@ document.addEventListener("click", (e) => {
 // Capture phase: Escape dismisses ONE layer, and an open menu is the innermost
 // one. Without this the same press would also close the sheet behind it.
 document.addEventListener("keydown", (e) => {
+  if (document.documentElement.classList.contains("tv")) return;
   if (e.key !== "Escape" || !document.querySelector('.picker[data-open="true"]')) return;
   closePickers();
   e.stopImmediatePropagation();
@@ -3490,6 +3633,9 @@ function closeSearch() {
   box.value = "";
   if (document.activeElement === box) box.blur();
 }
+window.closeSearch = closeSearch;
+window.closePickers = closePickers;
+window.closeCollections = closeCollections;
 $("#searchClose").addEventListener("click", () => {
   const had = $("#search").value.trim();
   closeSearch();
@@ -3497,6 +3643,7 @@ $("#searchClose").addEventListener("click", () => {
   if (had && APP_VIEW === "search") nav("/");
 });
 $("#search").addEventListener("blur", () => {
+  if (document.documentElement.classList.contains("tv")) return;
   if (!$("#search").value.trim()) document.body.classList.remove("search-open");
 });
 document.addEventListener("keydown", (e) => {
@@ -3751,7 +3898,7 @@ function renderBrowseTypes() {
   if (!box) return;
   const cur = BR.filters.type || "all";
   box.innerHTML = BROWSE_TYPES.map((t) => `<button class="mode-pill ${cur === t.id ? "active" : ""}"
-    aria-pressed="${cur === t.id}" onclick="setBrowseType('${t.id}')">${t.label}</button>`).join("");
+    data-tv-key="browse-type:${t.id}" aria-pressed="${cur === t.id}" onclick="setBrowseType('${t.id}')">${t.label}</button>`).join("");
 }
 
 // The filter bar reuses the app's existing controls: mode-pills for sort,
@@ -3771,7 +3918,7 @@ function renderCatBar() {
   bar.innerHTML = `
     <div class="mode-pills" role="group" aria-label="Sort">
       ${meta.sorts.map((s) => `<button class="mode-pill ${sort === s.id ? "active" : ""}"
-        aria-pressed="${sort === s.id}" onclick="setBrowseSort('${s.id}')">${s.label}</button>`).join("")}
+        data-tv-key="browse-sort:${s.id}" aria-pressed="${sort === s.id}" onclick="setBrowseSort('${s.id}')">${s.label}</button>`).join("")}
     </div>
     <div class="picker" id="catGenre"></div>
     <div class="picker" id="catYear"></div>
@@ -3862,7 +4009,7 @@ function mediaCardHtml(m, onclick) {
     ? `<img loading="lazy" src="${m.poster}" alt="" />`
     : `<div class="movie-noart"><span>${esc(m.title)}</span></div>`;
   const sub = [m.year, m.rating ? m.rating + "%" : null].filter(Boolean).join(" · ");
-  return `<div class="card movie-card" role="link" tabindex="0" aria-label="${esc(m.title)}" onclick="${onclick}">
+  return `<div class="card movie-card" role="link" tabindex="0" data-tv-key="media:${esc(onclick)}" aria-label="${esc(m.title)}" onclick="${onclick}">
     <div class="card-art">${art}
       ${m.rating ? `<span class="badge">${m.rating}%</span>` : ""}
       <div class="card-scrim"><div class="card-t">${esc(m.title)}</div>${sub ? `<div class="card-sub">${sub}</div>` : ""}</div>
@@ -3926,6 +4073,7 @@ async function showMediaDetail(kind, id) {
   $("#mDetail").classList.add("show");
   document.body.style.overflow = "hidden";
   if (isNew) {
+    $("#mPlay").disabled = true;
     $("#mDetail").scrollTop = 0;
     // Clear the previous title rather than leave it under the new hero while
     // this one loads — a stale name on someone else's artwork reads as a bug.
@@ -3949,7 +4097,7 @@ async function showMediaDetail(kind, id) {
   if (MDETAIL_KEY !== key) return; // user moved on while we waited
   if (!data || data.error) {
     $("#m-title").textContent = cache.get(id)?.title || "Unavailable";
-    $("#m-note").textContent = "Couldn't load this one — it may have dropped out of the catalog.";
+    $("#m-note").innerHTML = `<span role="alert">Couldn't load this title.</span> <button class="btn" data-tv-key="retry-media-detail" onclick="retryMediaDetail()">Retry title</button>`;
     return;
   }
   cache.set(id, { ...(cache.get(id) || {}), ...data });
@@ -3995,6 +4143,7 @@ function paintMediaDetail() {
     `<div class="fact"><dt>${k}</dt><dd>${esc(v)}</dd></div>`).join("");
 
   $("#mPlay").textContent = kind === "movie" ? "▶ Play" : "▶ Play S1 E1";
+  $("#mPlay").disabled = false;
   $("#mPlay").hidden = data.playable === false;
   $("#m-note").textContent = data.playable === false
     ? "Playback needs a Real-Debrid token on the server."
@@ -4021,6 +4170,11 @@ function paintMediaDetail() {
     loadSeasonEps(id, mDetail.season);
   }
 }
+function retryMediaDetail() {
+  if (!MDETAIL_KEY) return;
+  const split = MDETAIL_KEY.indexOf(":");
+  showMediaDetail(MDETAIL_KEY.slice(0, split), MDETAIL_KEY.slice(split + 1));
+}
 
 // Episodes of one season, into the shared list. Guarded on the open key so a
 // slow season fetch can't paint over a different show.
@@ -4032,9 +4186,9 @@ async function loadSeasonEps(id, season) {
   $("#m-eps").innerHTML = `<div class="grid-empty">Loading episodes…</div>`;
   let eps = [];
   try { eps = (await (await fetch(`/api/tv/${encodeURIComponent(id)}/season/${season}`)).json()).episodes || []; } catch {}
-  if (MDETAIL_KEY !== key) return;
+  if (MDETAIL_KEY !== key || mDetail?.season !== season) return;
   $("#m-eps").innerHTML = eps.length ? eps.map((e) => `
-    <div class="ep-row" onclick="openTvEpisode('${esc(id)}', ${season}, ${e.ep})">
+    <div class="ep-row" role="button" tabindex="0" data-tv-key="tv-episode:${esc(id)}:${season}:${e.ep}" aria-label="Play season ${season} episode ${e.ep}: ${esc(e.title)}" onclick="openTvEpisode('${esc(id)}', ${season}, ${e.ep})">
       <div class="ep-row-thumb ${e.still ? "" : "ph"}">
         ${e.still ? `<img loading="lazy" src="${e.still}" alt="" />` : ""}
         <span class="ep-row-badge">${e.ep}</span>
@@ -4054,6 +4208,7 @@ $("#mPlay").addEventListener("click", () => {
   else openTvEpisode(mDetail.id, mDetail.season ?? 1, 1);
 });
 document.addEventListener("keydown", (e) => {
+  if (document.documentElement.classList.contains("tv")) return;
   if (e.key !== "Escape") return;
   if (!$("#mDetail").classList.contains("show") || $("#player").classList.contains("show")) return;
   if (["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName)) return;
@@ -4158,7 +4313,7 @@ async function renderSchedule() {
   for (const day of schedByDay) day.sort((a, b) => a.airing.at - b.airing.at);
   const today = new Date().getDay();
   const tabs = DAY_ORDER.map((d) =>
-    `<button class="sched-day ${d === today ? "today" : ""}" data-day="${d}" onclick="selectSchedDay(${d})">
+    `<button class="sched-day ${d === today ? "today" : ""}" data-day="${d}" data-tv-key="schedule-day:${d}" onclick="selectSchedDay(${d})">
       <span class="sched-day-name">${DAYS[d]}</span><span class="sched-day-count">${schedByDay[d].length}</span>
     </button>`).join("");
   app.innerHTML = `<div class="rows"><div class="row"><h2>Airing Schedule</h2>
@@ -4167,11 +4322,15 @@ async function renderSchedule() {
   selectSchedDay(today);
 }
 function selectSchedDay(day) {
-  document.querySelectorAll(".sched-day").forEach((b) => b.classList.toggle("active", +b.dataset.day === day));
+  document.querySelectorAll(".sched-day").forEach((b) => {
+    const active = +b.dataset.day === day;
+    b.classList.toggle("active", active);
+    b.setAttribute("aria-pressed", String(active));
+  });
   const list = schedByDay[day];
   const fmtTime = (at) => new Date(at * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   $("#schedList").innerHTML = list.length
-    ? list.map((m) => `<div class="sched-item" onclick="openTitle(${m.anilistId})">
+    ? list.map((m) => `<div class="sched-item" role="link" tabindex="0" data-tv-key="schedule-title:${m.anilistId}" aria-label="${esc(m.title)}, episode ${m.airing.episode}, ${fmtTime(m.airing.at)}" onclick="openTitle(${m.anilistId})">
         <div class="sched-time">${fmtTime(m.airing.at)}</div>
         <img class="sched-thumb" loading="lazy" src="${m.cover}" alt="" />
         <div class="sched-info">
@@ -4201,6 +4360,8 @@ const MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","
 function fmtDate(iso) { const d = new Date(iso); return isNaN(d) ? "" : `${MON[d.getUTCMonth()]} ${d.getUTCDate()}, ${d.getUTCFullYear()}`; }
 function esc(s) { return String(s || "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
 window.openTitle = openTitle; window.playTitle = playTitle; window.setDetailMode = setDetailMode; window.launchPlayer = launchPlayer;
+window.retryDetail = retryDetail;
+window.retryMediaDetail = retryMediaDetail;
 window.toggleFav = toggleFav; window.toggleList = toggleList; window.deleteCollection = deleteCollection;
 window.heroGo = heroGo; window.heroNav = heroNav;
 window.scrollRow = scrollRow; window.updateRowArrows = updateRowArrows; window.openCategory = openCategory;
@@ -4233,6 +4394,7 @@ $("#rail").addEventListener("click", (e) => {
   closeRailMore(); // anything else is a destination or an action; the popover is done
   if (b.dataset.nav) return nav(b.dataset.nav);
   if (b.dataset.act === "search") return openSearch();
+  if (b.dataset.act === "together") return window.WatchTogether?.open();
   if (b.dataset.act === "schedule") return openSchedule();
   if (b.dataset.act === "random") return surpriseMe();
   if (b.dataset.act === "admin") { location.href = "/admin.html"; return; }
@@ -4243,7 +4405,13 @@ document.addEventListener("click", (e) => {
 });
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") closeRailMore();
-  if (!document.documentElement.classList.contains("tv") && e.key === "Enter" && e.target.matches(".card[role='link']")) {
+  // Native controls already activate themselves. Only our composite rows need
+  // a keyboard click; TV activation is handled once by tv.js.
+  if (!document.documentElement.classList.contains("tv") &&
+      e.target.matches('[role="link"][tabindex], [role="button"][tabindex]') &&
+      !e.target.matches("button, a, input, select, textarea") &&
+      e.target.getAttribute("aria-disabled") !== "true" &&
+      (e.key === "Enter" || (e.key === " " && e.target.getAttribute("role") === "button"))) {
     e.preventDefault();
     e.target.click();
   }

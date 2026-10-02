@@ -17,7 +17,7 @@
     BlinkMacSystemFont,
     "Segoe UI",
     sans-serif;
-  font-size: 16px;
+  font-size: calc(16px * var(--tv-scale, 1));
   font-synthesis: none;
 }
 * {
@@ -31,7 +31,7 @@ body {
 }
 a {
   color: inherit;
-  text-underline-offset: 4px;
+  text-underline-offset: calc(4px * var(--tv-scale, 1));
 }
 button,
 input,
@@ -57,8 +57,8 @@ a:focus-visible,
 input:focus-visible,
 select:focus-visible,
 summary:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 4px;
+  outline: calc(2px * var(--tv-scale, 1)) solid var(--accent);
+  outline-offset: calc(4px * var(--tv-scale, 1));
 }
 [hidden] {
   display: none !important;
@@ -70,26 +70,26 @@ p {
   margin: 0;
 }
 h1 {
-  font-size: clamp(27px, 3vw, 34px);
+  font-size: clamp(calc(27px * var(--tv-scale, 1)), 3vw, calc(34px * var(--tv-scale, 1)));
   font-weight: 600;
-  letter-spacing: -.8px;
+  letter-spacing: calc(-.8px * var(--tv-scale, 1));
   line-height: 1.2;
 }
 h2 {
-  font-size: 20px;
+  font-size: calc(20px * var(--tv-scale, 1));
   font-weight: 600;
-  letter-spacing: -.3px;
+  letter-spacing: calc(-.3px * var(--tv-scale, 1));
 }
 h3 {
-  font-size: 16px;
+  font-size: calc(16px * var(--tv-scale, 1));
   font-weight: 600;
 }
 .sr-only {
   position: absolute;
-  width: 1px;
-  height: 1px;
+  width: calc(1px * var(--tv-scale, 1));
+  height: calc(1px * var(--tv-scale, 1));
   padding: 0;
-  margin: -1px;
+  margin: calc(-1px * var(--tv-scale, 1));
   overflow: hidden;
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
@@ -98,9 +98,9 @@ h3 {
 .skip-link {
   position: fixed;
   z-index: 10;
-  top: 8px;
-  left: 8px;
-  padding: 12px 16px;
+  top: calc(8px * var(--tv-scale, 1));
+  left: calc(8px * var(--tv-scale, 1));
+  padding: calc(12px * var(--tv-scale, 1)) calc(16px * var(--tv-scale, 1));
   background: var(--accent);
   color: var(--on-accent);
   transform: translateY(-160%);
@@ -112,36 +112,36 @@ h3 {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 24px;
-  padding: 0 max(24px, calc((100vw - 1152px) / 2));
-  min-height: 80px;
-  border-bottom: 1px solid var(--line);
+  gap: calc(24px * var(--tv-scale, 1));
+  padding: 0 max(calc(24px * var(--tv-scale, 1)), calc((100vw - calc(1152px * var(--tv-scale, 1))) / 2));
+  min-height: calc(80px * var(--tv-scale, 1));
+  border-bottom: calc(1px * var(--tv-scale, 1)) solid var(--line);
 }
 .brand {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  font-size: 23px;
+  gap: calc(5px * var(--tv-scale, 1));
+  font-size: calc(23px * var(--tv-scale, 1));
   font-weight: 650;
-  letter-spacing: -.9px;
+  letter-spacing: calc(-.9px * var(--tv-scale, 1));
   text-decoration: none;
-  min-height: 44px;
+  min-height: calc(44px * var(--tv-scale, 1));
 }
 .admin-nav nav {
   display: flex;
   align-items: stretch;
   align-self: stretch;
-  gap: 28px;
-  font-size: 14px;
+  gap: calc(28px * var(--tv-scale, 1));
+  font-size: calc(14px * var(--tv-scale, 1));
 }
 .admin-nav nav a {
   display: flex;
   align-items: center;
-  min-height: 44px;
+  min-height: calc(44px * var(--tv-scale, 1));
   color: var(--muted);
   text-decoration: none;
-  border-bottom: 2px solid transparent;
-  padding-top: 2px;
+  border-bottom: calc(2px * var(--tv-scale, 1)) solid transparent;
+  padding-top: calc(2px * var(--tv-scale, 1));
 }
 .admin-nav nav a:hover,
 .admin-nav nav a[aria-current] {
@@ -151,9 +151,9 @@ h3 {
   border-bottom-color: var(--accent);
 }
 .admin {
-  max-width: 1200px;
+  max-width: calc(1200px * var(--tv-scale, 1));
   margin: 0 auto;
-  padding: 48px 24px 0;
+  padding: calc(48px * var(--tv-scale, 1)) calc(24px * var(--tv-scale, 1)) 0;
 }
 .page-heading,
 .section-heading,
@@ -164,29 +164,29 @@ h3 {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: calc(16px * var(--tv-scale, 1));
 }
 .page-heading {
-  margin-bottom: 40px;
+  margin-bottom: calc(40px * var(--tv-scale, 1));
 }
 .section-heading {
-  margin-bottom: 24px;
+  margin-bottom: calc(24px * var(--tv-scale, 1));
   flex-wrap: wrap;
 }
 .heading-with-status {
   justify-content: flex-start;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: calc(12px * var(--tv-scale, 1));
 }
 .button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 44px;
-  padding: 10px 16px;
-  border-radius: 6px;
-  border: 1px solid transparent;
-  font-size: 14px;
+  min-height: calc(44px * var(--tv-scale, 1));
+  padding: calc(10px * var(--tv-scale, 1)) calc(16px * var(--tv-scale, 1));
+  border-radius: calc(6px * var(--tv-scale, 1));
+  border: calc(1px * var(--tv-scale, 1)) solid transparent;
+  font-size: calc(14px * var(--tv-scale, 1));
   font-weight: 550;
   line-height: 1.4;
   white-space: nowrap;
@@ -210,7 +210,7 @@ h3 {
   border-color: #667168;
 }
 .text-button {
-  padding: 8px 10px;
+  padding: calc(8px * var(--tv-scale, 1)) calc(10px * var(--tv-scale, 1));
   background: transparent;
   color: var(--text);
 }
@@ -223,8 +223,8 @@ h3 {
 .status {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  font-size: 13px;
+  gap: calc(7px * var(--tv-scale, 1));
+  font-size: calc(13px * var(--tv-scale, 1));
   font-weight: 500;
   color: var(--accent);
   white-space: nowrap;
@@ -232,8 +232,8 @@ h3 {
 .status::before {
   content: "";
   flex: none;
-  width: 6px;
-  height: 6px;
+  width: calc(6px * var(--tv-scale, 1));
+  height: calc(6px * var(--tv-scale, 1));
   background: currentColor;
   border-radius: 50%;
 }
@@ -247,43 +247,43 @@ h3 {
   color: var(--error);
 }
 .updated {
-  font-size: 13px;
+  font-size: calc(13px * var(--tv-scale, 1));
   color: var(--muted);
 }
 .pipeline-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 8px;
+  border: calc(1px * var(--tv-scale, 1)) solid var(--line);
+  border-radius: calc(8px * var(--tv-scale, 1));
 }
 .service {
   min-width: 0;
-  padding: 24px;
+  padding: calc(24px * var(--tv-scale, 1));
 }
 .service + .service {
-  border-left: 1px solid var(--line);
+  border-left: calc(1px * var(--tv-scale, 1)) solid var(--line);
 }
 .service-purpose {
   color: var(--muted);
-  font-size: 14px;
-  margin-top: 8px;
-  margin-bottom: 24px;
+  font-size: calc(14px * var(--tv-scale, 1));
+  margin-top: calc(8px * var(--tv-scale, 1));
+  margin-bottom: calc(24px * var(--tv-scale, 1));
 }
 .metrics {
   display: grid;
-  gap: 14px;
+  gap: calc(14px * var(--tv-scale, 1));
   margin: 0;
-  font-size: 14px;
+  font-size: calc(14px * var(--tv-scale, 1));
 }
 .service-heading + .metrics {
-  margin-top: 24px;
+  margin-top: calc(24px * var(--tv-scale, 1));
 }
 .metrics > div {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  gap: 24px;
+  gap: calc(24px * var(--tv-scale, 1));
 }
 .metrics dt {
   color: var(--muted);
@@ -295,13 +295,13 @@ h3 {
 }
 .storage-meter,
 .download-progress {
-  height: 4px;
+  height: calc(4px * var(--tv-scale, 1));
   background: var(--line);
   overflow: hidden;
-  border-radius: 2px;
+  border-radius: calc(2px * var(--tv-scale, 1));
 }
 .storage-meter {
-  margin-top: 20px;
+  margin-top: calc(20px * var(--tv-scale, 1));
 }
 .storage-meter > span,
 .download-progress > span {
@@ -313,10 +313,10 @@ h3 {
 .storage-meta {
   display: flex;
   justify-content: space-between;
-  gap: 16px;
+  gap: calc(16px * var(--tv-scale, 1));
   color: var(--muted);
-  font-size: 13px;
-  margin-top: 12px;
+  font-size: calc(13px * var(--tv-scale, 1));
+  margin-top: calc(12px * var(--tv-scale, 1));
   flex-wrap: wrap;
 }
 .detail-path {
@@ -326,14 +326,14 @@ h3 {
     SFMono-Regular,
     Consolas,
     monospace;
-  font-size: 12px;
+  font-size: calc(12px * var(--tv-scale, 1));
   overflow-wrap: anywhere;
-  margin-top: 8px;
+  margin-top: calc(8px * var(--tv-scale, 1));
 }
 .service-note {
   color: var(--warning);
-  font-size: 13px;
-  margin-top: 16px;
+  font-size: calc(13px * var(--tv-scale, 1));
+  margin-top: calc(16px * var(--tv-scale, 1));
   overflow-wrap: anywhere;
 }
 .service-note:empty {
@@ -345,67 +345,67 @@ h3 {
 .activity-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 48px;
-  margin-top: 32px;
+  gap: calc(48px * var(--tv-scale, 1));
+  margin-top: calc(32px * var(--tv-scale, 1));
 }
 .activity-grid > section {
   min-width: 0;
 }
 .activity-heading {
-  margin-bottom: 12px;
+  margin-bottom: calc(12px * var(--tv-scale, 1));
 }
 .count {
-  font-size: 13px;
+  font-size: calc(13px * var(--tv-scale, 1));
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
 .empty-state {
-  padding: 16px 0;
+  padding: calc(16px * var(--tv-scale, 1)) 0;
   color: var(--muted);
-  font-size: 14px;
+  font-size: calc(14px * var(--tv-scale, 1));
 }
 .activity-item {
-  padding: 16px 0;
-  border-top: 1px solid var(--line);
+  padding: calc(16px * var(--tv-scale, 1)) 0;
+  border-top: calc(1px * var(--tv-scale, 1)) solid var(--line);
 }
 .activity-name {
-  font-size: 14px;
+  font-size: calc(14px * var(--tv-scale, 1));
   overflow-wrap: anywhere;
 }
 .activity-meta {
   display: flex;
   justify-content: space-between;
-  gap: 12px;
+  gap: calc(12px * var(--tv-scale, 1));
   color: var(--muted);
-  font-size: 13px;
-  margin-top: 6px;
+  font-size: calc(13px * var(--tv-scale, 1));
+  margin-top: calc(6px * var(--tv-scale, 1));
   flex-wrap: wrap;
 }
 .download-progress {
-  margin-top: 12px;
+  margin-top: calc(12px * var(--tv-scale, 1));
 }
 .setup-details {
-  margin-top: 24px;
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
+  margin-top: calc(24px * var(--tv-scale, 1));
+  border-top: calc(1px * var(--tv-scale, 1)) solid var(--line);
+  border-bottom: calc(1px * var(--tv-scale, 1)) solid var(--line);
 }
 summary {
   cursor: pointer;
-  min-height: 56px;
+  min-height: calc(56px * var(--tv-scale, 1));
   align-content: center;
-  font-size: 14px;
-  padding: 16px 0;
+  font-size: calc(14px * var(--tv-scale, 1));
+  padding: calc(16px * var(--tv-scale, 1)) 0;
 }
 summary::marker {
   color: var(--muted);
 }
 .summary-note {
-  margin-left: 16px;
+  margin-left: calc(16px * var(--tv-scale, 1));
   color: var(--muted);
-  font-size: 13px;
+  font-size: calc(13px * var(--tv-scale, 1));
 }
 .setup-content {
-  padding: 0 0 24px 18px;
+  padding: 0 0 calc(24px * var(--tv-scale, 1)) calc(18px * var(--tv-scale, 1));
 }
 .check-list {
   list-style: none;
@@ -414,16 +414,16 @@ summary::marker {
 }
 .check-list li {
   display: grid;
-  grid-template-columns: minmax(150px, 220px) 1fr;
-  column-gap: 24px;
-  padding: 12px 0;
-  border-top: 1px solid var(--line);
-  font-size: 14px;
+  grid-template-columns: minmax(calc(150px * var(--tv-scale, 1)), calc(220px * var(--tv-scale, 1))) 1fr;
+  column-gap: calc(24px * var(--tv-scale, 1));
+  padding: calc(12px * var(--tv-scale, 1)) 0;
+  border-top: calc(1px * var(--tv-scale, 1)) solid var(--line);
+  font-size: calc(14px * var(--tv-scale, 1));
 }
 .check-label {
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  gap: calc(8px * var(--tv-scale, 1));
 }
 .check-detail {
   color: var(--muted);
@@ -431,7 +431,7 @@ summary::marker {
 }
 .check-result {
   flex: none;
-  width: 18px;
+  width: calc(18px * var(--tv-scale, 1));
   color: var(--accent);
   text-align: center;
 }
@@ -442,18 +442,18 @@ summary::marker {
   color: var(--error);
 }
 .install-details {
-  margin-top: 8px;
+  margin-top: calc(8px * var(--tv-scale, 1));
 }
 .install-details > summary {
   color: var(--accent);
 }
 .setup-steps {
   margin: 0;
-  padding-left: 22px;
+  padding-left: calc(22px * var(--tv-scale, 1));
   display: grid;
-  gap: 16px;
-  max-width: 850px;
-  font-size: 14px;
+  gap: calc(16px * var(--tv-scale, 1));
+  max-width: calc(850px * var(--tv-scale, 1));
+  font-size: calc(14px * var(--tv-scale, 1));
   color: var(--muted);
 }
 .setup-steps strong {
@@ -471,73 +471,73 @@ code {
   overflow-wrap: anywhere;
 }
 pre {
-  padding: 16px;
-  margin: 12px 0 0;
+  padding: calc(16px * var(--tv-scale, 1));
+  margin: calc(12px * var(--tv-scale, 1)) 0 0;
   background: var(--surface);
-  border-radius: 4px;
+  border-radius: calc(4px * var(--tv-scale, 1));
   overflow-x: auto;
   line-height: 1.9;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 .setup-note {
-  margin-top: 20px;
-  max-width: 850px;
+  margin-top: calc(20px * var(--tv-scale, 1));
+  max-width: calc(850px * var(--tv-scale, 1));
   color: var(--muted);
-  font-size: 13px;
+  font-size: calc(13px * var(--tv-scale, 1));
 }
 .admin-section {
-  margin-top: 44px;
+  margin-top: calc(44px * var(--tv-scale, 1));
 }
 .section-note {
   color: var(--muted);
-  font-size: 14px;
-  margin-top: -12px;
-  margin-bottom: 16px;
+  font-size: calc(14px * var(--tv-scale, 1));
+  margin-top: calc(-12px * var(--tv-scale, 1));
+  margin-bottom: calc(16px * var(--tv-scale, 1));
 }
 .source-row {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) minmax(130px, .7fr) minmax(220px, 1.5fr);
-  gap: 16px 24px;
+  grid-template-columns: minmax(calc(180px * var(--tv-scale, 1)), 1fr) minmax(calc(130px * var(--tv-scale, 1)), .7fr) minmax(calc(220px * var(--tv-scale, 1)), 1.5fr);
+  gap: calc(16px * var(--tv-scale, 1)) calc(24px * var(--tv-scale, 1));
   align-items: baseline;
-  border-top: 1px solid var(--line);
-  padding: 18px 0;
-  font-size: 14px;
+  border-top: calc(1px * var(--tv-scale, 1)) solid var(--line);
+  padding: calc(18px * var(--tv-scale, 1)) 0;
+  font-size: calc(14px * var(--tv-scale, 1));
 }
 .source-tier {
   display: block;
-  margin-top: 4px;
+  margin-top: calc(4px * var(--tv-scale, 1));
   color: var(--muted);
-  font-size: 13px;
+  font-size: calc(13px * var(--tv-scale, 1));
 }
 .source-detail {
   color: var(--muted);
-  font-size: 13px;
+  font-size: calc(13px * var(--tv-scale, 1));
   overflow-wrap: anywhere;
 }
 .index-list:empty {
   display: none;
 }
 .index-list {
-  border-top: 1px solid var(--line);
-  padding-top: 16px;
+  border-top: calc(1px * var(--tv-scale, 1)) solid var(--line);
+  padding-top: calc(16px * var(--tv-scale, 1));
 }
 .index-list h3 {
-  font-size: 14px;
-  margin-bottom: 8px;
+  font-size: calc(14px * var(--tv-scale, 1));
+  margin-bottom: calc(8px * var(--tv-scale, 1));
 }
 .index-row {
   display: flex;
-  gap: 16px;
-  font-size: 13px;
+  gap: calc(16px * var(--tv-scale, 1));
+  font-size: calc(13px * var(--tv-scale, 1));
   color: var(--muted);
-  padding: 5px 0;
+  padding: calc(5px * var(--tv-scale, 1)) 0;
   flex-wrap: wrap;
 }
 .index-row strong {
   color: var(--text);
   font-weight: 500;
-  min-width: 90px;
+  min-width: calc(90px * var(--tv-scale, 1));
 }
 .index-row.stale {
   color: var(--warning);
@@ -549,18 +549,18 @@ pre {
 table {
   border-collapse: collapse;
   width: 100%;
-  font-size: 14px;
+  font-size: calc(14px * var(--tv-scale, 1));
   text-align: left;
 }
 th {
   color: var(--muted);
-  font-size: 12px;
+  font-size: calc(12px * var(--tv-scale, 1));
   font-weight: 500;
-  padding: 0 20px 12px 0;
+  padding: 0 calc(20px * var(--tv-scale, 1)) calc(12px * var(--tv-scale, 1)) 0;
 }
 td {
-  border-top: 1px solid var(--line);
-  padding: 14px 20px 14px 0;
+  border-top: calc(1px * var(--tv-scale, 1)) solid var(--line);
+  padding: calc(14px * var(--tv-scale, 1)) calc(20px * var(--tv-scale, 1)) calc(14px * var(--tv-scale, 1)) 0;
   overflow-wrap: anywhere;
 }
 td:last-child,
@@ -572,12 +572,12 @@ td.member-email {
 }
 .member-actions {
   display: flex;
-  gap: 4px;
+  gap: calc(4px * var(--tv-scale, 1));
   justify-content: flex-end;
 }
 .table-link {
   display: inline-flex;
-  min-height: 44px;
+  min-height: calc(44px * var(--tv-scale, 1));
   align-items: center;
   color: var(--accent);
   white-space: nowrap;
@@ -585,8 +585,8 @@ td.member-email {
 .invite-form {
   display: flex;
   align-items: flex-end;
-  gap: 16px;
-  margin-top: 24px;
+  gap: calc(16px * var(--tv-scale, 1));
+  margin-top: calc(24px * var(--tv-scale, 1));
 }
 .field {
   flex: 1;
@@ -594,20 +594,20 @@ td.member-email {
 }
 label {
   display: block;
-  font-size: 13px;
+  font-size: calc(13px * var(--tv-scale, 1));
   color: var(--muted);
-  margin-bottom: 8px;
+  margin-bottom: calc(8px * var(--tv-scale, 1));
 }
 input,
 select {
   width: 100%;
-  height: 44px;
-  padding: 10px 12px;
-  border: 1px solid #4b554e;
+  height: calc(44px * var(--tv-scale, 1));
+  padding: calc(10px * var(--tv-scale, 1)) calc(12px * var(--tv-scale, 1));
+  border: calc(1px * var(--tv-scale, 1)) solid #4b554e;
   background: transparent;
-  border-radius: 5px;
+  border-radius: calc(5px * var(--tv-scale, 1));
   color: var(--text);
-  font-size: 14px;
+  font-size: calc(14px * var(--tv-scale, 1));
 }
 input::placeholder {
   color: #929d94;
@@ -616,38 +616,38 @@ select {
   background: var(--bg);
 }
 .role-field {
-  flex: 0 0 128px;
+  flex: 0 0 calc(128px * var(--tv-scale, 1));
 }
 .invite-result {
-  padding: 20px;
+  padding: calc(20px * var(--tv-scale, 1));
   background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  margin-top: 24px;
+  border: calc(1px * var(--tv-scale, 1)) solid var(--line);
+  border-radius: calc(6px * var(--tv-scale, 1));
+  margin-top: calc(24px * var(--tv-scale, 1));
 }
 .invite-copy {
   display: flex;
-  gap: 12px;
+  gap: calc(12px * var(--tv-scale, 1));
 }
 .invite-copy input {
   min-width: 0;
 }
 .invite-result .section-note {
-  margin: 10px 0 0;
+  margin: calc(10px * var(--tv-scale, 1)) 0 0;
 }
 .pending-heading {
-  margin-top: 36px;
-  margin-bottom: 20px;
+  margin-top: calc(36px * var(--tv-scale, 1));
+  margin-bottom: calc(20px * var(--tv-scale, 1));
   justify-content: flex-start;
-  gap: 12px;
+  gap: calc(12px * var(--tv-scale, 1));
 }
 .feedback {
-  padding: 12px 16px;
+  padding: calc(12px * var(--tv-scale, 1)) calc(16px * var(--tv-scale, 1));
   background: #332624;
-  border: 1px solid #76504c;
-  border-radius: 5px;
-  margin: 16px 0;
-  font-size: 14px;
+  border: calc(1px * var(--tv-scale, 1)) solid #76504c;
+  border-radius: calc(5px * var(--tv-scale, 1));
+  margin: calc(16px * var(--tv-scale, 1)) 0;
+  font-size: calc(14px * var(--tv-scale, 1));
   color: var(--error);
   overflow-wrap: anywhere;
 }
@@ -655,31 +655,31 @@ select {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 16px;
-  border-top: 1px solid var(--line);
-  margin-top: 48px;
-  padding: 24px 0;
+  gap: calc(16px * var(--tv-scale, 1));
+  border-top: calc(1px * var(--tv-scale, 1)) solid var(--line);
+  margin-top: calc(48px * var(--tv-scale, 1));
+  padding: calc(24px * var(--tv-scale, 1)) 0;
   color: var(--muted);
-  font-size: 13px;
+  font-size: calc(13px * var(--tv-scale, 1));
 }
 .admin-footer a {
   display: inline-flex;
-  min-height: 44px;
+  min-height: calc(44px * var(--tv-scale, 1));
   align-items: center;
 }
 @media (max-width: 760px) {
   .admin-nav {
-    padding: 0 24px;
-    min-height: 72px;
+    padding: 0 calc(24px * var(--tv-scale, 1));
+    min-height: calc(72px * var(--tv-scale, 1));
   }
   .admin-nav nav {
-    gap: 20px;
+    gap: calc(20px * var(--tv-scale, 1));
   }
   .admin {
-    padding-top: 32px;
+    padding-top: calc(32px * var(--tv-scale, 1));
   }
   .page-heading {
-    margin-bottom: 32px;
+    margin-bottom: calc(32px * var(--tv-scale, 1));
   }
   .pipeline-grid,
   .activity-grid {
@@ -687,10 +687,10 @@ select {
   }
   .service + .service {
     border-left: 0;
-    border-top: 1px solid var(--line);
+    border-top: calc(1px * var(--tv-scale, 1)) solid var(--line);
   }
   .activity-grid {
-    gap: 24px;
+    gap: calc(24px * var(--tv-scale, 1));
   }
   .source-row {
     grid-template-columns: 1fr auto;
@@ -702,54 +702,54 @@ select {
     flex-wrap: wrap;
   }
   .field {
-    flex-basis: calc(50% - 8px);
+    flex-basis: calc(50% - calc(8px * var(--tv-scale, 1)));
   }
   .role-field {
     flex: 1;
   }
   .check-list li {
     grid-template-columns: 1fr;
-    gap: 4px;
+    gap: calc(4px * var(--tv-scale, 1));
   }
   .check-detail {
-    padding-left: 26px;
+    padding-left: calc(26px * var(--tv-scale, 1));
   }
   .summary-note {
     display: block;
-    margin: 4px 0 0 18px;
+    margin: calc(4px * var(--tv-scale, 1)) 0 0 calc(18px * var(--tv-scale, 1));
   }
   table {
-    min-width: 620px;
+    min-width: calc(620px * var(--tv-scale, 1));
   }
 }
 @media (max-width: 440px) {
   .admin-nav {
-    gap: 12px;
-    padding: 0 16px;
+    gap: calc(12px * var(--tv-scale, 1));
+    padding: 0 calc(16px * var(--tv-scale, 1));
   }
   .brand {
-    font-size: 20px;
+    font-size: calc(20px * var(--tv-scale, 1));
   }
   .admin-nav nav {
-    gap: 16px;
-    font-size: 12px;
+    gap: calc(16px * var(--tv-scale, 1));
+    font-size: calc(12px * var(--tv-scale, 1));
   }
   .admin {
-    padding-left: 16px;
-    padding-right: 16px;
+    padding-left: calc(16px * var(--tv-scale, 1));
+    padding-right: calc(16px * var(--tv-scale, 1));
   }
   .page-heading {
     flex-wrap: wrap;
-    gap: 20px;
+    gap: calc(20px * var(--tv-scale, 1));
   }
   .service {
-    padding: 20px;
+    padding: calc(20px * var(--tv-scale, 1));
   }
   .service-heading {
-    gap: 10px;
+    gap: calc(10px * var(--tv-scale, 1));
   }
   .metrics > div {
-    gap: 16px;
+    gap: calc(16px * var(--tv-scale, 1));
   }
   .field {
     flex-basis: 100%;
@@ -761,7 +761,7 @@ select {
     padding-left: 0;
   }
   .invite-result {
-    padding: 16px;
+    padding: calc(16px * var(--tv-scale, 1));
   }
   .invite-copy {
     flex-wrap: wrap;
@@ -776,5 +776,222 @@ select {
   *::after {
     transition: none !important;
     scroll-behavior: auto !important;
+  }
+}
+.admin-confirm-overlay {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 1600;
+  background: #080e0bcf;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: calc(24px * var(--tv-scale, 1));
+}
+.admin-confirm-dialog {
+  width: calc(520px * var(--tv-scale, 1));
+  max-width: 100%;
+  max-height: 90vh;
+  overflow: auto;
+  padding: calc(28px * var(--tv-scale, 1));
+  background: var(--surface);
+  border: calc(1px * var(--tv-scale, 1)) solid #667168;
+  border-radius: calc(8px * var(--tv-scale, 1));
+}
+.admin-confirm-dialog p {
+  color: var(--muted);
+  margin-top: calc(16px * var(--tv-scale, 1));
+}
+.admin-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: calc(12px * var(--tv-scale, 1));
+  margin-top: calc(28px * var(--tv-scale, 1));
+}
+.admin-confirm-actions .danger {
+  border-color: #76504c;
+  background: #332624;
+}
+html.tv .admin-nav {
+  padding: 0 calc(64px * var(--tv-scale, 1));
+  min-height: calc(104px * var(--tv-scale, 1));
+}
+html.tv .admin-nav .brand {
+  font-size: calc(34px * var(--tv-scale, 1));
+  min-height: calc(64px * var(--tv-scale, 1));
+}
+html.tv .admin-nav nav {
+  font-size: calc(24px * var(--tv-scale, 1));
+  gap: 0;
+}
+html.tv .admin-nav nav > * + * {
+  margin-left: calc(36px * var(--tv-scale, 1));
+}
+html.tv .admin {
+  max-width: calc(1680px * var(--tv-scale, 1));
+  padding: calc(52px * var(--tv-scale, 1)) calc(64px * var(--tv-scale, 1)) 0;
+}
+html.tv .admin h1 {
+  font-size: calc(44px * var(--tv-scale, 1));
+}
+html.tv .admin h2,
+html.tv .admin-confirm-dialog h2 {
+  font-size: calc(32px * var(--tv-scale, 1));
+}
+html.tv .admin h3 {
+  font-size: calc(26px * var(--tv-scale, 1));
+}
+html.tv .admin .button,
+html.tv .admin-confirm-dialog .button {
+  min-height: calc(64px * var(--tv-scale, 1));
+  padding: calc(16px * var(--tv-scale, 1)) calc(24px * var(--tv-scale, 1));
+  font-size: calc(22px * var(--tv-scale, 1));
+}
+html.tv .admin .status,
+html.tv .admin .updated,
+html.tv .admin .count,
+html.tv .admin .detail-path,
+html.tv .admin .storage-meta,
+html.tv .admin .service-purpose,
+html.tv .admin .service-note,
+html.tv .admin .metrics,
+html.tv .admin .activity-name,
+html.tv .admin .activity-meta,
+html.tv .admin .empty-state,
+html.tv .admin .summary-note,
+html.tv .admin .check-list li,
+html.tv .admin .setup-steps,
+html.tv .admin .setup-note,
+html.tv .admin .section-note,
+html.tv .admin .source-row,
+html.tv .admin .source-tier,
+html.tv .admin .source-detail,
+html.tv .admin .index-row,
+html.tv .admin .index-list h3,
+html.tv .admin .feedback,
+html.tv .admin .admin-footer,
+html.tv .admin label,
+html.tv .admin table {
+  font-size: calc(22px * var(--tv-scale, 1));
+}
+html.tv .admin .status::before {
+  width: calc(9px * var(--tv-scale, 1));
+  height: calc(9px * var(--tv-scale, 1));
+}
+html.tv .admin .service {
+  padding: calc(32px * var(--tv-scale, 1));
+}
+html.tv .admin .metrics > div {
+  margin-top: calc(8px * var(--tv-scale, 1));
+}
+html.tv .admin summary {
+  font-size: calc(24px * var(--tv-scale, 1));
+  min-height: calc(72px * var(--tv-scale, 1));
+  padding: calc(20px * var(--tv-scale, 1)) calc(12px * var(--tv-scale, 1));
+}
+html.tv .admin .setup-steps {
+  max-width: none;
+}
+html.tv .admin .setup-content {
+  padding: 0 calc(16px * var(--tv-scale, 1)) calc(28px * var(--tv-scale, 1));
+}
+html.tv .admin .check-list li {
+  grid-template-columns: calc(320px * var(--tv-scale, 1)) 1fr;
+  padding: calc(20px * var(--tv-scale, 1)) 0;
+}
+html.tv .admin .check-result {
+  width: calc(24px * var(--tv-scale, 1));
+}
+html.tv .admin .source-row {
+  grid-template-columns: 1fr .8fr 1.7fr;
+  padding: calc(24px * var(--tv-scale, 1)) 0;
+}
+html.tv .admin .table-scroll {
+  padding: calc(8px * var(--tv-scale, 1));
+  margin: calc(-8px * var(--tv-scale, 1));
+}
+html.tv .admin th {
+  font-size: calc(22px * var(--tv-scale, 1));
+  padding-bottom: calc(20px * var(--tv-scale, 1));
+}
+html.tv .admin td {
+  padding-top: calc(20px * var(--tv-scale, 1));
+  padding-bottom: calc(20px * var(--tv-scale, 1));
+}
+html.tv .admin .member-actions {
+  gap: 0;
+}
+html.tv .admin .member-actions > * + * {
+  margin-left: calc(12px * var(--tv-scale, 1));
+}
+html.tv .admin .table-link,
+html.tv .admin .admin-footer a {
+  min-height: calc(64px * var(--tv-scale, 1));
+  padding: calc(12px * var(--tv-scale, 1)) calc(6px * var(--tv-scale, 1));
+}
+html.tv .admin .invite-form {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr calc(180px * var(--tv-scale, 1));
+  gap: calc(24px * var(--tv-scale, 1));
+}
+html.tv .admin .invite-form > .button {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+html.tv .admin input,
+html.tv .admin select {
+  height: calc(64px * var(--tv-scale, 1));
+  font-size: calc(22px * var(--tv-scale, 1));
+  padding: calc(14px * var(--tv-scale, 1)) calc(16px * var(--tv-scale, 1));
+}
+html.tv .admin .invite-copy {
+  gap: 0;
+}
+html.tv .admin .invite-copy > * + * {
+  margin-left: calc(20px * var(--tv-scale, 1));
+}
+html.tv .admin .admin-section {
+  margin-top: calc(60px * var(--tv-scale, 1));
+}
+html.tv .admin .activity-grid {
+  gap: calc(36px * var(--tv-scale, 1));
+}
+html.tv .admin-confirm-dialog {
+  width: calc(720px * var(--tv-scale, 1));
+  padding: calc(40px * var(--tv-scale, 1));
+  font-size: calc(24px * var(--tv-scale, 1));
+}
+html.tv .admin-confirm-actions {
+  gap: 0;
+}
+html.tv .admin-confirm-actions > * + * {
+  margin-left: calc(20px * var(--tv-scale, 1));
+}
+@media (max-width: 1100px) {
+  html.tv .admin-nav {
+    padding: 0 calc(36px * var(--tv-scale, 1));
+  }
+  html.tv .admin {
+    padding: calc(36px * var(--tv-scale, 1));
+  }
+  html.tv .admin .pipeline-grid,
+  html.tv .admin .activity-grid {
+    grid-template-columns: 1fr;
+  }
+  html.tv .admin .service + .service {
+    border-left: 0;
+    border-top: calc(1px * var(--tv-scale, 1)) solid var(--line);
+  }
+  html.tv .admin .invite-form {
+    grid-template-columns: 1fr 1fr;
+  }
+  html.tv .admin .role-field {
+    grid-column: 1;
+  }
+  html.tv .admin .invite-form > .button {
+    grid-column: 2;
   }
 }
