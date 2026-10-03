@@ -1,6 +1,7 @@
 services:
   web:
     image: ghcr.io/marwansummakieh/mediawan:latest
+    pull_policy: always
     restart: unless-stopped
     labels:
       - "com.centurylinklabs.watchtower.enable=true"

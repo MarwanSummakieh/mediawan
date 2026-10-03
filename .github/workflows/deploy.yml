@@ -60,6 +60,10 @@ jobs:
       - run: npm ci
       - run: npm run build:tv
 
+      - name: Read release version
+        id: release
+        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
       - uses: docker/setup-buildx-action@v3
 
       - uses: docker/login-action@v3
@@ -76,6 +80,8 @@ jobs:
           tags: |
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
             type=raw,value=${{ github.sha }}
+          labels: |
+            org.opencontainers.image.version=${{ steps.release.outputs.version }}
 
       - name: Verify publish tags
         env:
@@ -107,6 +113,8 @@ jobs:
           load: true
           push: false
           tags: mediawan:smoke
+          build-args: |
+            APP_REVISION=${{ github.sha }}
           # The apt layer (ffmpeg + the Intel VA-API stack) is minutes of the
           # build and changes about never. Cache it across runs.
           cache-from: type=gha
@@ -119,6 +127,8 @@ jobs:
       # tests. `docker build` succeeding proves the layers assembled, not that
       # the module graph resolves.
       - name: Smoke test — the image boots and answers /healthz
+        env:
+          EXPECTED_VERSION: ${{ steps.release.outputs.version }}
         run: |
           set -euo pipefail
           docker run -d --name smoke -p 8787:8787 \
@@ -128,7 +138,8 @@ jobs:
             -e CACHE_DIR=/tmp/smoke-cache \
             mediawan:smoke
           for i in $(seq 1 30); do
-            if curl -fsS http://localhost:8787/healthz >/dev/null 2>&1; then
+            if curl -fsS http://localhost:8787/healthz > /tmp/mediawan-smoke-health.json 2>/dev/null; then
+              node -e 'const h = require("/tmp/mediawan-smoke-health.json"); if (!h.ok || h.version !== process.env.EXPECTED_VERSION || h.revision !== process.env.GITHUB_SHA) { console.error("Image release identity is incorrect", h.version, h.revision); process.exit(1); }'
               echo "healthy after ${i}s"
               docker rm -f smoke >/dev/null
               exit 0
@@ -151,6 +162,8 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            APP_REVISION=${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -158,9 +171,11 @@ jobs:
         env:
           PUBLISHED_TAGS: ${{ steps.meta.outputs.tags }}
           IMAGE_DIGEST: ${{ steps.publish.outputs.digest }}
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
           PUBLISHED_LATEST: ${{ github.ref == 'refs/heads/main' }}
         run: |
           echo "### Published" >> "$GITHUB_STEP_SUMMARY"
+          echo "Version: $RELEASE_VERSION · Revision: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
           echo "$PUBLISHED_TAGS" >> "$GITHUB_STEP_SUMMARY"
           echo "ghcr.io/${GITHUB_REPOSITORY,,}@$IMAGE_DIGEST" >> "$GITHUB_STEP_SUMMARY"
