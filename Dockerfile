@@ -77,6 +77,10 @@ RUN mkdir -p /data /media/cache && chown -R node:node /data /media /app
 ENV DB_PATH=/data/data.sqlite
 ENV CACHE_DIR=/media/cache
 
+# Identify the image's source revision through /healthz.
+ARG APP_REVISION
+ENV APP_REVISION=$APP_REVISION
+
 # `video`/`render` own /dev/dri on the host; the compose file adds the node user
 # to those groups, otherwise the device is passed through but unopenable.
 USER node

@@ -35,17 +35,56 @@ The active UGOS project file is
 was copied to `Shared Folder/docker/mediawan/releases/docker-compose.yaml`
 before deployment.
 
-Deploy a tested registry image by digest through the existing UGOS project
-editor. Set the web service's `com.centurylinklabs.watchtower.enable` label to
-`"false"` while the image is pinned. This prevents automatic web updates until
-the release is deliberately advanced. Preserve the other services, environment,
-mounts, and GPU permissions.
+For automatic updates, the active UGOS project must use
+`ghcr.io/marwansummakieh/mediawan:latest` for `web`, with the web service's
+`com.centurylinklabs.watchtower.enable` label set to `"true"`. Apply edits by
+redeploying the project so the running container receives the new label.
+The repository also sets `pull_policy: always` explicitly for Compose deployments.
+Watchtower must also be running and able to access GHCR and the Docker socket.
+Preserve the other services, environment, mounts, and GPU permissions.
+
+The initial pipeline rollout pinned a tested image by digest and set that label
+to `"false"`. That policy intentionally stops automatic updates. To resume them,
+restore `:latest` and the `"true"` label in the active project; editing this
+repository's compose file alone does not change the NAS project.
+
+UGOS distinguishes configuration **Redeploy** from image **Update**. Enable
+**Docker → Management → Update detection**, then use the project's **Update**
+action when it reports newer images. This updates the project's images; see the
+[UGREEN Project guide](https://support.ugnas.com/detail/article/en-US/411).
+
+To download only the app image explicitly, use **Docker → Image → Local → New
+Image → From package source → By Image Name**, enter
+`ghcr.io/marwansummakieh/mediawan:latest`, complete the download, and redeploy
+the project; see the
+[UGREEN Image guide](https://support.ugnas.com/detail/article/en-US/290).
+
+Alternatively, force a registry pull and recreate only `web` from the NAS project
+directory:
+
+```sh
+docker compose -f docker-compose.yaml up -d --no-deps --pull always --force-recreate web
+```
+
+For a deliberately fixed release, use the tested registry digest and the
+`"false"` label until you advance the release manually.
 
 For rollback, restore the backed-up compose content in the project editor and
 redeploy. The backup uses the previous registry image policy; restoring it also
 restores automatic updates. Data and media stay in their existing bind mounts.
 
 ## Verification
+
+`/healthz` reports the running package `version` and Git `revision` for newly
+published images. Compare the revision with the merged commit and the image
+digest in the GitHub Actions deployment summary. Publishing an image does not
+prove that the NAS has pulled and restarted it. The package version is release
+metadata; Watchtower detects a changed image digest behind `:latest`.
+
+If `:latest` and the label are correct but updates do not arrive, inspect the
+Watchtower container logs. For Docker API errors, compare its configured
+`DOCKER_API_VERSION` with the supported range from `docker version` on the NAS.
+Do not blindly raise or remove the API override.
 
 Run these commands inside the web container's Terminal:
 

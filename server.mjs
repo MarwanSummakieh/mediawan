@@ -32,6 +32,7 @@ import { startLiveReaper, stopAllLive } from "./lib/live/sessions.mjs";
 import { mountWatchTogetherRoutes } from "./lib/watch-together-routes.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const APP_VERSION = JSON.parse(fs.readFileSync(path.join(__dirname, "package.json"), "utf8")).version;
 const app = express();
 const PORT = config.port;
 const SESSION_MAX_AGE = config.sessionMaxAgeDays * 24 * 60 * 60 * 1000;
@@ -1501,6 +1502,8 @@ app.get("/proxy/mp4", mediaCors, requireAuthOrMediaToken, async (req, res) => {
 app.get("/healthz", (req, res) =>
   res.json({
     ok: true,
+    version: APP_VERSION,
+    revision: process.env.APP_REVISION || null,
     uptime: process.uptime(),
     // Which delivery tier THIS request would get. Reported because the whole
     // LAN/remote split hinges on it and it is otherwise invisible — hitting
