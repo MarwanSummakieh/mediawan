@@ -154,3 +154,38 @@ test('duration uses the playable local copy and never discloses a private copy',
   assert.equal(detail.items[0].fileInfo.video, 'h264');
   assert.equal(JSON.stringify(detail).includes(privatePath), false);
 });
+
+test('replacement copies supply playback and duration while missing or private copies are skipped', (t) => {
+  const store = createStore(':memory:');
+  const root = mkdtempSync(path.join(os.tmpdir(), 'mediawan-replacement-'));
+  t.after(() => {
+    store.close();
+    rmSync(root, { recursive: true, force: true });
+  });
+  const title = store.saveTitle({ kind: 'movie', external_id: 'tt1', name: 'Movie' });
+  const item = store.saveItem({ title_id: title.id });
+  const user = { id: 1, active: 1, role: 'member' };
+  const copies = [
+    { name: 'old.mov', duration: 330, added_at: 1 },
+    { name: 'replacement.mkv', duration: 10061, added_at: 2 },
+    { name: 'private.mp4', duration: 999, added_at: 3, readers: [2] },
+    { name: 'missing.mp4', duration: 123, added_at: 4 },
+  ];
+  for (const copy of copies) {
+    const file = path.join(root, copy.name);
+    if (copy.name !== 'missing.mp4') writeFileSync(file, 'fixture');
+    store.addAsset({
+      item_id: item.id,
+      path: file,
+      bytes: 7,
+      added_at: copy.added_at,
+      readers: copy.readers,
+      probe: { duration: copy.duration, video: 'h264' },
+    });
+  }
+  assert.equal(store.available(user, item.id).path, path.join(root, 'replacement.mkv'));
+  const detail = createNavigation(store).detail(user, title.id);
+  assert.equal(detail.items[0].durationSeconds, 10061);
+  rmSync(path.join(root, 'replacement.mkv'));
+  assert.equal(store.available(user, item.id).path, path.join(root, 'old.mov'));
+});

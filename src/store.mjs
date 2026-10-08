@@ -168,7 +168,10 @@ export function createStore(file) {
       return unpack(one('SELECT * FROM assets WHERE id=?', key));
     },
     assets(item) {
-      return all('SELECT * FROM assets WHERE item_id=? ORDER BY added_at', item).map(unpack);
+      // Prefer a replacement download over an older copy of the same item.
+      return all('SELECT * FROM assets WHERE item_id=? ORDER BY added_at DESC,id DESC', item).map(
+        unpack,
+      );
     },
     canRead(user, asset) {
       return (

@@ -14,7 +14,9 @@ export function createNavigation(store) {
       if (!items.has(item.title_id)) items.set(item.title_id, []);
       items.get(item.title_id).push(item);
     }
-    for (const asset of store.all('SELECT * FROM assets ORDER BY added_at').map(store.unpack)) {
+    for (const asset of store
+      .all('SELECT * FROM assets ORDER BY added_at DESC,id DESC')
+      .map(store.unpack)) {
       if (!assets.has(asset.item_id)) assets.set(asset.item_id, []);
       assets
         .get(asset.item_id)
