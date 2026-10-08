@@ -10,6 +10,13 @@ export function configuration(env = process.env) {
     database: path.resolve(env.MEDIAWAN_DB || 'data/mediawan-v2.sqlite'),
     media: path.resolve(env.LIBRARY_DIR || 'media/library'),
     runtime: path.resolve(env.TRANSCODE_DIR || '.runtime'),
+    liveDir: path.resolve(
+      env.LIVE_TV_DIR ||
+        path.join(
+          path.dirname(path.resolve(env.MEDIAWAN_DB || 'data/mediawan-v2.sqlite')),
+          'live-tv',
+        ),
+    ),
     adminEmail: env.ADMIN_EMAIL || '',
     adminPassword: env.ADMIN_PASSWORD || '',
     secureCookie: env.COOKIE_SECURE === 'true',

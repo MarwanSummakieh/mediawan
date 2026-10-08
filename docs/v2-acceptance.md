@@ -29,7 +29,7 @@ Live Cinemeta discovery and an explicit movie search returned results in the bro
 
 ## Explicit scope changes from the original incremental plan
 
-The user subsequently requested a complete restart. This implementation replaces the old runtime and renders a new interface. Playback operates on completed local files; the previous on-demand stream/cache path is archived. Live TV/sports, watch-together, casting, Premiumize, hardware acceleration and native pairing are not wired into v2. Follow-series automation, ordered playlists, intro/credits detection and customizable home shelves remain later work. These are not claimed as completed features.
+The user subsequently requested a complete restart. This implementation replaces the old runtime and renders a new interface. Library playback operates on completed local files; the previous on-demand stream/cache path is archived. Live sports has since been restored as a daily event schedule with guide-backed and manually scheduled events, channel choices and authenticated live HLS playback; see [live-tv.md](live-tv.md). Watch-together, casting, Premiumize, hardware acceleration and native pairing are not wired into v2. Follow-series automation, ordered playlists, intro/credits detection and customizable home shelves remain later work.
 
 ## Metadata update
 

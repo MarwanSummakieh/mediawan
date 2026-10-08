@@ -116,6 +116,378 @@
     return `<p class="episode-runtime">${esc(itemRuntime(item))}</p>${item.description ? `<details class="episode-description"><summary>Synopsis</summary><p class="muted">${esc(item.description)}</p></details>` : ""}${technical ? `<details class="episode-description"><summary>File details</summary><p class="meta">${esc(technical)}</p></details>` : ""}`;
   }
 
+  // public/sports.js
+  var schedule = null;
+  var channels = [];
+  var liveSession = null;
+  var hls = null;
+  var heartbeat = null;
+  var playbackGeneration = 0;
+  var timezone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  function dateKey(time2 = /* @__PURE__ */ new Date()) {
+    return `${time2.getFullYear()}-${String(time2.getMonth() + 1).padStart(2, "0")}-${String(time2.getDate()).padStart(2, "0")}`;
+  }
+  var time = (stamp) => new Intl.DateTimeFormat(void 0, { hour: "2-digit", minute: "2-digit" }).format(stamp);
+  var dayLabel = (date) => new Intl.DateTimeFormat(void 0, {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    timeZone: "UTC"
+  }).format(/* @__PURE__ */ new Date(date + "T12:00:00Z"));
+  function sportsUrl(values = {}) {
+    const url = new URL(location.hash.slice(1), "http://local");
+    for (const [key, value] of Object.entries(values))
+      value ? url.searchParams.set(key, value) : url.searchParams.delete(key);
+    return "#/sports" + url.search;
+  }
+  function dateOffset(date, delta) {
+    const day = /* @__PURE__ */ new Date(date + "T12:00:00Z");
+    day.setUTCDate(day.getUTCDate() + delta);
+    return day.toISOString().slice(0, 10);
+  }
+  var option = (value, label, current) => `<option value="${esc(value)}" ${value === current ? "selected" : ""}>${esc(label)}</option>`;
+  var statusLabel = { live: "On now", upcoming: "Upcoming", finished: "Ended" };
+  function eventRow(event, admin) {
+    const languages = [...new Set(event.channels.map((c) => c.language).filter(Boolean))];
+    return `<article class="sports-event"><div class="sports-event-time"><time datetime="${new Date(event.start).toISOString()}">${esc(time(event.start))}</time><span class="sports-status ${event.status}">${statusLabel[event.status]}</span></div><div class="sports-event-main"><p class="sports-competition">${esc([event.sport, event.competition].filter(Boolean).join(" \xB7 "))}</p><h3>${esc(event.title)}</h3>${event.subtitle ? `<p class="meta">${esc(event.subtitle)}</p>` : ""}<p class="meta">${event.channels.length ? `${event.channels.length} channel${event.channels.length === 1 ? "" : "s"}${languages.length ? " \xB7 " + esc(languages.join(" / ")) : ""}` : "No channel linked"} \xB7 Until ${esc(time(event.end))}</p></div><div class="sports-event-actions">${event.status !== "finished" && event.channels.length ? `<button class="${event.status === "live" ? "primary" : ""}" data-action="sports-watch" data-id="${esc(event.id)}">${event.status === "live" ? "Watch" : "View channels"}</button>` : ""}${admin && event.source === "manual" ? `<button class="quiet" data-action="sports-edit" data-id="${esc(event.id)}">Edit</button>` : ""}</div></article>`;
+  }
+  async function sportsPage(url, user2) {
+    const date = url.searchParams.get("date") || dateKey();
+    schedule = await api(`/api/sports?${new URLSearchParams({ date, timezone: timezone() })}`);
+    const sport = url.searchParams.get("sport") || "", status = url.searchParams.get("status") || "", query = url.searchParams.get("q") || "";
+    const admin = user2.role === "admin";
+    const matching = schedule.events.filter(
+      (e) => (!sport || e.sport === sport) && `${e.title} ${e.competition}`.toLowerCase().includes(query.toLowerCase())
+    );
+    const filtered = matching.filter((e) => !status || e.status === status);
+    const count = (value) => matching.filter((e) => !value || e.status === value).length;
+    let html = heading(
+      "Live sports",
+      "",
+      admin ? '<div class="actions"><button data-action="sports-add">Add event</button><button class="quiet" data-action="sports-manage">Manage live TV</button></div>' : ""
+    ).replace("page-heading", "page-heading sports-heading");
+    html += `<div class="sports-datebar"><div class="actions"><a class="sports-day" href="${esc(sportsUrl({ date: dateOffset(date, -1) }))}" aria-label="Previous day">\u2190</a><h2>${esc(dateLabel(date))}</h2><a class="sports-day" href="${esc(sportsUrl({ date: dateOffset(date, 1) }))}" aria-label="Next day">\u2192</a></div><div class="actions"><a class="sports-day ${date === dateKey() ? "selected" : ""}" href="${esc(sportsUrl({ date: "" }))}">Today</a><label class="sports-date-label">Date<input id="sports-date" type="date" value="${esc(date)}" required></label></div></div>`;
+    html += `<div class="sports-filters"><nav class="sports-tabs" aria-label="Event status">${[
+      ["", "All events"],
+      ["live", "On now"],
+      ["upcoming", "Upcoming"]
+    ].map(
+      ([value, label]) => `<a href="${esc(sportsUrl({ status: value }))}" ${status === value ? 'aria-current="page"' : ""}>${label}<span>${count(value)}</span></a>`
+    ).join(
+      ""
+    )}</nav><form id="sports-filter" class="sports-filter-form"><label>Sport<select name="sport">${option("", "All sports", sport)}${schedule.sports.map((s) => option(s, s, sport)).join("")}</select></label><label>Find an event<input name="q" type="search" value="${esc(query)}" placeholder="Team, event or competition"></label><button>Search</button></form></div>`;
+    if (["missing", "unavailable", "stale", "refreshing"].includes(schedule.guideStatus)) {
+      const message = schedule.guideStatus === "refreshing" ? "The programme guide is updating." : schedule.guideStatus === "stale" ? "The guide could not be updated. Showing the saved schedule." : schedule.guideStatus === "unavailable" ? "The programme guide is unavailable. Check the guide source or add events." : schedule.guideConfigured ? "The programme guide has not been refreshed." : "Connect a programme guide to fill the daily schedule. Events can also be added manually.";
+      html += `<p class="sports-notice" role="status">${esc(message)}${admin ? ' <button class="text-button" data-action="sports-manage">Manage live TV</button>' : ""}</p>`;
+    }
+    if (!filtered.length)
+      html += empty(
+        schedule.events.length ? "No matching events" : "No events listed for this day",
+        schedule.events.length ? "Try another sport or search." : schedule.channels ? "Check another day, open a channel below, or add a scheduled event." : "Import your live TV playlist to connect channels to matches and events.",
+        admin ? '<button data-action="sports-add">Add event</button>' : ""
+      );
+    for (const [state, title] of [
+      ["live", "On now"],
+      ["upcoming", date === dateKey() ? "Later today" : "Upcoming"],
+      ["finished", "Finished"]
+    ]) {
+      const items = filtered.filter((e) => e.status === state);
+      if (items.length)
+        html += `<section class="sports-section"><div class="section-heading"><h2>${title}</h2><span class="meta">${items.length} event${items.length === 1 ? "" : "s"}</span></div>${items.map((e) => eventRow(e, admin)).join("")}</section>`;
+    }
+    html += `<section class="sports-channels section"><button data-action="sports-channels">Browse channels (${schedule.channels})</button><p class="meta">Times shown in ${esc(schedule.timezone)}. \u201COn now\u201D follows the scheduled broadcast time.</p></section>`;
+    return html;
+  }
+  function dateLabel(date) {
+    return `${date === dateKey() ? "Today \xB7 " : ""}${dayLabel(date)}`;
+  }
+  function bindSportsFilters() {
+    $("#sports-date").onchange = (e) => {
+      if (e.target.value) location.hash = sportsUrl({ date: e.target.value });
+    };
+    $("#sports-filter").onsubmit = (e) => {
+      e.preventDefault();
+      const data = new FormData(e.target);
+      location.hash = sportsUrl({ sport: data.get("sport"), q: data.get("q") });
+    };
+    $("#sports-filter select").onchange = () => $("#sports-filter").requestSubmit ? $("#sports-filter").requestSubmit() : $("#sports-filter").dispatchEvent(new Event("submit", { cancelable: true }));
+  }
+  async function loadChannels() {
+    channels = (await api("/api/live/channels")).items;
+    return channels;
+  }
+  function channelButtons(items) {
+    return items.map(
+      (c) => `<button class="sports-channel" data-action="sports-play" data-id="${esc(c.id)}"><strong>${esc(c.name)}</strong><span class="meta">${esc([c.language, c.quality].filter(Boolean).join(" \xB7 "))}</span></button>`
+    ).join("");
+  }
+  function bindDialog(context) {
+    $("#dialog-content").onclick = (e) => {
+      const b = e.target.closest("[data-action]");
+      if (!b) return;
+      b.disabled = true;
+      void sportsAction(b, context).catch((error) => toast(error.message)).finally(() => {
+        b.disabled = false;
+      });
+    };
+  }
+  async function sportsAction(button2, context) {
+    const action2 = button2.dataset.action, key = button2.dataset.id;
+    if (action2 === "sports-watch") {
+      const event = schedule.events.find((e) => e.id === key);
+      modal(
+        `<h2>${esc(event.title)}</h2><p class="meta">${event.status === "upcoming" ? `Scheduled for ${esc(time(event.start))}. Opening a channel plays its current broadcast.` : "Choose a channel"}</p><div class="sports-channel-list">${channelButtons(event.channels)}</div>`
+      );
+      bindDialog(context);
+    } else if (action2 === "sports-channels") {
+      await loadChannels();
+      modal(
+        '<h2>Live channels</h2><label class="section">Find a channel<input id="channel-search" type="search"></label><div id="channel-results" class="sports-channel-list"></div>'
+      );
+      const render = () => {
+        const q = $("#channel-search").value.toLowerCase();
+        const found = channels.filter((c) => `${c.name} ${c.language}`.toLowerCase().includes(q));
+        $("#channel-results").innerHTML = channelButtons(found.slice(0, 100)) + (found.length > 100 ? '<p class="meta">Search to narrow the channel list.</p>' : !found.length ? '<p class="meta">No channels found.</p>' : "");
+      };
+      $("#channel-search").oninput = render;
+      render();
+      bindDialog(context);
+    } else if (action2 === "sports-play") {
+      closeModal();
+      await context.closeVod();
+      await playLive(key);
+    } else if (action2 === "sports-manage") {
+      const status = await api("/api/admin/live");
+      modal(
+        `<h2>Manage live TV</h2><p class="meta">${status.channels} channels \xB7 Guide: ${esc(status.guideStatus)}${status.guideUpdatedAt ? " \xB7 Updated " + esc(new Date(status.guideUpdatedAt).toLocaleString()) : ""}</p><form id="live-import" class="form section"><h3>Import playlist</h3><label>M3U file<input name="playlist" type="file" accept=".m3u,.m3u8,text/plain" required></label><p class="meta">Replaces the channel list. Provider credentials stay on the server.</p><button>Import channels</button></form><form id="live-settings" class="form section"><h3>Programme guide</h3><label>XMLTV guide URL<input name="guideUrl" type="url" placeholder="${status.guideConfigured ? "Leave blank to keep the current guide" : "https://provider.example/guide.xml"}" autocomplete="off"></label><label>Simultaneous channels<select name="maxConnections">${[1, 2, 3, 4].map((n) => option(String(n), String(n), String(status.maxConnections))).join("")}</select></label><p class="meta">Use the connection limit allowed by your provider.</p><div class="actions"><button>Save settings</button><button type="button" data-action="sports-refresh-guide">Refresh guide</button></div><p id="live-settings-result" class="meta" role="status"></p></form>`
+      );
+      bindDialog(context);
+      $("#live-import").onsubmit = async (e) => {
+        e.preventDefault();
+        const b = e.target.querySelector("button");
+        b.disabled = true;
+        try {
+          const file = e.target.elements.playlist.files[0];
+          if (file.size > 12 * 1024 * 1024) throw Error("Playlist must be smaller than 12 MB");
+          const playlist = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = () => reject(Error("The playlist could not be read"));
+            reader.readAsText(file);
+          });
+          await api("/api/admin/live/import", { playlist });
+          closeModal();
+          await context.refresh();
+          toast("Channels imported");
+        } catch (error) {
+          toast(error.message);
+        } finally {
+          b.disabled = false;
+        }
+      };
+      $("#live-settings").onsubmit = async (e) => {
+        e.preventDefault();
+        const b = e.target.querySelector("button");
+        b.disabled = true;
+        const data = new FormData(e.target), guideUrl = String(data.get("guideUrl")).trim();
+        try {
+          await api(
+            "/api/admin/live",
+            { ...guideUrl ? { guideUrl } : {}, maxConnections: Number(data.get("maxConnections")) },
+            "PATCH"
+          );
+          $("#live-settings-result").textContent = "Settings saved. Refresh the guide to update events.";
+          await context.refresh();
+        } catch (error) {
+          toast(error.message);
+        } finally {
+          b.disabled = false;
+        }
+      };
+    } else if (action2 === "sports-refresh-guide") {
+      button2.textContent = "Refreshing\u2026";
+      try {
+        const result = await api("/api/admin/live/refresh", {});
+        toast(
+          result.guideStatus === "ready" ? "Programme guide updated" : result.guideConfigured ? "Guide update failed. Check the source and try again." : "Add a guide URL first"
+        );
+        await context.refresh();
+        if ($("#live-settings-result"))
+          $("#live-settings-result").textContent = `Guide: ${result.guideStatus}`;
+      } finally {
+        button2.textContent = "Refresh guide";
+      }
+    } else if (action2 === "sports-add" || action2 === "sports-edit") {
+      await loadChannels();
+      const event = action2 === "sports-edit" ? schedule.events.find((e) => e.id === key) : null;
+      const localInput = (stamp) => {
+        const d = new Date(stamp);
+        return dateKey(d) + "T" + String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+      };
+      const date = schedule.date;
+      modal(
+        `<h2>${event ? "Edit event" : "Add event"}</h2><form id="sports-event-form" class="form section"><label>Match or event<input name="title" value="${esc((event == null ? void 0 : event.title) || "")}" maxlength="180" required placeholder="Home team vs Away team"></label><div class="sports-form-pair"><label>Sport<select name="sport">${schedule.sports.map((s) => option(s, s, (event == null ? void 0 : event.sport) || "Football")).join("")}</select></label><label>Competition<input name="competition" value="${esc((event == null ? void 0 : event.competition) || "")}" maxlength="100"></label></div><div class="sports-form-pair"><label>Starts<input name="start" type="datetime-local" value="${event ? localInput(event.start) : date + "T18:00"}" required></label><label>Ends<input name="end" type="datetime-local" value="${event ? localInput(event.end) : date + "T20:00"}" required></label></div><p class="meta">Times in ${esc(timezone())}.</p><fieldset class="sports-channel-picker"><legend>Channels</legend><label>Find a channel<input id="event-channel-search" type="search"></label><div id="event-channel-options"></div><p id="event-channel-count" class="meta" role="status"></p></fieldset><div class="actions"><button class="primary">Save event</button>${event ? `<button type="button" data-action="sports-delete" data-id="${esc(event.id)}">Delete event</button>` : ""}</div></form>`
+      );
+      bindDialog(context);
+      const selected = new Set((event == null ? void 0 : event.channelIds) || []);
+      const render = () => {
+        const q = $("#event-channel-search").value.toLowerCase();
+        const items = channels.filter((c) => `${c.name} ${c.language}`.toLowerCase().includes(q)).sort((a, b) => Number(selected.has(b.id)) - Number(selected.has(a.id))).slice(0, 80);
+        $("#event-channel-options").innerHTML = items.map(
+          (c) => `<label class="check"><input type="checkbox" value="${esc(c.id)}" ${selected.has(c.id) ? "checked" : ""}>${esc(c.name)} <span class="meta">${esc(c.language)}</span></label>`
+        ).join("") || '<p class="meta">No channels found.</p>';
+        $("#event-channel-count").textContent = `${selected.size} selected${channels.length > 80 ? " \xB7 Search to find more channels" : ""}`;
+      };
+      $("#event-channel-search").oninput = render;
+      $("#event-channel-options").onchange = (e) => {
+        if (e.target.checked) selected.add(e.target.value);
+        else selected.delete(e.target.value);
+        $("#event-channel-count").textContent = `${selected.size} selected`;
+      };
+      render();
+      $("#sports-event-form").onsubmit = async (e) => {
+        e.preventDefault();
+        const b = e.target.querySelector("button");
+        b.disabled = true;
+        try {
+          const data = Object.fromEntries(new FormData(e.target));
+          await api(
+            `/api/admin/sports/events${event ? "/" + event.id : ""}`,
+            {
+              title: data.title,
+              sport: data.sport,
+              competition: data.competition,
+              start: new Date(data.start).toISOString(),
+              end: new Date(data.end).toISOString(),
+              channelIds: [...selected]
+            },
+            event ? "PUT" : "POST"
+          );
+          closeModal();
+          await context.refresh();
+          toast("Event saved");
+        } catch (error) {
+          toast(error.message);
+        } finally {
+          b.disabled = false;
+        }
+      };
+    } else if (action2 === "sports-delete") {
+      await api(`/api/admin/sports/events/${key}`, {}, "DELETE");
+      closeModal();
+      await context.refresh();
+      toast("Event deleted");
+    }
+  }
+  var livePlaying = () => !!$("#live-player");
+  async function closeLive() {
+    var _a;
+    ++playbackGeneration;
+    clearInterval(heartbeat);
+    heartbeat = null;
+    const session = liveSession;
+    liveSession = null;
+    if (hls) {
+      hls.destroy();
+      hls = null;
+    }
+    const video2 = $("#live-video");
+    if (video2) {
+      video2.pause();
+      video2.removeAttribute("src");
+      video2.load();
+    }
+    const player = $("#live-player"), restore = player == null ? void 0 : player.restoreFocus;
+    player == null ? void 0 : player.remove();
+    restore == null ? void 0 : restore.focus();
+    if (((_a = document.fullscreenElement) == null ? void 0 : _a.id) === "live-video")
+      await document.exitFullscreen().catch(() => {
+      });
+    if (session)
+      await api(`/api/live/sessions/${session.id}`, { lease: session.lease }, "DELETE").catch(
+        () => {
+        }
+      );
+  }
+  async function playLive(channelId) {
+    var _a;
+    await closeLive();
+    const ticket = ++playbackGeneration;
+    const player = document.createElement("section");
+    player.id = "live-player";
+    player.setAttribute("aria-label", "Live TV player");
+    player.tabIndex = -1;
+    player.restoreFocus = document.activeElement;
+    player.innerHTML = '<header><button id="live-close">Back to sports</button><strong id="live-channel-name">Opening channel\u2026</strong><span class="sports-status live">Live TV</span></header><video id="live-video" controls playsinline></video><p id="live-player-status" role="status">Starting live playback\u2026</p>';
+    document.body.appendChild(player);
+    $("#live-close").onclick = closeLive;
+    $("#live-close").focus();
+    try {
+      const session = await api(`/api/live/channels/${channelId}/play`, {});
+      if (ticket !== playbackGeneration) {
+        await api(`/api/live/sessions/${session.id}`, { lease: session.lease }, "DELETE").catch(
+          () => {
+          }
+        );
+        return;
+      }
+      liveSession = session;
+      $("#live-channel-name").textContent = session.channel.name;
+      heartbeat = setInterval(() => {
+        void api(`/api/live/sessions/${session.id}/heartbeat`, { lease: session.lease }).catch(
+          (error) => {
+            clearInterval(heartbeat);
+            if ($("#live-player-status")) $("#live-player-status").textContent = error.message;
+          }
+        );
+      }, 15e3);
+      const video2 = $("#live-video");
+      const play2 = () => video2.play().catch(() => {
+        $("#live-player-status").textContent = "Press play to watch this channel.";
+      });
+      video2.onplaying = () => {
+        $("#live-player-status").textContent = "";
+      };
+      video2.onwaiting = () => {
+        $("#live-player-status").textContent = "Buffering\u2026";
+      };
+      video2.onerror = () => {
+        $("#live-player-status").textContent = "Playback stopped. Return to sports and try this channel again.";
+      };
+      if ((_a = window.Hls) == null ? void 0 : _a.isSupported()) {
+        hls = new window.Hls();
+        hls.loadSource(session.url);
+        hls.attachMedia(video2);
+        hls.on(window.Hls.Events.MANIFEST_PARSED, play2);
+        hls.on(window.Hls.Events.ERROR, (_event, data) => {
+          if (data.fatal && $("#live-player-status"))
+            $("#live-player-status").textContent = "The channel stopped responding. Return to sports and try another channel.";
+        });
+      } else if (video2.canPlayType("application/vnd.apple.mpegurl")) {
+        video2.src = session.url;
+        await play2();
+      } else {
+        await closeLive();
+        toast("This browser cannot play live HLS video.");
+      }
+    } catch (error) {
+      if (ticket === playbackGeneration) {
+        await closeLive();
+        toast(error.message);
+      }
+    }
+  }
+  window.addEventListener("pagehide", () => {
+    if (liveSession)
+      void fetch(`/api/live/sessions/${liveSession.id}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lease: liveSession.lease }),
+        keepalive: true
+      }).catch(() => {
+      });
+  });
+
   // public/torrents.js
   async function downloadSeason(title, season) {
     modal("<h2>Checking season\u2026</h2>");
@@ -319,7 +691,7 @@
   // public/player.js
   var active = null;
   var queue = null;
-  var hls = null;
+  var hls2 = null;
   var conversion = null;
   var timer = null;
   var countdown = null;
@@ -382,9 +754,9 @@
     queue = next;
   }
   async function releaseConversion() {
-    if (hls) {
-      hls.destroy();
-      hls = null;
+    if (hls2) {
+      hls2.destroy();
+      hls2 = null;
     }
     if (conversion) {
       const key = conversion;
@@ -441,6 +813,7 @@
   }
   async function play(itemId, titleId, { replay = false, queueId = null } = {}) {
     var _a, _b, _c;
+    await closeLive();
     clearInterval(timer);
     cancelNext();
     await report("stop");
@@ -550,10 +923,10 @@
         resolve();
       };
       if (url.includes(".m3u8") && ((_a = window.Hls) == null ? void 0 : _a.isSupported())) {
-        hls = new window.Hls({ startPosition: 0, lowLatencyMode: false });
-        hls.loadSource(url);
-        hls.attachMedia(video());
-        hls.on(window.Hls.Events.ERROR, (_, data) => {
+        hls2 = new window.Hls({ startPosition: 0, lowLatencyMode: false });
+        hls2.loadSource(url);
+        hls2.attachMedia(video());
+        hls2.on(window.Hls.Events.ERROR, (_, data) => {
           if (data.fatal) {
             cleanup();
             $("#player-message").textContent = "Playback failed. Try compatibility playback again.";
@@ -919,7 +1292,7 @@
   var returnPositions = {};
   var main = () => $("#main");
   var button = (label, action2, attrs = "", style = "") => `<button class="${style}" data-action="${action2}" ${attrs}>${esc(label)}</button>`;
-  var option = (value, label, current) => `<option value="${esc(value)}" ${value === current ? "selected" : ""}>${esc(label)}</option>`;
+  var option2 = (value, label, current) => `<option value="${esc(value)}" ${value === current ? "selected" : ""}>${esc(label)}</option>`;
   var grid = (items) => `<div class="grid">${items.map((t) => card(t)).join("")}</div>`;
   function shelf(label, items, mode) {
     return items.length ? `<section class="section"><div class="section-heading"><h2>${esc(label)}</h2></div><div class="rail ${mode ? "resume-rail" : ""}">${items.map((t) => card(t, mode)).join("")}</div></section>` : "";
@@ -961,7 +1334,16 @@
     };
     if (!quiet) main().innerHTML = '<p class="loading" role="status">Loading\u2026</p>';
     try {
-      if (page === "home") {
+      if (page === "sports") {
+        const html = await sportsPage(url, user);
+        draw(html);
+        if (ticket !== generation) return;
+        bindSportsFilters();
+        poll = setInterval(() => {
+          if (!document.hidden && !$("#dialog").open && !livePlaying() && !main().contains(document.activeElement))
+            void route({ quiet: true });
+        }, 6e4);
+      } else if (page === "home") {
         const data = await api("/api/home"), queues = await api("/api/queues");
         const count = data.continueWatching.length + data.nextUp.length + data.recentlyAdded.length;
         draw(
@@ -986,20 +1368,20 @@
             ["movie", "Movies"],
             ["tv", "Series"],
             ["anime", "Anime"]
-          ].map(([v, l]) => option(v, l, params.get("kind") || "")).join("")}</select></label><label>View<select name="status">${[
+          ].map(([v, l]) => option2(v, l, params.get("kind") || "")).join("")}</select></label><label>View<select name="status">${[
             ["", "All titles"],
             ["ready", "Downloaded"],
             ["progress", "In progress"],
             ["unwatched", "Unwatched"],
             ["watched", "Watched"]
-          ].map(([v, l]) => option(v, l, params.get("status") || "")).join("")}</select></label><label>Sort<select name="sort">${[
+          ].map(([v, l]) => option2(v, l, params.get("status") || "")).join("")}</select></label><label>Sort<select name="sort">${[
             ["", "Title"],
             ["added", "Recently added"],
             ["played", "Last watched"],
             ["year", "Year"]
-          ].map(([v, l]) => option(v, l, params.get("sort") || "")).join(
+          ].map(([v, l]) => option2(v, l, params.get("sort") || "")).join(
             ""
-          )}</select></label>${page === "list" ? `<label>List<select name="tag">${option("watchlist", "Watchlist", params.get("tag"))}${option("favorite", "Favorites", params.get("tag"))}</select></label>` : ""}<button>Apply</button></form>` + (page === "list" ? `<div class="collection-links">${button("New collection", "new-collection")}${collections.map((c) => button(c.name, "collection", `data-id="${c.id}"`)).join("")}</div>` : "") + (data.items.length ? grid(data.items) : empty(
+          )}</select></label>${page === "list" ? `<label>List<select name="tag">${option2("watchlist", "Watchlist", params.get("tag"))}${option2("favorite", "Favorites", params.get("tag"))}</select></label>` : ""}<button>Apply</button></form>` + (page === "list" ? `<div class="collection-links">${button("New collection", "new-collection")}${collections.map((c) => button(c.name, "collection", `data-id="${c.id}"`)).join("")}</div>` : "") + (data.items.length ? grid(data.items) : empty(
             "Nothing here yet",
             page === "list" ? "Save titles to your watchlist or favorites from their detail page." : "Downloaded titles will appear here. Try different filters or discover a title."
           )) + `<div class="actions section">${data.offset ? button("Previous page", "page", `data-offset="${Math.max(0, data.offset - 48)}"`) : ""}${data.offset + 48 < data.total ? button("Next page", "page", `data-offset="${data.offset + 48}"`) : ""}</div>`
@@ -1047,7 +1429,7 @@
         const prefs = await api("/api/preferences");
         const admin = user.role === "admin" ? await api("/api/admin") : null;
         draw(
-          heading("Settings") + torrentRulesForm(admin) + `<form id="preferences" class="form"><h2>Playback</h2><label class="check section"><input type="checkbox" name="autoplay" ${prefs.autoplay ? "checked" : ""}>Play the next episode automatically</label><label>Preferred audio language<input name="audioLanguage" placeholder="eng, dan, jpn\u2026" maxlength="20" value="${esc(prefs.audioLanguage)}"></label><label>Preferred subtitle language<input name="subtitleLanguage" maxlength="20" placeholder="eng, dan\u2026" value="${esc(prefs.subtitleLanguage)}"></label><label>Subtitles<select name="subtitleMode">${option("off", "Off", prefs.subtitleMode)}${option("preferred", "Use preferred language", prefs.subtitleMode)}</select></label><button class="primary">Save preferences</button></form>${admin ? `<section class="section"><h2>Server</h2><p class="meta">Real-Debrid: ${admin.debridConfigured ? "Configured" : "Not configured"}</p><p class="meta">Import folders: ${esc(admin.importRoots.join(", ") || "None configured")}</p></section><section class="section"><div class="section-heading"><h2>People</h2>${button("Add person", "add-user")}</div>${admin.users.map((u) => `<div class="row"><div class="row-main"><h3>${esc(u.name)}</h3><p class="meta">${esc(u.email)} \xB7 ${u.active ? "Active" : "Disabled"} \xB7 ${u.role === "admin" || u.can_download ? "Downloads allowed" : "Viewing only"}</p></div>${u.id !== user.id ? button(u.can_download ? "Disable downloads" : "Allow downloads", "user-permission", `data-id="${u.id}" data-active="${!!u.active}" data-allowed="${!u.can_download}"`) : ""}</div>`).join("")}</section>` : ""}<section class="section">${button("Sign out", "logout")}</section>`
+          heading("Settings") + torrentRulesForm(admin) + `<form id="preferences" class="form"><h2>Playback</h2><label class="check section"><input type="checkbox" name="autoplay" ${prefs.autoplay ? "checked" : ""}>Play the next episode automatically</label><label>Preferred audio language<input name="audioLanguage" placeholder="eng, dan, jpn\u2026" maxlength="20" value="${esc(prefs.audioLanguage)}"></label><label>Preferred subtitle language<input name="subtitleLanguage" maxlength="20" placeholder="eng, dan\u2026" value="${esc(prefs.subtitleLanguage)}"></label><label>Subtitles<select name="subtitleMode">${option2("off", "Off", prefs.subtitleMode)}${option2("preferred", "Use preferred language", prefs.subtitleMode)}</select></label><button class="primary">Save preferences</button></form>${admin ? `<section class="section"><h2>Server</h2><p class="meta">Real-Debrid: ${admin.debridConfigured ? "Configured" : "Not configured"}</p><p class="meta">Import folders: ${esc(admin.importRoots.join(", ") || "None configured")}</p></section><section class="section"><div class="section-heading"><h2>People</h2>${button("Add person", "add-user")}</div>${admin.users.map((u) => `<div class="row"><div class="row-main"><h3>${esc(u.name)}</h3><p class="meta">${esc(u.email)} \xB7 ${u.active ? "Active" : "Disabled"} \xB7 ${u.role === "admin" || u.can_download ? "Downloads allowed" : "Viewing only"}</p></div>${u.id !== user.id ? button(u.can_download ? "Disable downloads" : "Allow downloads", "user-permission", `data-id="${u.id}" data-active="${!!u.active}" data-allowed="${!u.can_download}"`) : ""}</div>`).join("")}</section>` : ""}<section class="section">${button("Sign out", "logout")}</section>`
         );
         bindTorrentRules();
         $("#preferences").onsubmit = async (e) => {
@@ -1126,7 +1508,14 @@
     const actionName = b.dataset.action;
     b.disabled = true;
     try {
-      if (actionName === "refresh") await route();
+      if (actionName.startsWith("sports-"))
+        await sportsAction(b, {
+          refresh: () => route({ quiet: true }),
+          closeVod: async () => {
+            if (playing()) await closePlayer();
+          }
+        });
+      else if (actionName === "refresh") await route();
       else if (actionName === "refresh-metadata") {
         const titleId = currentTitle.id;
         await api(`/api/titles/${titleId}/refresh`, {});
@@ -1134,6 +1523,7 @@
         toast("Metadata refreshed");
       } else if (actionName === "play") {
         closeModal();
+        await closeLive();
         await play(b.dataset.item, b.dataset.title, { replay: b.dataset.replay === "true" });
       } else if (actionName === "release") await releases(b.dataset.item);
       else if (actionName === "download-season")
@@ -1309,6 +1699,7 @@
     }
   }
   async function logout() {
+    await closeLive();
     if (playing()) await closePlayer();
     await api("/api/logout", {});
     location.reload();
@@ -1352,6 +1743,9 @@
         if ($("#dialog").open) {
           e.preventDefault();
           closeModal();
+        } else if (livePlaying()) {
+          e.preventDefault();
+          void closeLive();
         } else if (playing()) {
           e.preventDefault();
           void closePlayer();
@@ -1360,7 +1754,7 @@
       }
       if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key) || ["INPUT", "SELECT", "TEXTAREA", "VIDEO"].includes(document.activeElement.tagName))
         return;
-      const root = $("#dialog").open ? $("#dialog") : playing() ? $("#player") : document;
+      const root = $("#dialog").open ? $("#dialog") : livePlaying() ? $("#live-player") : playing() ? $("#player") : document;
       const candidates = [...root.querySelectorAll("a,button,input,select")].filter(
         (el) => !el.disabled && el.getClientRects().length
       );

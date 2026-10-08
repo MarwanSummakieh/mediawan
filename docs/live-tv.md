@@ -1,23 +1,23 @@
-# Live TV
+# Live sports
 
-Sports lives at `/sports`. It provides competition shelves, football/NFL/NHL destinations, saved channels, language filtering, and a local-time programme guide. Movies, TV shows and Anime have separate shelf-based libraries at `/library/:kind`; Browse retains the full filters.
+Open **Live sports** (`#/sports`) for the daily schedule. Choose a date, filter by sport or search by team/event/competition. Events are grouped into On now, Upcoming and Finished in the browser's local time zone, including broadcasts that cross midnight. On now follows the scheduled broadcast time; it does not assert a live score or provider availability.
 
-An administrator can import an extended M3U through **Sports → Manage live TV**. Playlist URLs and credentials stay in the server's private storage. The browser receives opaque channel IDs, proxied logos, and short-lived playback grants. Do not commit playlists or copy private data into an image.
+Events come from the configured XMLTV programme guide. Identical titles at the same start time are grouped with their channel choices. Channel-name placeholders, repeated placeholders, news, highlights and replays are excluded. No fixtures or broadcaster rights are invented. Browse channels remains available when guide details are missing.
 
-Storage defaults to `live-tv/` beside `DB_PATH`. With the Docker configuration (`DB_PATH=/data/data.sqlite`), this is `/data/live-tv` on the existing persistent volume. `LIVE_TV_DIR` can override it. Back up this directory securely with the database. The rolling playback buffer is disposable.
+Administrators can **Add event**, enter a match or event, sport, competition and start/end time, and link imported channels. These events persist in the v2 database and can be edited or deleted. Events without linked channels remain visible without a Watch button. Upcoming events offer channel details; opening a channel plays its current broadcast. Finished events have no replay action.
 
-For a server-side import, run in the container's normal environment:
+## Setup and existing installations
 
-```sh
-node scripts/import-live.mjs /private/channels.m3u
-```
+Use **Manage live TV** to import an extended M3U file. Its `url-tvg` / `x-tvg-url` supplies the guide source; a single Xtream account also allows discovery of its XMLTV endpoint. An explicit XMLTV URL can be saved in guide settings. Refresh the guide after changing it. Guides refresh every four hours while the server is running; gzip XMLTV is supported. Failed refreshes retain the saved guide and show its stale status. The retained guide covers available programmes from two days before refresh to eight days ahead.
 
-For a single Xtream account, Mediawan checks supported output formats and the concurrent connection limit, and discovers its XMLTV endpoint. Otherwise it uses the playlist's `url-tvg` / `x-tvg-url`, or an administrator-supplied guide URL. Guides refresh every four hours; gzip XMLTV is supported. Failed refreshes retain the last saved guide.
+Private configuration defaults to `live-tv/` beside `MEDIAWAN_DB`. Docker uses `/data/live-tv`, matching the old installation's persistent directory. Existing `catalog.json` and `guide.json` files are loaded automatically, including saved channel mappings and provider connection limits. `LIVE_TV_DIR` can select another location. Back up this directory securely alongside the v2 database. A fresh playlist import resets the simultaneous channel limit to one; change it only to the number allowed by the provider.
 
-Guide matching uses explicit IDs, provider stream IDs, then unique normalized names. Channel details allow manual guide-ID, language, and competition corrections. Region-derived language is an estimate, shown in channel details. Dedicated channel names and explicit competition groups establish membership; general sports channels are linked by programme listings. Broadcaster rights and fixtures are never invented. Repeated channel-name placeholders do not appear as live programmes.
+Playlist stream URLs, guide URLs and provider credentials stay on the server. Viewers receive opaque channel IDs and authenticated playback URLs. Every provider resource and redirect is restricted to public HTTP(S) addresses, with the checked DNS address pinned to the connection. Do not commit playlists or private live-TV files.
 
-The supplied playlist's provider currently has one simultaneous upstream channel and no detailed programme listings for the principal sports channels. A richer XMLTV source is needed for a useful fixture guide. Importing a playlist does not guarantee that every provider stream will remain online.
+## Playback
 
-Viewers of the same channel share one FFmpeg session. Another channel is refused when the account limit is reached. Live and on-demand sessions share the NAS encoder budget. Compatible 8-bit H264 video up to 1080p is passed through at its source bitrate, with audio converted to AAC. Other inputs use the selected hardware encoder or software fallback. HLS keeps eight segments plus a small deletion margin rather than an unbounded live recording; passthrough segment duration follows source keyframes. Sessions end when their last viewer leaves, leases expire, or output stalls. The existing VAAPI/QSV probe selects hardware encoding; software encoding is available when hardware is unavailable.
+Watch opens the chosen channel through a bounded FFmpeg HLS buffer. Viewers of the same channel share one upstream session. Different channels are limited by provider settings, and live playback shares a two-conversion budget with local playback. Video uses software H.264 conversion up to 1080p and AAC audio; FFmpeg must be installed. Output retains eight segments and a small deletion margin rather than recording indefinitely. Closing playback releases the viewer; disconnected viewers expire after 45 seconds. Source URLs never reach the browser or logs.
 
-Validation: `npm test` and `npm run build:tv`. Live provider verification must be sequential and respect the account connection limit. Private playlist data is intentionally absent from automated tests.
+No Google service or external calendar is involved. A guide containing only channel-name placeholders cannot populate match details; use a richer XMLTV source or add events directly.
+
+Run `npm test` and `npm run build:tv`. Automated checks use synthetic playlists, guides and generated video. Physical Tizen operation and private provider availability still require deployment acceptance checks.

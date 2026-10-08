@@ -90,6 +90,6 @@ For real downloads on this PC, run `npm run local` and open http://127.0.0.1:880
 
 ## Rewrite boundaries
 
-The v1 live-TV/sports subsystem, watch-together rooms, casting adapters, scraping fallbacks, Premiumize integration, hardware-specific transcoding and native TV pairing are archived with the old source and are not connected to this replacement. The new app's focus is the local library/navigation/download plan. A JavaScript compatibility build does not certify physical Tizen behavior. Live Real-Debrid acquisition, NAS filesystem permissions, GPU behavior and physical TV operation still need deployment acceptance checks. Follow-series automation remains a future addition.
+Live sports is restored as a daily event schedule with programme-guide listings, manually scheduled events and authenticated live playback. See [Live sports](docs/live-tv.md) for playlist setup and migration. Watch-together rooms, casting adapters, scraping fallbacks, Premiumize integration, hardware-specific transcoding and native TV pairing are archived with the old source and are not connected to this replacement. A JavaScript compatibility build does not certify physical Tizen behavior. Live Real-Debrid acquisition, NAS filesystem permissions, GPU behavior and physical TV operation still need deployment acceptance checks. Follow-series automation remains a future addition.
 
 Use sources and media you are entitled to access. No credentials or media ship with this repository.

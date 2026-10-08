@@ -1,4 +1,5 @@
 import { metadataHtml, episodeMetadata } from './metadata.js';
+import { sportsPage, bindSportsFilters, sportsAction, livePlaying, closeLive } from './sports.js';
 import {
   releases,
   downloadSeason,
@@ -88,7 +89,21 @@ async function route({ quiet = false } = {}) {
   };
   if (!quiet) main().innerHTML = '<p class="loading" role="status">Loading…</p>';
   try {
-    if (page === 'home') {
+    if (page === 'sports') {
+      const html = await sportsPage(url, user);
+      draw(html);
+      if (ticket !== generation) return;
+      bindSportsFilters();
+      poll = setInterval(() => {
+        if (
+          !document.hidden &&
+          !$('#dialog').open &&
+          !livePlaying() &&
+          !main().contains(document.activeElement)
+        )
+          void route({ quiet: true });
+      }, 60000);
+    } else if (page === 'home') {
       const data = await api('/api/home'),
         queues = await api('/api/queues');
       const count = data.continueWatching.length + data.nextUp.length + data.recentlyAdded.length;
@@ -300,7 +315,14 @@ async function action(event) {
   const actionName = b.dataset.action;
   b.disabled = true;
   try {
-    if (actionName === 'refresh') await route();
+    if (actionName.startsWith('sports-'))
+      await sportsAction(b, {
+        refresh: () => route({ quiet: true }),
+        closeVod: async () => {
+          if (playing()) await closePlayer();
+        },
+      });
+    else if (actionName === 'refresh') await route();
     else if (actionName === 'refresh-metadata') {
       const titleId = currentTitle.id;
       await api(`/api/titles/${titleId}/refresh`, {});
@@ -308,6 +330,7 @@ async function action(event) {
       toast('Metadata refreshed');
     } else if (actionName === 'play') {
       closeModal();
+      await closeLive();
       await play(b.dataset.item, b.dataset.title, { replay: b.dataset.replay === 'true' });
     } else if (actionName === 'release') await releases(b.dataset.item);
     else if (actionName === 'download-season')
@@ -495,6 +518,7 @@ async function action(event) {
   }
 }
 async function logout() {
+  await closeLive();
   if (playing()) await closePlayer();
   await api('/api/logout', {});
   location.reload();
@@ -538,6 +562,9 @@ async function boot() {
       if ($('#dialog').open) {
         e.preventDefault();
         closeModal();
+      } else if (livePlaying()) {
+        e.preventDefault();
+        void closeLive();
       } else if (playing()) {
         e.preventDefault();
         void closePlayer();
@@ -549,7 +576,13 @@ async function boot() {
       ['INPUT', 'SELECT', 'TEXTAREA', 'VIDEO'].includes(document.activeElement.tagName)
     )
       return;
-    const root = $('#dialog').open ? $('#dialog') : playing() ? $('#player') : document;
+    const root = $('#dialog').open
+      ? $('#dialog')
+      : livePlaying()
+        ? $('#live-player')
+        : playing()
+          ? $('#player')
+          : document;
     const candidates = [...root.querySelectorAll('a,button,input,select')].filter(
       (el) => !el.disabled && el.getClientRects().length,
     );

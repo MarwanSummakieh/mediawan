@@ -45,6 +45,7 @@ export async function probe(file, config) {
 }
 export function createMedia(store, config) {
   const sessions = new Map();
+  let starting = 0;
   async function dispose(key) {
     const session = sessions.get(key);
     if (!session) return;
@@ -58,6 +59,8 @@ export function createMedia(store, config) {
   }, 30000);
   timer.unref();
   return {
+    active: () => sessions.size + starting,
+    externalSessions: () => 0,
     async info(user, itemId) {
       const asset = store.available(user, itemId);
       if (!asset) fail(404, 'Local file is unavailable');
@@ -73,9 +76,12 @@ export function createMedia(store, config) {
       const asset = store.available(user, itemId);
       if (!asset) fail(404, 'Local file is unavailable');
       const release = store.retainItem(itemId);
+      let reserved = false;
       try {
-        if (sessions.size >= 2)
+        if (sessions.size + starting + this.externalSessions() >= 2)
           fail(503, 'Both conversion slots are busy. Try direct play or wait.');
+        starting++;
+        reserved = true;
         const info = asset.probe || (await probe(asset.path, config));
         if (!Number.isFinite(seek) || seek < 0 || seek > info.duration)
           fail(400, 'Invalid seek position');
@@ -139,6 +145,8 @@ export function createMedia(store, config) {
           release,
         };
         sessions.set(key, session);
+        starting--;
+        reserved = false;
         child.stderr.on('data', () => {});
         child.on('error', () => {
           session.failed = true;
@@ -160,6 +168,8 @@ export function createMedia(store, config) {
       } catch (error) {
         release();
         throw error;
+      } finally {
+        if (reserved) starting--;
       }
     },
     file(user, itemId) {

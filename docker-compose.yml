@@ -16,6 +16,7 @@ services:
       MEDIAWAN_DB: /data/mediawan-v2.sqlite
       LIBRARY_DIR: /media/library
       TRANSCODE_DIR: /runtime
+      LIVE_TV_DIR: /data/live-tv
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
       TRUST_PROXY: ${TRUST_PROXY:-0}
       IMPORT_ROOTS: /media

@@ -1,4 +1,5 @@
 import { clockTime, playbackPosition, seekPlan, atTitleEnd } from './playback-time.js';
+import { closeLive } from './sports.js';
 import { $, esc, api, toast, modal, closeModal, episodeLabel } from './core.js';
 let active = null,
   queue = null,
@@ -123,6 +124,7 @@ export async function closePlayer() {
   window.dispatchEvent(new Event('library-changed'));
 }
 export async function play(itemId, titleId, { replay = false, queueId = null } = {}) {
+  await closeLive();
   clearInterval(timer);
   cancelNext();
   await report('stop');

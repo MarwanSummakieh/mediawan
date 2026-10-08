@@ -17,7 +17,8 @@
     "format": "prettier --write src public/*.js public/*.css public/index.html scripts test server.mjs package.json"
   },
   "dependencies": {
-    "express": "^4.21.2"
+    "express": "^4.21.2",
+    "sax": "^1.6.1"
   },
   "engines": {
     "node": ">=22.5.0"

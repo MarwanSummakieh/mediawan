@@ -13,6 +13,8 @@ import { createTorrentPolicy, assessRelease } from './torrent-policy.mjs';
 import { createTorrentDownloads } from './torrent-downloads.mjs';
 import { createMedia, probe } from './media.mjs';
 import { createSeasonDownloads } from './season-downloads.mjs';
+import { createLiveStore } from './live/store.mjs';
+import { createLivePlayback } from './live/playback.mjs';
 
 const publicPath = fileURLToPath(new URL('../public/', import.meta.url));
 const wrap = (fn) => (req, res, next) =>
@@ -31,6 +33,12 @@ export function createApplication(config, dependencies = {}) {
   const torrentPolicy = createTorrentPolicy(store);
   const torrents = dependencies.torrents || createTorrentDownloads(store, config, torrentPolicy);
   const seasons = createSeasonDownloads(store, config, catalog, downloads, torrents, torrentPolicy);
+  const live = createLiveStore(store, config, dependencies.live);
+  const livePlayback = createLivePlayback(config, live, {
+    activeConversions: () => media.active(),
+    ...dependencies.livePlayback,
+  });
+  media.externalSessions = () => livePlayback.active();
   app.disable('x-powered-by');
   app.set('trust proxy', config.trustProxy);
   app.use((req, res, next) => {
@@ -58,7 +66,14 @@ export function createApplication(config, dependencies = {}) {
     }
     next();
   });
-  app.use(express.json({ limit: '128kb' }));
+  app.use((req, res, next) => {
+    const limit = req.path === '/api/admin/live/import' ? '13mb' : '128kb';
+    express.json({ limit })(req, res, next);
+  });
+  app.get(
+    '/internal/live/:id/:asset',
+    wrap((req, res) => livePlayback.source(req, res)),
+  );
   app.get('/healthz', (req, res) =>
     res.json({ ok: true, version: '2.0.0', revision: process.env.APP_REVISION || 'local' }),
   );
@@ -74,6 +89,88 @@ export function createApplication(config, dependencies = {}) {
   app.get(
     '/api/home',
     wrap((req, res) => res.json(navigation.home(req.user))),
+  );
+  app.get(
+    '/api/sports',
+    wrap(async (req, res) => res.json(await live.schedule(req.query))),
+  );
+  app.get(
+    '/api/live/channels',
+    wrap(async (req, res) => res.json({ items: await live.channels() })),
+  );
+  app.post(
+    '/api/live/channels/:id/play',
+    wrap(async (req, res) =>
+      res.json(await livePlayback.start(req.user, req.params.id, req.socket.localPort)),
+    ),
+  );
+  app.post(
+    '/api/live/sessions/:id/heartbeat',
+    wrap((req, res) => res.json(livePlayback.heartbeat(req.user, req.params.id, req.body.lease))),
+  );
+  app.delete(
+    '/api/live/sessions/:id',
+    wrap(async (req, res) => {
+      await livePlayback.release(req.user, req.params.id, req.body.lease);
+      res.json({ ok: true });
+    }),
+  );
+  app.get(
+    '/api/live/sessions/:id/:file',
+    wrap((req, res) => livePlayback.media(req, res)),
+  );
+  app.get(
+    '/api/admin/live',
+    wrap(async (req, res) => {
+      admin(req);
+      await live.load();
+      res.json(live.status());
+    }),
+  );
+  app.post(
+    '/api/admin/live/import',
+    wrap(async (req, res) => {
+      admin(req);
+      const result = await live.importPlaylist(req.body.playlist, req.body);
+      void live.refresh().catch(() => {});
+      res.json(result);
+    }),
+  );
+  app.patch(
+    '/api/admin/live',
+    wrap(async (req, res) => {
+      admin(req);
+      res.json(await live.settings(req.body));
+    }),
+  );
+  app.post(
+    '/api/admin/live/refresh',
+    wrap(async (req, res) => {
+      admin(req);
+      res.json(await live.refresh());
+    }),
+  );
+  app.post(
+    '/api/admin/sports/events',
+    wrap(async (req, res) => {
+      admin(req);
+      res.status(201).json(await live.saveEvent(req.body));
+    }),
+  );
+  app.put(
+    '/api/admin/sports/events/:id',
+    wrap(async (req, res) => {
+      admin(req);
+      res.json(await live.saveEvent(req.body, req.params.id));
+    }),
+  );
+  app.delete(
+    '/api/admin/sports/events/:id',
+    wrap((req, res) => {
+      admin(req);
+      live.deleteEvent(req.params.id);
+      res.json({ ok: true });
+    }),
   );
   app.get(
     '/api/library',
@@ -496,6 +593,7 @@ export function createApplication(config, dependencies = {}) {
   );
   app.use('/api', (req, res) => res.status(404).json({ error: 'Endpoint not found' }));
   app.use(express.static(publicPath, { index: false, maxAge: 0 }));
+  app.get('/sports', (req, res) => res.redirect('/#/sports'));
   app.get('*', (req, res) => res.sendFile(path.join(publicPath, 'index.html')));
   app.use((error, req, res, next) => {
     if (res.headersSent) return next(error);
@@ -515,12 +613,17 @@ export function createApplication(config, dependencies = {}) {
     downloads,
     media,
     seasons,
+    live,
+    livePlayback,
     start() {
       downloads.start();
       torrents.start();
       seasons.start();
+      live.start();
     },
     async close() {
+      await livePlayback.close();
+      await live.close();
       await seasons.close();
       await downloads.close();
       await torrents.close();
