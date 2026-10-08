@@ -1,29 +1,29 @@
 {
   "name": "mediawan",
-  "version": "1.1.0",
+  "version": "2.0.0",
   "private": true,
   "type": "module",
-  "description": "Closed, invite-only, Netflix-style anime streamer for a small group.",
+  "description": "A local-first media library with Real-Debrid downloads, watch history and persistent queues.",
   "scripts": {
-    "start": "node --env-file-if-exists=.env --experimental-sqlite server.mjs",
-    "dev": "node --env-file-if-exists=.env --experimental-sqlite --watch server.mjs",
-    "check-sources": "node --env-file-if-exists=.env scripts/check-providers.mjs",
-    "why": "node --env-file-if-exists=.env scripts/why.mjs",
-    "tizen-icon": "node scripts/make-tizen-icon.mjs",
-    "build:tv": "node scripts/build-tv-assets.mjs",
-    "tv-build": "node scripts/build-tizen.mjs",
-    "tv-install": "node scripts/install-tizen.mjs",
-    "test": "node --test"
+    "start": "node --env-file-if-exists=.env server.mjs",
+    "local": "node scripts/local.mjs",
+    "setup:torrents": "node scripts/setup-torrents.mjs",
+    "test:torrents:live": "node scripts/smoke-torrents.mjs",
+    "dev": "node --env-file-if-exists=.env --watch server.mjs",
+    "build": "node scripts/build.mjs",
+    "build:tv": "node scripts/build.mjs",
+    "migrate": "node scripts/migrate.mjs",
+    "test": "node --test test/*.test.mjs",
+    "format": "prettier --write src public/*.js public/*.css public/index.html scripts test server.mjs package.json"
   },
   "dependencies": {
-    "express": "^4.21.2",
-    "sax": "^1.6.1",
-    "tweetnacl": "^1.0.3"
+    "express": "^4.21.2"
   },
   "engines": {
     "node": ">=22.5.0"
   },
   "devDependencies": {
-    "esbuild": "^0.28.1"
+    "esbuild": "^0.28.1",
+    "prettier": "^3.9.9"
   }
 }

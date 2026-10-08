@@ -1,5 +1,9 @@
 # Phase 0 — decisions and preflight
 
+> Historical proposal. The current Mediawan pipeline owns downloading, cache
+> management and playback encoding. Do not deploy the Jellyfin/qBittorrent layout
+> below for a Mediawan-only NAS; use [NAS migration](nas-migration.md).
+
 Companion to the build plan. Everything here is either a decision that later
 phases read, or a host fact that had to be checked before phase 01. Update the
 status column as checks land; nothing in phase 01 starts until every row is

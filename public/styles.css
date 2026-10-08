@@ -1,990 +1,876 @@
-/* ============================================================
-   Mediawan — restrained surfaces, clear navigation and room for the artwork.
-   One sheet styles the browse SPA, detail modal, player, auth
-   pages, and admin panel.
-   ============================================================ */
 :root {
-  --bg: #171a19;
-  --bg-rgb: 23, 26, 25;
-  --bg2: #202422;
-  --card: #272d29;
-  --card2: #323a34;
-  --line: #3c463e;
-  --line-glass: rgba(255, 255, 255, .09); /* hairline on glass/acrylic */
-  --text: #edf0eb;
-  --muted: #a6b0a8;
-  --accent: #bdd4bc;
-  --accent-dim: rgba(189, 212, 188, .10);
-  --on-accent: #172219;
-  --good: #b5cfb8;
-  --radius: calc(6px * var(--tv-scale, 1));
-  --radius-lg: calc(8px * var(--tv-scale, 1));
-  --radius-xl: calc(10px * var(--tv-scale, 1));
-  --radius-pill: calc(6px * var(--tv-scale, 1));
-  --rail-w: calc(88px * var(--tv-scale, 1));           /* the nav column (a bottom bar on phones) */
-  --rail-h: calc(62px * var(--tv-scale, 1));           /* ...its height in that bottom-bar form */
-  --glass: rgba(255, 255, 255, .06);
-  --scrim-rgb: 14, 19, 16;
-  --acrylic: #202422;
-  --shadow-2: 0 calc(1px * var(--tv-scale, 1)) calc(2px * var(--tv-scale, 1)) rgba(0, 0, 0, .35);
-  --shadow-8: 0 calc(6px * var(--tv-scale, 1)) calc(18px * var(--tv-scale, 1)) rgba(0, 0, 0, .42);
-  --shadow-16: 0 calc(14px * var(--tv-scale, 1)) calc(42px * var(--tv-scale, 1)) rgba(0, 0, 0, .55);
+  color-scheme: dark;
+  --bg: #151918;
+  --surface: #1d2321;
+  --line: #343d38;
+  --muted: #a6b0a9;
+  --text: #f0f1e9;
+  --accent: #c8dba2;
+  font-family:
+    Inter,
+    Segoe UI,
+    Arial,
+    sans-serif;
+  font-size: 16px;
+  background: var(--bg);
+  color: var(--text);
 }
-* { box-sizing: border-box; margin: 0; padding: 0; }
-/* Hide window-level scrollbars but keep scrolling — inner lists that need a
-   visible scrollbar (episode list, drawers) opt back in below. */
-html { scrollbar-color: var(--line) var(--bg); scrollbar-width: thin; }
-
-html, body { background: var(--bg); color: var(--text);
-  font-family: "Segoe UI Variable Text", "Segoe UI", ui-sans-serif, system-ui, -apple-system, Roboto, "Helvetica Neue", sans-serif;
-  -webkit-font-smoothing: antialiased; }
-a { color: inherit; text-decoration: none; }
-img { display: block; }
-::selection { background: var(--accent); color: var(--on-accent); }
-button, input, select { font: inherit; }
-:focus-visible { outline: calc(2px * var(--tv-scale, 1)) solid var(--accent); outline-offset: calc(4px * var(--tv-scale, 1)); }
-.skip-link { position: fixed; top: calc(-70px * var(--tv-scale, 1)); left: calc(16px * var(--tv-scale, 1)); z-index: 200; padding: calc(12px * var(--tv-scale, 1)) calc(20px * var(--tv-scale, 1));
-  background: var(--accent); color: var(--on-accent); border-radius: var(--radius); }
-.skip-link:focus { top: calc(12px * var(--tv-scale, 1)); }
-.rail-mark span { display: none; }
-.page-heading { display: flex; align-items: center; justify-content: space-between; gap: calc(16px * var(--tv-scale, 1));
-  padding: calc(32px * var(--tv-scale, 1)) calc(40px * var(--tv-scale, 1)) calc(24px * var(--tv-scale, 1)); }
-.page-heading h1 { font-size: calc(26px * var(--tv-scale, 1)); font-weight: 600; letter-spacing: calc(-.5px * var(--tv-scale, 1)); }
-.text-link { color: var(--muted); font-size: calc(14px * var(--tv-scale, 1)); padding: calc(12px * var(--tv-scale, 1)) 0; }
-.text-link:hover { color: var(--text); }
-.text-link span { margin-left: calc(10px * var(--tv-scale, 1)); }
-.library-empty { margin: calc(12px * var(--tv-scale, 1)) calc(40px * var(--tv-scale, 1)); padding: calc(40px * var(--tv-scale, 1)) 0; border-top: calc(1px * var(--tv-scale, 1)) solid var(--line); }
-.library-empty h2 { font-size: calc(20px * var(--tv-scale, 1)); font-weight: 600; }
-.library-empty p { color: var(--muted); max-width: calc(480px * var(--tv-scale, 1)); line-height: 1.6; margin: calc(12px * var(--tv-scale, 1)) 0 calc(24px * var(--tv-scale, 1)); }
-.empty-actions { display: flex; flex-wrap: wrap; gap: calc(12px * var(--tv-scale, 1)); }
-.resume-rows .row { margin-top: 0; }
-.resume-rows { padding-bottom: calc(8px * var(--tv-scale, 1)) !important; }
-
-/* ---- the rail: one navigation, for pointer, thumb and remote ----
-   A phone, a laptop and a television get the same destinations in the same
-   order, from the same markup. Only the geometry differs: a fixed column on
-   the left, or a bottom tab bar on a phone (see the ≤720px block below). This
-   replaced a top bar plus a hamburger drawer plus a TV-only icon column —
-   three navigations that had already drifted apart on what they even listed. */
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+}
+button,
+input,
+select {
+  font: inherit;
+}
+a {
+  color: inherit;
+  text-decoration: none;
+}
+button {
+  cursor: pointer;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  min-height: 44px;
+  padding: 10px 16px;
+}
+button:hover,
+a:hover {
+  color: var(--accent);
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.primary {
+  background: var(--accent);
+  color: #1a2416;
+  border-color: var(--accent);
+  font-weight: 600;
+}
+.primary:hover {
+  color: #1a2416;
+  background: #deebc4;
+}
+.quiet,
+.text-button {
+  background: transparent;
+}
+.text-button {
+  border: 0;
+  text-align: left;
+  padding: 8px 0;
+}
+:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 4px;
+}
+input,
+select {
+  background: #111613;
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 12px;
+  min-height: 44px;
+  max-width: 100%;
+}
+label {
+  display: flex;
+  flex-direction: column;
+  margin: 0 12px 12px 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+label input,
+label select {
+  margin-top: 6px;
+}
+input[type='checkbox'] {
+  width: 20px;
+  min-height: 20px;
+}
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+h1 {
+  font-size: clamp(1.9rem, 3.5vw, 3rem);
+  font-weight: 500;
+  letter-spacing: -0.04em;
+}
+h2 {
+  font-size: 1.3rem;
+  font-weight: 500;
+}
+h3 {
+  font-size: 1rem;
+  font-weight: 550;
+}
+p {
+  line-height: 1.65;
+}
+.muted,
+.meta {
+  color: var(--muted);
+}
+.eyebrow {
+  font-size: 0.72rem;
+  letter-spacing: 0.13em;
+  color: var(--accent);
+  text-transform: uppercase;
+  margin-bottom: 14px;
+}
+.meta {
+  font-size: 0.85rem;
+  margin-top: 8px;
+}
+.brand {
+  font-size: 1.9rem;
+  letter-spacing: -0.06em;
+  font-weight: 650;
+}
+.brand span {
+  display: block;
+  font-size: 0.52rem;
+  letter-spacing: 0.13em;
+  color: var(--muted);
+  margin-top: 8px;
+  font-weight: 400;
+}
+#shell {
+  display: flex;
+  min-height: 100vh;
+}
+#sidebar {
+  width: 220px;
+  padding: 36px 28px;
+  border-right: 1px solid var(--line);
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+}
+nav {
+  display: flex;
+  flex-direction: column;
+  margin-top: 56px;
+}
+nav a {
+  padding: 14px 12px;
+  margin: 2px -12px;
+  border-radius: 6px;
+  color: var(--muted);
+}
+nav a.active {
+  background: #283027;
+  color: var(--accent);
+}
+.sidebar-bottom {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  font-size: 0.85rem;
+}
+.sidebar-bottom > * {
+  margin-top: 12px;
+}
+#account {
+  color: var(--muted);
+}
+#main {
+  margin-left: 220px;
+  padding: 44px 48px;
+  min-width: 0;
+  width: calc(100% - 220px);
+}
+.page-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  margin-bottom: 32px;
+}
+.page-heading p {
+  color: var(--muted);
+  margin-top: 10px;
+}
+.section {
+  margin-top: 38px;
+}
+.section-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 18px;
+}
+.section-heading a {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
 .rail {
-  position: fixed; left: 0; top: 0; bottom: 0; width: var(--rail-w); z-index: 30;
-  display: flex; flex-direction: column; align-items: center;
-  padding: calc(18px * var(--tv-scale, 1)) 0 calc(14px * var(--tv-scale, 1)); gap: calc(4px * var(--tv-scale, 1));
-  background: var(--bg2); border-right: calc(1px * var(--tv-scale, 1)) solid var(--line);
+  display: flex;
+  overflow-x: auto;
+  padding: 4px 4px 18px;
+  margin: -4px;
+  scroll-snap-type: x proximity;
 }
-/* The content column clears the rail. Padding on the body, not a margin on a
-   wrapper: #app is not the only thing in flow, the search strip is too. The
-   class keeps it off the pages that have no rail (login, invite, admin). */
-body.app-shell { padding-left: var(--rail-w); }
-
-/* Play-button brand mark. The MEDIAWAN wordmark it used to sit beside went
-   with the top bar; at rail width the triangle carries the identity alone. */
-.rail-mark { flex: 0 0 auto; width: calc(16px * var(--tv-scale, 1)); height: calc(19px * var(--tv-scale, 1)); background: var(--accent);
-  clip-path: polygon(0 0, 100% 50%, 0 100%); margin-bottom: calc(12px * var(--tv-scale, 1)); }
-
-.rail-btn {
-  flex: 0 0 auto; width: calc(var(--rail-w) - calc(16px * var(--tv-scale, 1))); padding: calc(8px * var(--tv-scale, 1)) calc(2px * var(--tv-scale, 1));
-  display: flex; flex-direction: column; align-items: center; gap: calc(4px * var(--tv-scale, 1));
-  background: transparent; border: 0; border-radius: var(--radius-lg);
-  color: var(--muted); font-family: inherit; font-size: calc(11px * var(--tv-scale, 1)); font-weight: 600;
-  cursor: pointer; transition: background .15s, color .15s;
+.rail > .card {
+  flex: 0 0 160px;
+  margin-right: 18px;
 }
-.rail-btn svg { width: calc(24px * var(--tv-scale, 1)); height: calc(24px * var(--tv-scale, 1)); display: block; }
-.rail-btn span { line-height: 1.1; text-align: center; }
-.rail-btn[hidden] { display: none; }
-.rail-btn:hover { background: var(--glass); color: var(--text); }
-/* "You are here". The rail lists the libraries as peers, so it tints by
-   library when one is on screen and by section otherwise — app.js's
-   setActiveTab owns the class. */
-.rail-btn.active { background: var(--accent-dim); color: var(--accent); }
-
-.rail-spacer { flex: 1 1 auto; }
-/* The secondary half — tools, admin, sign-out. Same buttons on every device;
-   only this container moves, to a popover above the bar on phones. */
-.rail-tail { display: flex; flex-direction: column; align-items: center; gap: calc(4px * var(--tv-scale, 1)); width: 100%; }
-.rail-who { color: var(--muted); font-size: calc(10px * var(--tv-scale, 1)); max-width: 100%; padding: calc(6px * var(--tv-scale, 1)) calc(4px * var(--tv-scale, 1)) 0;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center; }
-.rail-more-btn { display: none; } /* phones only — the column has room for the lot */
-
-/* ---- search: summoned by the rail, never resident ----
-   One entry point everywhere: the rail's Search button, or "/" on a keyboard.
-   A permanently mounted field costs a row of the page on a phone and, worse, a
-   D-pad stop above everything worth watching on a remote. */
-.searchbar { display: none; position: sticky; top: 0; z-index: 25;
-  align-items: center; gap: calc(10px * var(--tv-scale, 1)); padding: calc(12px * var(--tv-scale, 1)) calc(40px * var(--tv-scale, 1));
-  background: var(--acrylic); border-bottom: calc(1px * var(--tv-scale, 1)) solid var(--line-glass);
-  backdrop-filter: blur(calc(24px * var(--tv-scale, 1))) saturate(1.5);
-  -webkit-backdrop-filter: blur(calc(24px * var(--tv-scale, 1))) saturate(1.5); }
-body.search-open .searchbar { display: flex; }
-.searchbar-ic { flex: 0 0 auto; color: var(--muted); }
-.searchbar .search { flex: 1 1 auto; min-width: 0; max-width: calc(620px * var(--tv-scale, 1));
-  background: rgba(255,255,255,.07); border: calc(1px * var(--tv-scale, 1)) solid var(--line-glass);
-  border-radius: var(--radius-pill); color: var(--text);
-  padding: calc(10px * var(--tv-scale, 1)) calc(16px * var(--tv-scale, 1)); font-size: calc(14px * var(--tv-scale, 1)); font-family: inherit; }
-.searchbar .search::-webkit-search-cancel-button,
-.searchbar .search::-webkit-search-decoration { -webkit-appearance: none; display: none; }
-.searchbar .search::placeholder { color: var(--muted); }
-.searchbar .search:focus { outline: none; border-color: var(--accent);
-  background: rgba(var(--bg-rgb), .65); box-shadow: 0 0 0 calc(3px * var(--tv-scale, 1)) var(--accent-dim); }
-.searchbar-close { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center;
-  width: calc(38px * var(--tv-scale, 1)); height: calc(38px * var(--tv-scale, 1)); border: 0; border-radius: var(--radius);
-  background: transparent; color: var(--muted); cursor: pointer; }
-.searchbar-close:hover { background: var(--glass); color: var(--text); }
-
-/* ---- picker: the app's only dropdown ----
-   Replaces every <select>. A native one opens a list drawn by the platform,
-   which a D-pad cannot enter at all — that is why seasons used to carry a
-   second, TV-only chooser beside the episode list, kept in step by hand. This
-   is ordinary markup, so one control answers a mouse, a thumb and a remote. */
-.picker { position: relative; flex: 0 1 auto; min-width: 0; max-width: 100%; }
-.picker[hidden] { display: none; }
-.picker-btn { display: flex; align-items: center; gap: calc(8px * var(--tv-scale, 1)); max-width: 100%;
-  padding: calc(9px * var(--tv-scale, 1)) calc(14px * var(--tv-scale, 1)); background: var(--card); border: calc(1px * var(--tv-scale, 1)) solid var(--line);
-  border-radius: var(--radius); color: var(--text);
-  font-family: inherit; font-size: calc(13px * var(--tv-scale, 1)); font-weight: 600; cursor: pointer;
-  white-space: nowrap; transition: border-color .15s, box-shadow .15s; }
-.picker-btn:hover { border-color: var(--accent); }
-.picker-val { overflow: hidden; text-overflow: ellipsis; }
-.picker-caret { flex: 0 0 auto; margin-left: auto; color: var(--muted); font-size: calc(10px * var(--tv-scale, 1)); }
-.picker-menu { position: absolute; top: 100%; left: 0; margin-top: calc(6px * var(--tv-scale, 1)); z-index: 20;
-  /* Never narrower than the longest option, never narrower than the button it
-     hangs off. width:100% resolves to the button; min-width raises it from
-     there. (max(200px, 100%) would say it in one line and need Chromium 79 —
-     the TV floor is 69.) */
-  width: 100%; min-width: calc(200px * var(--tv-scale, 1)); max-width: calc(340px * var(--tv-scale, 1)); max-height: calc(320px * var(--tv-scale, 1)); overflow-y: auto;
-  background: var(--bg2); border: calc(1px * var(--tv-scale, 1)) solid var(--line); border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-16); padding: calc(6px * var(--tv-scale, 1)); }
-.picker-menu[hidden] { display: none; }
-.picker-opt { display: block; width: 100%; text-align: left; padding: calc(10px * var(--tv-scale, 1)) calc(12px * var(--tv-scale, 1));
-  background: transparent; border: 0; border-radius: var(--radius); color: var(--text);
-  font-family: inherit; font-size: calc(13px * var(--tv-scale, 1)); cursor: pointer; white-space: nowrap;
-  overflow: hidden; text-overflow: ellipsis; }
-.picker-opt:hover { background: var(--card2); }
-.picker-opt.active { color: var(--accent); font-weight: 700; }
-
-/* ---- admin.html's header ----
-   The admin console is a utility page outside the browsing app: no rail, no
-   library, nothing to navigate between. It keeps a plain title bar. */
-.nav { display: flex; align-items: center; gap: calc(20px * var(--tv-scale, 1)); padding: calc(14px * var(--tv-scale, 1)) calc(40px * var(--tv-scale, 1));
-  background: var(--acrylic); border-bottom: calc(1px * var(--tv-scale, 1)) solid var(--line-glass); }
-.nav .spacer { flex: 1; }
-.brand { color: var(--text); font-weight: 800; font-size: calc(22px * var(--tv-scale, 1)); letter-spacing: calc(.5px * var(--tv-scale, 1));
-  display: inline-flex; align-items: center; gap: calc(10px * var(--tv-scale, 1)); }
-.brand::before { content: ""; width: calc(11px * var(--tv-scale, 1)); height: calc(13px * var(--tv-scale, 1)); background: var(--accent);
-  clip-path: polygon(0 0, 100% 50%, 0 100%); flex: 0 0 auto; }
-
-/* keyboard navigation: a visible accent outline, mouse clicks unaffected */
-:focus-visible { outline: calc(2px * var(--tv-scale, 1)) solid var(--accent); outline-offset: calc(2px * var(--tv-scale, 1)); }
-
-/* genre/schedule/random are anime tools — they live on the unified Home and
-   hide on the Movies / TV Shows catalog sections */
-body:not([data-tab="home"]) .anime-tool { display: none; }
-
-.btn { background: var(--accent); color: var(--on-accent); border: 0; border-radius: var(--radius);
-  padding: calc(10px * var(--tv-scale, 1)) calc(20px * var(--tv-scale, 1)); font-weight: 700; cursor: pointer; font-size: calc(14px * var(--tv-scale, 1));
-  white-space: nowrap; transition: filter .15s, transform .1s; }
-.btn:hover { filter: brightness(1.08); }
-.btn:active { transform: scale(.98); }
-.btn.ghost { background: var(--glass); color: var(--text); border: calc(1px * var(--tv-scale, 1)) solid transparent; }
-.btn.ghost:hover { background: rgba(255,255,255,.12); filter: none; }
-.mini { padding: calc(7px * var(--tv-scale, 1)) calc(14px * var(--tv-scale, 1)); font-size: calc(13px * var(--tv-scale, 1)); }
-#randomBtn:disabled { opacity: .6; cursor: default; }
-
-/* icon + label buttons */
-.icon-btn { display: inline-flex; align-items: center; gap: calc(6px * var(--tv-scale, 1)); }
-.icon-btn svg { display: block; }
-
-/* weekly airing schedule */
-.sched-days { display: flex; gap: calc(8px * var(--tv-scale, 1)); overflow-x: auto; padding: calc(2px * var(--tv-scale, 1)) 0 calc(14px * var(--tv-scale, 1)); }
-.sched-day { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; gap: calc(3px * var(--tv-scale, 1));
-  min-width: calc(76px * var(--tv-scale, 1)); padding: calc(10px * var(--tv-scale, 1)) calc(14px * var(--tv-scale, 1)); border-radius: var(--radius); cursor: pointer;
-  background: var(--card); border: calc(1px * var(--tv-scale, 1)) solid var(--line); color: var(--text);
-  transition: border-color .15s, background .15s; }
-.sched-day:hover { border-color: var(--accent); }
-.sched-day.active { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
-.sched-day-name { font-size: calc(14px * var(--tv-scale, 1)); font-weight: 700; }
-.sched-day-count { font-size: calc(11px * var(--tv-scale, 1)); opacity: .7; }
-.sched-day.today:not(.active) .sched-day-name { color: var(--accent); }
-.sched-list { display: grid; gap: calc(10px * var(--tv-scale, 1)); grid-template-columns: repeat(auto-fill, minmax(calc(320px * var(--tv-scale, 1)), 1fr)); }
-.sched-item { display: flex; align-items: center; gap: calc(12px * var(--tv-scale, 1)); padding: calc(8px * var(--tv-scale, 1)) calc(12px * var(--tv-scale, 1)) calc(8px * var(--tv-scale, 1)) calc(8px * var(--tv-scale, 1));
-  background: var(--card); border: calc(1px * var(--tv-scale, 1)) solid transparent; border-radius: var(--radius); cursor: pointer;
-  transition: border-color .15s, background .15s; }
-.sched-item:hover { border-color: var(--accent); background: var(--card2); }
-.sched-time { flex: 0 0 auto; min-width: calc(52px * var(--tv-scale, 1)); text-align: center; font-size: calc(14px * var(--tv-scale, 1)); font-weight: 800; color: var(--accent); }
-.sched-thumb { flex: 0 0 auto; width: calc(46px * var(--tv-scale, 1)); height: calc(62px * var(--tv-scale, 1)); object-fit: cover; border-radius: var(--radius); border: calc(1px * var(--tv-scale, 1)) solid var(--line); }
-.sched-info { min-width: 0; }
-.sched-title { font-size: calc(14px * var(--tv-scale, 1)); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.sched-ep { font-size: calc(12px * var(--tv-scale, 1)); color: var(--muted); margin-top: calc(2px * var(--tv-scale, 1)); }
-
-/* ---- hero spotlight (centered, glass chips — Miruro-style) ---- */
-.hero-car { position: relative; min-height: calc(380px * var(--tv-scale, 1)); margin: 0 calc(40px * var(--tv-scale, 1)) calc(32px * var(--tv-scale, 1)); overflow: hidden; border-radius: var(--radius-lg); background: var(--bg2); }
-.hero { position: relative; min-height: calc(380px * var(--tv-scale, 1)); display: flex; align-items: center; justify-content: flex-start;
-  text-align: left; padding: calc(40px * var(--tv-scale, 1)); opacity: 0; pointer-events: none; z-index: 0; }
-.hero[hidden] { display: none; }
-.hero.active { opacity: 1; pointer-events: auto; z-index: 1; }
-.hero-bg { position: absolute; inset: 0; background-image: var(--hero-img);
-  background-size: cover; background-position: center 18%; }
-.hero.no-banner .hero-bg { filter: brightness(.8); transform: scale(1.04); }
-.hero-scrim { position: absolute; inset: 0;
-  background: linear-gradient(90deg, rgba(14,19,16,.96), rgba(14,19,16,.83) 32%, rgba(14,19,16,.16) 100%); }
-.hero-content { position: relative; max-width: calc(520px * var(--tv-scale, 1)); display: flex; flex-direction: column;
-  align-items: flex-start; gap: calc(16px * var(--tv-scale, 1)); }
-/* glassy chips — meta row and genre row */
-.hero-chips { display: flex; flex-wrap: wrap; gap: 0; }
-.hero-chip { color: #d4dbd5; font-size: calc(14px * var(--tv-scale, 1)); font-weight: 400; font-family: inherit; }
-.hero-chip + .hero-chip::before { content: "·"; margin: 0 calc(10px * var(--tv-scale, 1)); color: var(--muted); }
-/* genre chips are buttons — they jump to the category page */
-button.hero-chip { cursor: pointer; transition: border-color .15s, color .15s; }
-button.hero-chip:hover { border-color: var(--accent); color: var(--accent); }
-.hero-title { font-size: calc(38px * var(--tv-scale, 1)); font-weight: 600; line-height: 1.14; letter-spacing: calc(-.7px * var(--tv-scale, 1)); color: #fff; }
-.hero-actions { display: flex; flex-wrap: wrap; gap: calc(12px * var(--tv-scale, 1)); margin-top: calc(8px * var(--tv-scale, 1)); }
-.hero-btn { display: inline-flex; align-items: center; gap: calc(8px * var(--tv-scale, 1)); background: rgba(var(--scrim-rgb),.45);
-  color: var(--text); border: calc(1px * var(--tv-scale, 1)) solid #6c766d;
-  border-radius: var(--radius); padding: calc(12px * var(--tv-scale, 1)) calc(20px * var(--tv-scale, 1)); font-family: inherit; font-weight: 600; font-size: calc(14px * var(--tv-scale, 1)); cursor: pointer;
-  transition: background .15s, border-color .15s, transform .1s; }
-.hero-btn svg { display: block; }
-.hero-btn:hover { background: rgba(var(--scrim-rgb),.7); border-color: rgba(255,255,255,.28); }
-.hero-btn.primary { background: var(--accent); color: var(--on-accent); border-color: transparent; }
-.hero-btn.primary:hover { filter: brightness(1.08); background: var(--accent); }
-.hero-btn:active { transform: scale(.98); }
-/* top-left airing/label badge */
-.hero-badge { font-size: calc(13px * var(--tv-scale, 1)); font-weight: 500; color: #d1dfd0; }
-.hero-badge svg { display: block; color: var(--accent); }
-/* top-right pager */
-.hero-pager { position: absolute; bottom: calc(24px * var(--tv-scale, 1)); right: calc(24px * var(--tv-scale, 1)); z-index: 3; display: flex; align-items: center; gap: calc(4px * var(--tv-scale, 1)); }
-.hero-car:hover .hero-pager { opacity: 1; }
-.hero-pg-btn { width: calc(44px * var(--tv-scale, 1)); height: calc(44px * var(--tv-scale, 1)); border-radius: var(--radius); border: calc(1px * var(--tv-scale, 1)) solid #6c766d;
-  background: rgba(var(--scrim-rgb),.8); color: #fff; cursor: pointer;
-  display: flex; align-items: center; justify-content: center; transition: border-color .15s; }
-.hero-pg-btn:hover { border-color: var(--accent); }
-.hero-count { background: rgba(var(--scrim-rgb),.8); border-radius: var(--radius); padding: calc(13px * var(--tv-scale, 1)) calc(12px * var(--tv-scale, 1)); font-size: calc(13px * var(--tv-scale, 1)); color: #d4dbd5; }
-.hero-count b { color: #fff; font-weight: 700; }
-
-/* ---- rows ---- */
-.rows { padding: 0 calc(40px * var(--tv-scale, 1)) calc(60px * var(--tv-scale, 1)); }
-.row { margin: calc(32px * var(--tv-scale, 1)) 0; }
-.row.catalog-row { margin-top: 0; }
-.row h2 { font-size: calc(18px * var(--tv-scale, 1)); margin-bottom: calc(14px * var(--tv-scale, 1)); font-weight: 600;
-  display: flex; align-items: center; gap: calc(10px * var(--tv-scale, 1)); }
-/* "See all ›" jump on the home's Movies / TV Shows rails */
-.row-see { margin-left: auto; font-size: calc(13px * var(--tv-scale, 1)); font-weight: 600; color: var(--muted);
-  padding: calc(4px * var(--tv-scale, 1)) calc(10px * var(--tv-scale, 1)); border-radius: var(--radius-pill); transition: color .15s, background .15s; }
-.row-see:hover { color: var(--accent); background: var(--accent-dim); }
-/* vertical headroom so hover-zoomed artwork isn't clipped by the scroller;
-   negative margins keep the visual rhythm identical to before */
-.cards { display: flex; gap: calc(16px * var(--tv-scale, 1)); overflow-x: auto; padding: calc(20px * var(--tv-scale, 1)) calc(2px * var(--tv-scale, 1)) calc(26px * var(--tv-scale, 1));
-  margin: calc(-14px * var(--tv-scale, 1)) 0 calc(-16px * var(--tv-scale, 1)); scroll-behavior: smooth; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
-
-/* horizontal scroll arrows: full-height translucent panels, Netflix-style */
-.row-scroller { position: relative; }
-.row-arrow { position: absolute; top: 0; bottom: 0; width: calc(48px * var(--tv-scale, 1)); z-index: 6;
-  border: 0; cursor: pointer; color: #fff; font-size: calc(30px * var(--tv-scale, 1)); font-weight: 700;
-  display: flex; align-items: center; justify-content: center;
-  background: rgba(var(--scrim-rgb),.5); backdrop-filter: blur(calc(2px * var(--tv-scale, 1)));
-  opacity: 0; transition: opacity .18s, background .15s; }
-/* poster rows have a caption below the image; size the arrow to the image
-   height so the panel covers the poster, not image+caption (20px = the
-   scroller's top padding; its negative top margin collapses outward) */
-.row-scroller.posters .row-arrow { top: calc(20px * var(--tv-scale, 1)); bottom: auto; height: calc(230px * var(--tv-scale, 1)); }
-.row-arrow.left { left: 0; }
-.row-arrow.right { right: 0; }
-.row-scroller:hover .row-arrow:not(.hide) { opacity: 1; }
-.row-arrow:hover { color: var(--accent); background: rgba(var(--scrim-rgb),.78); }
-.row-arrow.hide { pointer-events: none; opacity: 0 !important; }
-
-/* wrapped grid (search results, category pages) */
-.cards-grid { display: grid; gap: calc(20px * var(--tv-scale, 1)) calc(10px * var(--tv-scale, 1));
-  grid-template-columns: repeat(auto-fill, minmax(calc(160px * var(--tv-scale, 1)), 1fr)); padding: calc(4px * var(--tv-scale, 1)) calc(2px * var(--tv-scale, 1)) calc(10px * var(--tv-scale, 1)); }
-.cards-grid .card { width: auto; }
-/* grid columns are fluid — posters keep their 2:3 shape instead of a fixed
-   height that crops (or stretches) when the column width changes */
-.cards-grid .card img, .cards-grid .movie-noart { height: auto; aspect-ratio: 2/3; }
-.grid-empty { grid-column: 1 / -1; color: var(--muted); padding: calc(30px * var(--tv-scale, 1)) calc(2px * var(--tv-scale, 1)); }
-.grid-empty .empty-actions { margin-top: calc(20px * var(--tv-scale, 1)); }
-.grid-empty .empty-actions .btn { margin-left: 0; }
-.grid-empty code { background: var(--card); padding: calc(1px * var(--tv-scale, 1)) calc(6px * var(--tv-scale, 1)); border-radius: var(--radius); }
-
-/* ---- unified filter bar (Movies + TV Shows) ----
-   Reuses the app's own controls — mode-pills for sort, pickers for
-   genre/year — so the catalog pages speak the same squared language as the
-   detail pages. Hidden (attribute) while a search query owns the grid. */
-/* Which library the grid is showing. Sits above the filter bar because it
-   changes what the filters below it even mean. */
-.browse-types { margin: 0 0 calc(20px * var(--tv-scale, 1)); gap: calc(20px * var(--tv-scale, 1)); flex-wrap: nowrap; border-bottom: calc(1px * var(--tv-scale, 1)) solid var(--line); }
-.browse-types .mode-pill { padding: calc(12px * var(--tv-scale, 1)) calc(4px * var(--tv-scale, 1)); min-height: calc(44px * var(--tv-scale, 1)); font-size: calc(14px * var(--tv-scale, 1)); font-weight: 500;
-  background: transparent; color: var(--muted); border: 0; border-bottom: calc(2px * var(--tv-scale, 1)) solid transparent; border-radius: 0; white-space: nowrap; }
-.browse-types .mode-pill.active { color: var(--accent); background: transparent; border-bottom-color: var(--accent); }
-.filter-bar .mode-pill, .filter-bar .picker-btn { min-height: calc(44px * var(--tv-scale, 1)); }
-.filter-bar { display: flex; align-items: center; gap: calc(10px * var(--tv-scale, 1)); flex-wrap: wrap; margin: calc(4px * var(--tv-scale, 1)) 0 calc(18px * var(--tv-scale, 1)); }
-.filter-bar[hidden] { display: none; }
-.filter-bar .picker { max-width: calc(200px * var(--tv-scale, 1)); }
-.filter-note { color: var(--muted); font-size: calc(12px * var(--tv-scale, 1)); }
-.cat-foot { display: flex; justify-content: center; padding: calc(26px * var(--tv-scale, 1)) 0 calc(6px * var(--tv-scale, 1)); }
-.cat-foot[hidden] { display: none; }
-.cat-foot .btn { min-width: calc(240px * var(--tv-scale, 1)); padding: calc(12px * var(--tv-scale, 1)) calc(26px * var(--tv-scale, 1)); border: calc(1px * var(--tv-scale, 1)) solid var(--line); }
-.cat-foot .btn:hover { border-color: var(--accent); }
-.grid-empty .btn { margin-left: calc(10px * var(--tv-scale, 1)); }
-
-/* ---- movies vertical ---- */
-/* poster fallback when TMDB art is unavailable (no key / no match) */
-.movie-noart { width: 100%; height: calc(230px * var(--tv-scale, 1)); display: flex; align-items: center; justify-content: center;
-  text-align: center; padding: calc(14px * var(--tv-scale, 1)); box-sizing: border-box;
-  background: linear-gradient(160deg, var(--card2) 0%, var(--bg2) 100%); }
-.movie-noart span { font-weight: 600; font-size: calc(14px * var(--tv-scale, 1)); line-height: 1.3; color: var(--text); opacity: .9; }
-
-/* ---- cards: Netflix-style boxart ----
-   Bare artwork, tight radius, no border. On hover the art zooms and an info
-   scrim (title + meta) fades in over the poster; the caption below fades out
-   so nothing is shown twice. Layout never shifts — transform only. */
-.card { position: relative; flex: 0 0 auto; width: calc(160px * var(--tv-scale, 1)); cursor: pointer; }
-.card:hover { z-index: 8; }
-.card-art { position: relative; border-radius: var(--radius-lg); overflow: hidden; background: var(--card);
-  box-shadow: var(--shadow-2);
-  transition: transform .24s cubic-bezier(.2,.68,.35,1) .08s, box-shadow .24s ease .08s; }
-.card:hover .card-art { transform: translateY(calc(-3px * var(--tv-scale, 1))); }
-/* zoom away from the row edges so the first/last cards don't clip */
-.card:first-child .card-art { transform-origin: left center; }
-.card:last-child .card-art { transform-origin: right center; }
-.card img { width: 100%; height: calc(230px * var(--tv-scale, 1)); object-fit: cover; }
-.card-scrim { position: absolute; inset: 0; z-index: 1; display: flex; flex-direction: column;
-  justify-content: flex-end; gap: calc(3px * var(--tv-scale, 1)); padding: calc(12px * var(--tv-scale, 1)) calc(10px * var(--tv-scale, 1)) calc(12px * var(--tv-scale, 1));
-  background: linear-gradient(0deg, rgba(var(--scrim-rgb),.94) 0%, rgba(var(--scrim-rgb),.5) 40%, transparent 66%);
-  opacity: 0; transition: opacity .2s ease .08s; pointer-events: none; }
-.card:hover .card-scrim { opacity: 1; }
-.card-t { font-size: calc(13px * var(--tv-scale, 1)); font-weight: 700; line-height: 1.3; color: var(--text);
-  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-.card-sub { font-size: calc(11px * var(--tv-scale, 1)); font-weight: 600; color: #b4bcc9; }
-.card .cap { padding: calc(10px * var(--tv-scale, 1)) 0 0; font-size: calc(14px * var(--tv-scale, 1)); line-height: 1.4; font-weight: 500; color: var(--text);
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
-  transition: opacity .2s ease .08s; }
-.card:hover .cap { opacity: 1; }
-.card:focus-visible .card-art { outline: calc(2px * var(--tv-scale, 1)) solid var(--accent); outline-offset: calc(-2px * var(--tv-scale, 1)); }
-.card:focus-within .card-actions { opacity: 1; }
-/* continue-watching bar: full-width track pinned to the artwork's bottom edge */
-.card .prog-track { position: absolute; left: calc(10px * var(--tv-scale, 1)); right: calc(10px * var(--tv-scale, 1)); bottom: calc(6px * var(--tv-scale, 1)); z-index: 2;
-  height: calc(3px * var(--tv-scale, 1)); background: rgba(255,255,255,.3); border-radius: var(--radius); }
-.card .prog { height: 100%; background: var(--accent); border-radius: var(--radius); }
-.card .badge { position: absolute; top: calc(8px * var(--tv-scale, 1)); left: calc(8px * var(--tv-scale, 1)); z-index: 2; background: rgba(var(--scrim-rgb),.82);
-  color: var(--good); font-size: calc(11px * var(--tv-scale, 1)); font-weight: 700; padding: calc(3px * var(--tv-scale, 1)) calc(9px * var(--tv-scale, 1)); border-radius: var(--radius-pill);
-  backdrop-filter: blur(calc(4px * var(--tv-scale, 1))); }
-.card .badge.airing { color: var(--on-accent); background: var(--accent); } /* next-episode countdown */
-.card-actions { position: absolute; top: calc(8px * var(--tv-scale, 1)); right: calc(8px * var(--tv-scale, 1)); z-index: 3; display: flex; gap: calc(6px * var(--tv-scale, 1));
-  opacity: 0; transition: opacity .18s ease .08s; }
-.card:hover .card-actions { opacity: 1; }
-.card-act { width: calc(36px * var(--tv-scale, 1)); height: calc(36px * var(--tv-scale, 1)); border-radius: var(--radius); border: calc(1.5px * var(--tv-scale, 1)) solid rgba(255,255,255,.55);
-  background: rgba(var(--scrim-rgb),.65); color: #fff; cursor: pointer; font-size: calc(14px * var(--tv-scale, 1)); line-height: 1;
-  display: flex; align-items: center; justify-content: center; backdrop-filter: blur(calc(4px * var(--tv-scale, 1)));
-  transition: background .15s, border-color .15s, transform .15s; }
-.card-act:hover { background: rgba(var(--scrim-rgb),.95); border-color: #fff; transform: scale(1.08); }
-.card-act.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
-.row-del { background: transparent; border: 0; color: var(--muted); cursor: pointer; font-size: calc(14px * var(--tv-scale, 1));
-  opacity: 0; transition: opacity .15s; }
-.row:hover .row-del { opacity: 1; }
-.row-del:hover { color: var(--accent); }
-
-/* ---- detail page ----
-   A real full-bleed page, not a floating modal: opaque background,
-   edge-to-edge hero banner, centered content column, fixed back button.
-   (The home DOM stays mounted underneath purely so back is instant.) */
-.overlay { position: fixed; inset: 0; z-index: 50; background: var(--bg);
-  display: none; overflow: auto; overscroll-behavior: contain; }
-.overlay.show { display: block; }
-.sheet { position: relative; width: 100%; min-height: 100vh; background: var(--bg); }
-/* page-transition polish: page slides up on open, player fades in */
-.overlay.show .sheet { animation: sheetIn .22s ease both; }
-@keyframes sheetIn { from { opacity: 0; transform: translateY(calc(14px * var(--tv-scale, 1))); } to { opacity: 1; transform: none; } }
-.player-overlay.show { animation: playerIn .18s ease both; }
-@keyframes playerIn { from { opacity: 0; } to { opacity: 1; } }
-@media (prefers-reduced-motion: reduce) {
-  .overlay.show .sheet, .player-overlay.show { animation: none; }
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(145px, 1fr));
+  gap: 26px 18px;
 }
-.sheet-back { position: fixed; top: calc(18px * var(--tv-scale, 1)); left: calc(18px * var(--tv-scale, 1)); z-index: 60;
-  width: calc(42px * var(--tv-scale, 1)); height: calc(42px * var(--tv-scale, 1)); border-radius: var(--radius-pill); border: calc(1px * var(--tv-scale, 1)) solid var(--line-glass);
-  background: rgba(var(--scrim-rgb),.75); color: var(--text); cursor: pointer;
-  display: flex; align-items: center; justify-content: center; backdrop-filter: blur(calc(8px * var(--tv-scale, 1)));
-  transition: border-color .15s, background .15s; }
-.sheet-back:hover { border-color: var(--accent); background: rgba(var(--scrim-rgb),.92); }
-.detail-hero { position: relative; width: 100%; aspect-ratio: 16/7;
-  min-height: calc(300px * var(--tv-scale, 1)); max-height: calc(560px * var(--tv-scale, 1)); overflow: hidden;
-  display: flex; align-items: flex-end; padding: calc(34px * var(--tv-scale, 1)) calc(40px * var(--tv-scale, 1)); }
-.detail-hero-bg { position: absolute; inset: 0; background-size: cover;
-  background-position: center 20%; }
-/* no widescreen banner → blurred cover backdrop + the sharp poster on top */
-.detail-hero.no-banner .detail-hero-bg { filter: blur(calc(28px * var(--tv-scale, 1))) brightness(.6); transform: scale(1.15); }
-.detail-hero-art { position: absolute;
-  top: calc(14px * var(--tv-scale, 1)); right: calc(14px * var(--tv-scale, 1));
-  bottom: calc(14px * var(--tv-scale, 1)); left: calc(14px * var(--tv-scale, 1)); display: none;
-  background-size: contain; background-repeat: no-repeat; background-position: center;
-  filter: drop-shadow(0 calc(14px * var(--tv-scale, 1)) calc(34px * var(--tv-scale, 1)) rgba(0,0,0,.6)); }
-.detail-hero.no-banner .detail-hero-art { display: block; }
-.detail-hero-fade { position: absolute; inset: 0;
-  background: linear-gradient(0deg, var(--bg) 2%, transparent 60%); }
-.detail-play { position: relative; z-index: 2; padding: calc(11px * var(--tv-scale, 1)) calc(24px * var(--tv-scale, 1)); font-size: calc(15px * var(--tv-scale, 1)); }
-.sheet-body { max-width: calc(1060px * var(--tv-scale, 1)); margin: 0 auto; padding: calc(26px * var(--tv-scale, 1)) calc(40px * var(--tv-scale, 1)) calc(70px * var(--tv-scale, 1)); }
-.sheet-body h2 { font-size: calc(32px * var(--tv-scale, 1)); font-weight: 800; margin-bottom: calc(8px * var(--tv-scale, 1)); }
-.sheet-meta { color: var(--muted); font-size: calc(14px * var(--tv-scale, 1)); margin-bottom: calc(16px * var(--tv-scale, 1)); }
-.genres { display: flex; gap: calc(8px * var(--tv-scale, 1)); flex-wrap: wrap; margin-bottom: calc(18px * var(--tv-scale, 1)); }
-.genres span, .genres button { background: var(--accent-dim); border: calc(1px * var(--tv-scale, 1)) solid transparent;
-  color: var(--accent); padding: calc(4px * var(--tv-scale, 1)) calc(12px * var(--tv-scale, 1)); border-radius: var(--radius-pill); font-size: calc(12px * var(--tv-scale, 1)); font-weight: 600; }
-.genres button { cursor: pointer; font-family: inherit; transition: border-color .15s; }
-.genres button:hover { border-color: var(--accent); }
-.detail-actions { display: flex; gap: calc(10px * var(--tv-scale, 1)); flex-wrap: wrap; margin-bottom: calc(18px * var(--tv-scale, 1)); }
-.act-btn { background: var(--card); border: calc(1px * var(--tv-scale, 1)) solid var(--line); color: var(--text); cursor: pointer;
-  padding: calc(9px * var(--tv-scale, 1)) calc(16px * var(--tv-scale, 1)); border-radius: var(--radius); font-size: calc(14px * var(--tv-scale, 1)); font-weight: 600;
-  transition: border-color .15s, background .15s; }
-.act-btn:hover { border-color: var(--accent); }
-.act-btn.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
-.act-col-wrap { position: relative; }
-.col-menu { position: absolute; top: calc(46px * var(--tv-scale, 1)); left: 0; z-index: 20; min-width: calc(250px * var(--tv-scale, 1));
-  background: var(--bg2); border: calc(1px * var(--tv-scale, 1)) solid var(--line); border-radius: var(--radius-lg); padding: calc(8px * var(--tv-scale, 1));
-  box-shadow: var(--shadow-16); }
-.col-row { display: flex; align-items: center; gap: calc(10px * var(--tv-scale, 1)); padding: calc(9px * var(--tv-scale, 1)) calc(8px * var(--tv-scale, 1)); border-radius: var(--radius);
-  cursor: pointer; font-size: calc(14px * var(--tv-scale, 1)); }
-.col-row:hover { background: rgba(255,255,255,.06); }
-.col-row input { width: calc(16px * var(--tv-scale, 1)); height: calc(16px * var(--tv-scale, 1)); accent-color: var(--accent); }
-.col-empty { color: var(--muted); font-size: calc(13px * var(--tv-scale, 1)); padding: calc(8px * var(--tv-scale, 1)); }
-.col-new { display: flex; gap: calc(6px * var(--tv-scale, 1)); padding: calc(8px * var(--tv-scale, 1)); border-top: calc(1px * var(--tv-scale, 1)) solid var(--line); margin-top: calc(6px * var(--tv-scale, 1)); }
-.col-new input { flex: 1; padding: calc(8px * var(--tv-scale, 1)) calc(10px * var(--tv-scale, 1)); border-radius: var(--radius); border: calc(1px * var(--tv-scale, 1)) solid var(--line);
-  background: var(--bg); color: var(--text); font-size: calc(13px * var(--tv-scale, 1)); }
-.d-desc { color: #c3cad6; font-size: calc(14px * var(--tv-scale, 1)); line-height: 1.6; margin-bottom: calc(22px * var(--tv-scale, 1)); }
-
-/* ---- episodes: season tabs + scrollable list ---- */
-.eps-head { display: flex; align-items: center; justify-content: space-between;
-  gap: calc(12px * var(--tv-scale, 1)); flex-wrap: wrap; margin-bottom: calc(12px * var(--tv-scale, 1)); }
-.eps-head-left { display: flex; align-items: center; gap: calc(14px * var(--tv-scale, 1)); flex: 1 1 auto; min-width: 0; }
-.eps-title { font-weight: 800; font-size: calc(17px * var(--tv-scale, 1)); }
-
-.mode-pills { display: flex; gap: calc(6px * var(--tv-scale, 1)); }
-.mode-pill { background: var(--card); border: calc(1px * var(--tv-scale, 1)) solid var(--line); color: var(--muted);
-  padding: calc(6px * var(--tv-scale, 1)) calc(16px * var(--tv-scale, 1)); border-radius: var(--radius-pill); font-size: calc(13px * var(--tv-scale, 1)); cursor: pointer; font-weight: 600;
-  transition: border-color .15s, color .15s; }
-.mode-pill:hover:not(:disabled) { border-color: var(--accent); color: var(--text); }
-.mode-pill.active { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
-.mode-pill:disabled { opacity: .4; cursor: not-allowed; }
-
-/* Seasons are tabs beside the episodes, on every device — the arrangement
-   Netflix uses on a television, and the reason there is no season dropdown
-   anywhere any more. A menu must be opened before it can be read, which is a
-   bad trade for a choice this small; tabs show every season at once and cost
-   one press each. Empty (one season, or a film) the column renders nothing and
-   the split collapses on its own, so the episode list is never left indented
-   past an empty gutter. */
-.eps-split { display: flex; align-items: flex-start; gap: calc(22px * var(--tv-scale, 1)); }
-.season-list { display: flex; flex-direction: column; gap: calc(8px * var(--tv-scale, 1));
-  flex: 0 1 auto; max-width: calc(260px * var(--tv-scale, 1)); max-height: min(62vh, calc(640px * var(--tv-scale, 1))); overflow-y: auto;
-  scrollbar-width: thin; scrollbar-color: #3a4150 transparent; }
-.season-list:empty { display: none; }
-.eps-split .eps { flex: 1 1 auto; min-width: 0; }
-.season-item { display: block; width: 100%; min-width: calc(150px * var(--tv-scale, 1)); text-align: left; cursor: pointer;
-  background: var(--card); border: calc(1px * var(--tv-scale, 1)) solid transparent; border-radius: var(--radius);
-  color: var(--text); font-family: inherit; padding: calc(10px * var(--tv-scale, 1)) calc(14px * var(--tv-scale, 1));
-  transition: border-color .15s, color .15s, background .15s; }
-.season-item:hover { border-color: var(--accent); }
-.season-item .t { display: block; font-size: calc(14px * var(--tv-scale, 1)); font-weight: 700; }
-.season-item .s { display: block; font-size: calc(12px * var(--tv-scale, 1)); color: var(--muted); margin-top: calc(2px * var(--tv-scale, 1));
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.season-item.active { border-color: var(--accent); color: var(--accent); }
-.season-item.active .t { color: var(--accent); }
-.eps { display: flex; flex-direction: column; gap: calc(8px * var(--tv-scale, 1));
-  max-height: min(62vh, calc(640px * var(--tv-scale, 1))); overflow-y: auto; padding-right: calc(6px * var(--tv-scale, 1));
-  scrollbar-width: thin; scrollbar-color: #3a4150 transparent; }
-.eps::-webkit-scrollbar { width: calc(8px * var(--tv-scale, 1)); display: block; }
-.eps::-webkit-scrollbar-thumb { background: #3a4150; border-radius: var(--radius-pill); }
-.eps::-webkit-scrollbar-track { background: transparent; }
-.ep-row { display: flex; align-items: center; gap: calc(14px * var(--tv-scale, 1)); padding: calc(10px * var(--tv-scale, 1)) calc(12px * var(--tv-scale, 1));
-  background: var(--card); border: calc(1px * var(--tv-scale, 1)) solid transparent; border-radius: var(--radius-lg); cursor: pointer;
-  transition: border-color .15s, background .15s; }
-.ep-row:hover { border-color: var(--accent); background: var(--card2); }
-/* thumbnail with the episode number badged over it (placeholder shows just the number) */
-.ep-row-thumb { position: relative; flex: 0 0 auto; width: calc(116px * var(--tv-scale, 1)); height: calc(66px * var(--tv-scale, 1)); border-radius: var(--radius);
-  background: var(--bg2) center/cover no-repeat; border: calc(1px * var(--tv-scale, 1)) solid var(--line); overflow: hidden;
-  display: flex; align-items: center; justify-content: center; }
-.ep-row-thumb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-/* placeholder (no episode still): dimmed show cover with a centered number */
-.ep-row-thumb.ph { background-position: center 28%; }
-.ep-row-thumb.ph::after { content: ""; position: absolute; inset: 0;
-  background: linear-gradient(180deg, rgba(var(--scrim-rgb),.35), rgba(var(--scrim-rgb),.72)); }
-.ep-row-badge { position: absolute; left: calc(5px * var(--tv-scale, 1)); bottom: calc(4px * var(--tv-scale, 1)); z-index: 1; background: rgba(var(--scrim-rgb),.82);
-  color: #fff; font-size: calc(12px * var(--tv-scale, 1)); font-weight: 800; padding: calc(1px * var(--tv-scale, 1)) calc(8px * var(--tv-scale, 1)); border-radius: var(--radius-pill); backdrop-filter: blur(calc(3px * var(--tv-scale, 1))); }
-.ep-row-thumb.ph .ep-row-badge { position: relative; left: 0; bottom: 0; background: rgba(var(--scrim-rgb),.4);
-  font-size: calc(16px * var(--tv-scale, 1)); padding: calc(2px * var(--tv-scale, 1)) calc(10px * var(--tv-scale, 1)); color: #fff; }
-.ep-row:hover .ep-row-thumb.ph .ep-row-badge { color: var(--accent); }
-.ep-row-body { flex: 1; min-width: 0; }
-.ep-row-t { font-size: calc(14px * var(--tv-scale, 1)); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ep-row-date { font-size: calc(12px * var(--tv-scale, 1)); color: var(--muted); margin-top: calc(3px * var(--tv-scale, 1)); }
-.ep-row-prog { height: calc(3px * var(--tv-scale, 1)); background: rgba(255,255,255,.12); border-radius: var(--radius-pill); margin-top: calc(7px * var(--tv-scale, 1)); overflow: hidden; }
-.ep-row-prog > div { height: 100%; background: var(--good); border-radius: var(--radius); }
-.ep-row-play { color: var(--muted); font-size: calc(13px * var(--tv-scale, 1)); opacity: 0; transition: opacity .15s; }
-.ep-row:hover .ep-row-play { opacity: 1; color: var(--accent); }
-
-/* ---- Movies / TV detail facts (director, cast, runtime…) ----
-   Films and shows render through the same sheet as anime; this is the one block
-   anime has no use for. Auto-fit rather than fixed columns: "Director" is one
-   short line, "Cast" is six names, and both have to sit on a phone. */
-.facts { display: grid; gap: calc(12px * var(--tv-scale, 1)) calc(26px * var(--tv-scale, 1)); margin: 0 0 calc(24px * var(--tv-scale, 1));
-  grid-template-columns: repeat(auto-fit, minmax(calc(240px * var(--tv-scale, 1)), 1fr)); }
-.fact dt { color: var(--muted); font-size: calc(11px * var(--tv-scale, 1)); font-weight: 700;
-  text-transform: uppercase; letter-spacing: calc(.8px * var(--tv-scale, 1)); margin-bottom: calc(3px * var(--tv-scale, 1)); }
-.fact dd { margin: 0; font-size: calc(14px * var(--tv-scale, 1)); line-height: 1.5; }
-.src-note { color: var(--muted); font-size: calc(12px * var(--tv-scale, 1)); margin-top: calc(14px * var(--tv-scale, 1)); }
-
-/* ---- franchise: movies / specials / related of the same series ---- */
-.fr-wrap { margin-top: calc(26px * var(--tv-scale, 1)); }
-.fr-head { font-weight: 800; font-size: calc(17px * var(--tv-scale, 1)); margin-bottom: calc(4px * var(--tv-scale, 1)); }
-.fr-label { color: var(--muted); font-size: calc(11px * var(--tv-scale, 1)); text-transform: uppercase;
-  letter-spacing: calc(1px * var(--tv-scale, 1)); font-weight: 700; margin: calc(14px * var(--tv-scale, 1)) 0 calc(8px * var(--tv-scale, 1)); }
-.fr-cards { display: flex; gap: calc(10px * var(--tv-scale, 1)); overflow-x: auto; padding: calc(2px * var(--tv-scale, 1)) calc(2px * var(--tv-scale, 1)) calc(8px * var(--tv-scale, 1)); }
-.fr-card { flex: 0 0 auto; display: flex; gap: calc(10px * var(--tv-scale, 1)); width: calc(252px * var(--tv-scale, 1)); background: var(--card);
-  border: calc(1px * var(--tv-scale, 1)) solid var(--line); border-radius: var(--radius-lg); overflow: hidden; cursor: pointer;
-  transition: border-color .15s; }
-.fr-card:hover { border-color: var(--accent); }
-.fr-card.active { border-color: var(--accent); background: var(--accent-dim); cursor: default; }
-.fr-card img { width: calc(56px * var(--tv-scale, 1)); height: calc(82px * var(--tv-scale, 1)); object-fit: cover; flex: 0 0 auto; }
-.fr-info { padding: calc(8px * var(--tv-scale, 1)) calc(10px * var(--tv-scale, 1)) calc(8px * var(--tv-scale, 1)) 0; min-width: 0; align-self: center; }
-.fr-num { font-size: calc(10px * var(--tv-scale, 1)); color: var(--accent); font-weight: 800; text-transform: uppercase;
-  letter-spacing: calc(.6px * var(--tv-scale, 1)); }
-.fr-title { font-size: calc(13px * var(--tv-scale, 1)); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.fr-sub { font-size: calc(12px * var(--tv-scale, 1)); color: var(--muted); margin-top: calc(1px * var(--tv-scale, 1)); }
-
-/* ============ immersive player ============ */
-.player-overlay { position: fixed; inset: 0; z-index: 100; background: #000;
-  display: none; cursor: default; }
-.player-overlay.show { display: block; }
-.player-overlay.hide-cursor { cursor: none; }
-#video { width: 100%; height: 100%; object-fit: contain; background: #000; }
-
-/* fade layers driven by .controls-hidden on the overlay */
-.p-top, .p-bottom { transition: opacity .25s ease; }
-.player-overlay.controls-hidden .p-top,
-.player-overlay.controls-hidden .p-bottom { opacity: 0; pointer-events: none; }
-
-.p-top { position: absolute; top: 0; left: 0; right: 0; z-index: 10;
-  display: flex; align-items: center; gap: calc(14px * var(--tv-scale, 1)); padding: calc(22px * var(--tv-scale, 1)) calc(28px * var(--tv-scale, 1));
-  background: linear-gradient(180deg, rgba(0,0,0,.8), transparent); }
-.p-titles { line-height: 1.2; }
-.p-title-main { font-size: calc(20px * var(--tv-scale, 1)); font-weight: 700; }
-.p-title-sub { font-size: calc(14px * var(--tv-scale, 1)); color: #cfcfcf; margin-top: calc(2px * var(--tv-scale, 1)); }
-
-.p-center { position: absolute; inset: 0; display: flex; align-items: center;
-  justify-content: center; z-index: 5; pointer-events: none; }
-.p-status { background: rgba(var(--scrim-rgb),.85); color: #fff; padding: calc(10px * var(--tv-scale, 1)) calc(18px * var(--tv-scale, 1)); border-radius: var(--radius-lg);
-  border: calc(1px * var(--tv-scale, 1)) solid var(--line-glass); font-size: calc(14px * var(--tv-scale, 1)); pointer-events: none; }
-/* the ±10s flash. Centred over the picture, never in the way: it is the only
-   feedback a D-pad seek gets, since the scrubber is too small to read across
-   a room. */
-.p-seek-osd { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
-  background: rgba(var(--scrim-rgb),.85); border: calc(1px * var(--tv-scale, 1)) solid var(--line-glass); color: #fff;
-  padding: calc(12px * var(--tv-scale, 1)) calc(22px * var(--tv-scale, 1)); border-radius: var(--radius-lg); font-size: calc(18px * var(--tv-scale, 1)); font-weight: 700;
-  white-space: nowrap; pointer-events: none; }
-.p-seek-osd[hidden] { display: none; }
-.spinner { width: calc(54px * var(--tv-scale, 1)); height: calc(54px * var(--tv-scale, 1)); border: calc(4px * var(--tv-scale, 1)) solid rgba(255,255,255,.16);
-  border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
-
-.p-bottom { position: absolute; bottom: 0; left: 0; right: 0; z-index: 10;
-  padding: 0 calc(22px * var(--tv-scale, 1)) calc(14px * var(--tv-scale, 1)); background: linear-gradient(0deg, rgba(0,0,0,.85), transparent); }
-
-/* scrubber */
-.scrub { position: relative; padding: calc(14px * var(--tv-scale, 1)) 0 calc(10px * var(--tv-scale, 1)); cursor: pointer; touch-action: none; }
-.scrub-track { position: relative; height: calc(4px * var(--tv-scale, 1)); background: rgba(255,255,255,.22); border-radius: var(--radius);
-  transition: height .12s ease; }
-.scrub:hover .scrub-track, .scrub.scrubbing .scrub-track { height: calc(6px * var(--tv-scale, 1)); }
-.scrub-buffered { position: absolute; left: 0; top: 0; bottom: 0; background: rgba(255,255,255,.38); border-radius: var(--radius); }
-.scrub-played { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: var(--accent); border-radius: var(--radius); }
-.scrub-knob { position: absolute; top: 50%; width: calc(13px * var(--tv-scale, 1)); height: calc(13px * var(--tv-scale, 1)); border-radius: var(--radius-pill);
-  background: #fff; box-shadow: 0 0 0 calc(4px * var(--tv-scale, 1)) var(--accent-dim);
-  transform: translate(-50%, -50%) scale(0); left: 0; transition: transform .12s ease; }
-.scrub:hover .scrub-knob, .scrub.scrubbing .scrub-knob { transform: translate(-50%, -50%) scale(1); }
-.scrub-tip { position: absolute; bottom: calc(24px * var(--tv-scale, 1)); transform: translateX(-50%);
-  background: rgba(var(--scrim-rgb),.95); border: calc(1px * var(--tv-scale, 1)) solid var(--line-glass); color: #fff;
-  padding: calc(3px * var(--tv-scale, 1)) calc(8px * var(--tv-scale, 1)); border-radius: var(--radius); font-size: calc(12px * var(--tv-scale, 1));
-  white-space: nowrap; pointer-events: none; }
-
-.p-controls { display: flex; align-items: center; gap: calc(6px * var(--tv-scale, 1)); }
-.p-icon { background: transparent; border: 0; color: #fff; cursor: pointer;
-  width: calc(40px * var(--tv-scale, 1)); height: calc(40px * var(--tv-scale, 1)); border-radius: var(--radius); font-size: calc(18px * var(--tv-scale, 1)); display: inline-flex;
-  align-items: center; justify-content: center; transition: background .15s; }
-.p-icon.wide { width: auto; padding: 0 calc(12px * var(--tv-scale, 1)); font-size: calc(14px * var(--tv-scale, 1)); font-weight: 600; gap: calc(6px * var(--tv-scale, 1)); }
-/* the .p-icon display rule would otherwise beat the [hidden] UA rule (same issue
-   as .cat-menu above), leaving the Skip button visible when it should be off */
-#pSkip[hidden] { display: none; }
-.p-icon:hover { background: rgba(255,255,255,.14); }
-.p-icon.on { color: var(--accent); }
-/* greyed-out, non-interactive look for the cast button when no device is found */
-.p-icon:disabled { opacity: .35; cursor: default; }
-.p-icon:disabled:hover { background: transparent; }
-.p-vol { display: flex; align-items: center; }
-.vol-slider { width: 0; opacity: 0; transition: width .2s, opacity .2s; cursor: pointer;
-  appearance: none; -webkit-appearance: none; height: calc(4px * var(--tv-scale, 1)); background: rgba(255,255,255,.25); }
-.vol-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none;
-  width: calc(12px * var(--tv-scale, 1)); height: calc(12px * var(--tv-scale, 1)); background: #fff; border: 0; border-radius: var(--radius-pill); }
-.vol-slider::-moz-range-thumb { width: calc(12px * var(--tv-scale, 1)); height: calc(12px * var(--tv-scale, 1)); background: #fff; border: 0; border-radius: var(--radius-pill); }
-.p-vol:hover .vol-slider { width: calc(80px * var(--tv-scale, 1)); opacity: 1; margin-left: calc(4px * var(--tv-scale, 1)); }
-.p-time { font-size: calc(13px * var(--tv-scale, 1)); color: #fff; margin-left: calc(8px * var(--tv-scale, 1)); white-space: nowrap; }
-.p-time .dim { color: #b6b6b6; }
-.p-controls .spacer { flex: 1; }
-
-/* collapsible menus (settings, cc) */
-.p-menu { position: absolute; right: calc(22px * var(--tv-scale, 1)); bottom: calc(78px * var(--tv-scale, 1)); z-index: 20;
-  background: rgba(var(--bg-rgb),.92); border: calc(1px * var(--tv-scale, 1)) solid var(--line-glass); border-radius: var(--radius-lg);
-  min-width: calc(260px * var(--tv-scale, 1)); max-width: calc(340px * var(--tv-scale, 1)); padding: calc(8px * var(--tv-scale, 1)); box-shadow: var(--shadow-16);
-  backdrop-filter: blur(calc(20px * var(--tv-scale, 1))) saturate(1.4); -webkit-backdrop-filter: blur(calc(20px * var(--tv-scale, 1))) saturate(1.4); }
-.p-menu-title { font-size: calc(13px * var(--tv-scale, 1)); color: var(--muted); padding: calc(8px * var(--tv-scale, 1)) calc(10px * var(--tv-scale, 1)); font-weight: 600; }
-.p-menu-sec { font-size: calc(11px * var(--tv-scale, 1)); color: var(--muted); font-weight: 700; text-transform: uppercase;
-  letter-spacing: calc(.8px * var(--tv-scale, 1)); padding: calc(8px * var(--tv-scale, 1)) calc(12px * var(--tv-scale, 1)) calc(4px * var(--tv-scale, 1)); }
-.p-menu-sec.sep { border-top: calc(1px * var(--tv-scale, 1)) solid var(--line); margin-top: calc(8px * var(--tv-scale, 1)); padding-top: calc(12px * var(--tv-scale, 1)); }
-.p-menu-empty { color: var(--muted); font-size: calc(13px * var(--tv-scale, 1)); padding: calc(9px * var(--tv-scale, 1)) calc(12px * var(--tv-scale, 1)); }
-.p-menu-section { max-height: 46vh; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #3a4150 transparent; }
-.p-menu-section::-webkit-scrollbar { width: calc(8px * var(--tv-scale, 1)); display: block; }
-.p-menu-section::-webkit-scrollbar-thumb { background: #3a4150; border-radius: var(--radius-pill); }
-/* Only a safety net: tracks are attached in "hidden" mode and drawn by
-   SubStyle into .sub-layer, so the browser's own cue renderer never runs. It
-   still matters if a cue ever reaches a native surface we don't own (an
-   AirPlay receiver, a webview that forces its own fullscreen player). */
-video::cue { background: rgba(8,8,12,.75); color: #fff; font-size: 1.05em; }
-
-/* ---- subtitles, drawn by the app ----
-   The layer is sized and placed over the video's PICTURE (not the element),
-   so letterboxed content puts its subtitles inside the image rather than in
-   the black bar. app.js writes left/top/width/height in px on every render;
-   everything below is the part that doesn't move. */
-.sub-layer { position: absolute; left: 0; top: 0; width: 100%; height: 100%;
-  z-index: 5; pointer-events: none; overflow: hidden; display: none;
-  font-weight: 600; text-align: center; }
-.sub-stack { position: absolute; left: 2%; right: 2%; display: flex; flex-direction: column; }
-/* `gap` does nothing on the TV's Chromium 69, so the stacking uses margins */
-.sub-cue + .sub-cue { margin-top: .28em; }
-.sub-cue { display: inline-block; max-width: 100%; padding: .16em .5em;
-  border-radius: calc(4px * var(--tv-scale, 1)); line-height: 1.34; white-space: pre-wrap; }
-/* a colour swatch beside its name, in the Text colour / Background pages */
-.sub-chip { display: inline-block; width: calc(15px * var(--tv-scale, 1)); height: calc(15px * var(--tv-scale, 1)); border-radius: calc(4px * var(--tv-scale, 1));
-  border: calc(1px * var(--tv-scale, 1)) solid rgba(255,255,255,.4); margin-right: calc(10px * var(--tv-scale, 1)); vertical-align: calc(-2px * var(--tv-scale, 1)); }
-.sub-chip.none { background: repeating-linear-gradient(45deg,
-  rgba(255,255,255,.18) 0 calc(3px * var(--tv-scale, 1)), transparent calc(3px * var(--tv-scale, 1)) calc(6px * var(--tv-scale, 1))); }
-.p-menu-note { font-size: calc(12px * var(--tv-scale, 1)); color: var(--muted); padding: calc(8px * var(--tv-scale, 1)) calc(10px * var(--tv-scale, 1)); line-height: 1.4; border-top: calc(1px * var(--tv-scale, 1)) solid var(--line); margin-top: calc(6px * var(--tv-scale, 1)); }
-.p-menu-row, .p-menu-item, .p-menu-back { width: 100%; text-align: left; background: transparent;
-  border: 0; color: var(--text); padding: calc(11px * var(--tv-scale, 1)) calc(12px * var(--tv-scale, 1)); border-radius: var(--radius); cursor: pointer;
-  font-size: calc(14px * var(--tv-scale, 1)); display: flex; align-items: center; justify-content: space-between; }
-.p-menu-row:hover, .p-menu-item:hover, .p-menu-back:hover { background: rgba(255,255,255,.07); }
-.p-menu-val { color: var(--muted); font-size: calc(13px * var(--tv-scale, 1)); }
-.p-menu-item.active { color: var(--accent); font-weight: 600; }
-.p-menu-item.active::after { content: "✓"; margin-left: calc(8px * var(--tv-scale, 1)); }
-/* Where a stream comes from, not just how big it is. Two rows can both read
-   "1080p" while one is a lossless remux and the other a re-encode a tenth its
-   size; the tier is the only thing that tells them apart, so it is a pill
-   rather than more grey text. `.floor` is deliberately the warmer colour — it
-   means "playing now, but not the best picture available". */
-.p-src { margin-left: auto; flex: none; font-size: calc(11px * var(--tv-scale, 1)); line-height: 1; padding: calc(4px * var(--tv-scale, 1)) calc(8px * var(--tv-scale, 1));
-  border-radius: var(--radius-pill); border: calc(1px * var(--tv-scale, 1)) solid var(--line); color: var(--muted);
-  white-space: nowrap; font-weight: 500; }
-.p-src.floor { color: #e8b672; border-color: rgba(232, 182, 114, .35); background: rgba(232, 182, 114, .10); }
-.p-src.quality { color: var(--good); border-color: rgba(111, 211, 156, .30); background: rgba(111, 211, 156, .09); }
-.p-menu-back { color: var(--muted); font-weight: 600; border-bottom: calc(1px * var(--tv-scale, 1)) solid var(--line);
-  margin-bottom: calc(4px * var(--tv-scale, 1)); border-radius: 0; }
-/* subtitle sync nudge (inside the Subtitles menu) */
-.sub-sync { display: flex; align-items: center; gap: calc(8px * var(--tv-scale, 1)); padding: calc(4px * var(--tv-scale, 1)) calc(12px * var(--tv-scale, 1)) calc(8px * var(--tv-scale, 1)); }
-.sub-sync .p-icon { width: calc(38px * var(--tv-scale, 1)); height: calc(38px * var(--tv-scale, 1)); font-size: calc(20px * var(--tv-scale, 1)); background: var(--card); }
-.sub-sync-val { min-width: calc(64px * var(--tv-scale, 1)); text-align: center; font-size: calc(14px * var(--tv-scale, 1)); font-variant-numeric: tabular-nums;
-  color: var(--muted); }
-.sub-sync-val.on { color: var(--accent); font-weight: 700; }
-.sub-sync-reset { border-bottom: 0; margin: 0 0 0 auto; width: auto; padding: calc(8px * var(--tv-scale, 1)) calc(12px * var(--tv-scale, 1)); font-size: calc(13px * var(--tv-scale, 1)); }
-
-/* episodes drawer */
-/* the plain width is a fallback: min() needs Chromium 79 and the TV webview is
-   69, where an unparsed width would collapse the drawer to its content */
-.p-drawer { position: absolute; top: 0; right: 0; bottom: 0; width: calc(420px * var(--tv-scale, 1)); width: min(calc(420px * var(--tv-scale, 1)), 92vw);
-  z-index: 25; background: rgba(var(--bg-rgb),.97); border-left: calc(1px * var(--tv-scale, 1)) solid var(--line-glass);
-  border-radius: var(--radius-xl) 0 0 var(--radius-xl); box-shadow: var(--shadow-16);
-  display: flex; flex-direction: column; transform: translateX(100%); transition: transform .28s ease; }
-.p-drawer.show { transform: translateX(0); }
-.p-drawer-head { display: flex; align-items: center; justify-content: space-between;
-  padding: calc(18px * var(--tv-scale, 1)) calc(20px * var(--tv-scale, 1)); font-size: calc(18px * var(--tv-scale, 1)); font-weight: 700; border-bottom: calc(1px * var(--tv-scale, 1)) solid var(--line); }
-.p-drawer-list { overflow-y: auto; padding: calc(10px * var(--tv-scale, 1)); display: flex; flex-direction: column; gap: calc(6px * var(--tv-scale, 1));
-  scrollbar-width: thin; scrollbar-color: #3a4150 transparent; }
-.p-drawer-list::-webkit-scrollbar { width: calc(8px * var(--tv-scale, 1)); display: block; }
-.p-drawer-list::-webkit-scrollbar-thumb { background: #3a4150; border-radius: var(--radius-pill); }
-.p-drawer-ep { display: flex; align-items: center; gap: calc(12px * var(--tv-scale, 1)); padding: calc(12px * var(--tv-scale, 1)); border-radius: var(--radius-lg);
-  cursor: pointer; background: var(--card); border: calc(1px * var(--tv-scale, 1)) solid transparent;
-  transition: border-color .15s; }
-.p-drawer-ep:hover { border-color: var(--accent); }
-.p-drawer-ep.active { background: var(--accent-dim); border-color: var(--accent); }
-.p-drawer-num { font-size: calc(20px * var(--tv-scale, 1)); font-weight: 700; color: var(--muted); min-width: calc(34px * var(--tv-scale, 1)); text-align: center; }
-.p-drawer-ep.active .p-drawer-num { color: var(--accent); }
-.p-drawer-meta { flex: 1; }
-.p-drawer-meta .t { font-weight: 600; font-size: calc(14px * var(--tv-scale, 1)); }
-.p-drawer-meta .s { font-size: calc(12px * var(--tv-scale, 1)); color: var(--muted); margin-top: calc(2px * var(--tv-scale, 1)); }
-.p-drawer-ep .mini-prog { height: calc(3px * var(--tv-scale, 1)); background: rgba(255,255,255,.12); border-radius: var(--radius-pill); margin-top: calc(6px * var(--tv-scale, 1)); }
-.p-drawer-ep .mini-prog > div { height: 100%; background: var(--good); border-radius: var(--radius); }
-
-/* servers — every source this stream can play from, hand-pickable. Lives in
-   the settings menu as a submenu next to Quality. */
-.srv-head-s { font-size: calc(12px * var(--tv-scale, 1)); color: var(--muted); font-weight: 500; padding: calc(2px * var(--tv-scale, 1)) calc(12px * var(--tv-scale, 1)) calc(6px * var(--tv-scale, 1)); letter-spacing: 0; }
-.settings-menu #srvList { display: flex; flex-direction: column; gap: calc(6px * var(--tv-scale, 1)); padding: calc(4px * var(--tv-scale, 1)) calc(4px * var(--tv-scale, 1)) calc(6px * var(--tv-scale, 1)); }
-/* release names need more room than the default menu width gives them
-   (:has is progressive — older TV webviews just keep the normal width) */
-.settings-menu:has([data-sub="servers"]:not([hidden])) { min-width: calc(340px * var(--tv-scale, 1)); max-width: calc(460px * var(--tv-scale, 1)); }
-/* #srvList is BOTH the flex column and the scroll box (.p-menu-section caps it
-   at 46vh). A flex item is normally protected from shrinking below its content
-   by min-height:auto — but that protection only applies while overflow is
-   visible, and these rows clip on purpose. So with a hundred releases the rows
-   were squashed to 27px and the second line (resolution · seeders) was sliced
-   in half instead of the list simply scrolling. Never shrink; let it scroll. */
-.srv-row { position: relative; display: flex; align-items: center; gap: calc(10px * var(--tv-scale, 1)); cursor: pointer;
-  flex: 0 0 auto;
-  padding: calc(13px * var(--tv-scale, 1)) calc(12px * var(--tv-scale, 1)) calc(13px * var(--tv-scale, 1)) calc(18px * var(--tv-scale, 1)); background: var(--card); border: calc(1px * var(--tv-scale, 1)) solid transparent;
-  border-radius: var(--radius-lg); overflow: hidden; transition: border-color .15s, background .15s; }
-/* the left rail: muted by default, accent on the live/hovered row */
-.srv-row::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: calc(3px * var(--tv-scale, 1));
-  background: #454c5a; transition: background .15s; }
-.srv-row:hover { background: var(--card2); border-color: var(--accent); }
-.srv-row:hover::before, .srv-row.live::before, .srv-row.fav::before { background: var(--accent); }
-.srv-row.live { background: var(--accent-dim); border-color: var(--accent); }
-.srv-body { flex: 1; min-width: 0; }
-/* Title plus an optional tier pill. The pill must never be the thing that gets
-   ellipsed away, so the NAME truncates (min-width:0 is what lets a flex child
-   shrink below its content) and the pill holds its size. */
-.srv-t { font-size: calc(14px * var(--tv-scale, 1)); font-weight: 700; display: flex; align-items: center; gap: calc(8px * var(--tv-scale, 1)); }
-.srv-name { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-/* The resolution, promoted out of the detail line to lead the row. Fixed width
-   so the numbers form a column the eye can run down, and flex:none so a long
-   release name is what gets ellipsed — never the one field you are scanning
-   for. Tabular figures keep 2160p and 720p the same width. */
-.srv-res { flex: 0 0 auto; min-width: calc(46px * var(--tv-scale, 1)); font-size: calc(12px * var(--tv-scale, 1)); font-weight: 700;
-  color: var(--accent); font-variant-numeric: tabular-nums; letter-spacing: calc(.2px * var(--tv-scale, 1)); }
-.srv-row.live .srv-res, .srv-row:hover .srv-res { color: var(--accent); }
-.srv-s { font-size: calc(12px * var(--tv-scale, 1)); color: var(--muted); margin-top: calc(3px * var(--tv-scale, 1));
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.srv-fav { flex: 0 0 auto; width: calc(30px * var(--tv-scale, 1)); height: calc(30px * var(--tv-scale, 1)); padding: 0; background: transparent;
-  border: 0; border-radius: var(--radius); color: var(--muted); cursor: pointer;
-  display: inline-flex; align-items: center; justify-content: center; }
-.srv-fav:hover { color: var(--accent); background: rgba(255,255,255,.08); }
-.srv-fav.on { color: var(--accent); }
-.srv-live { flex: 0 0 auto; display: inline-flex; align-items: center; gap: calc(5px * var(--tv-scale, 1));
-  background: var(--card2); color: #fff; font-size: calc(11px * var(--tv-scale, 1)); font-weight: 700; letter-spacing: calc(.6px * var(--tv-scale, 1));
-  padding: calc(5px * var(--tv-scale, 1)) calc(10px * var(--tv-scale, 1)); border-radius: var(--radius-pill); }
-.srv-live svg { display: block; }
-.srv-foot { border-top: calc(1px * var(--tv-scale, 1)) solid var(--line); padding: calc(12px * var(--tv-scale, 1)) calc(16px * var(--tv-scale, 1)); font-size: calc(12px * var(--tv-scale, 1));
-  color: var(--muted); line-height: 1.45; display: flex; flex-direction: column; gap: calc(10px * var(--tv-scale, 1)); }
-.srv-foot .btn { align-self: flex-start; padding: calc(8px * var(--tv-scale, 1)) calc(14px * var(--tv-scale, 1)); font-size: calc(13px * var(--tv-scale, 1)); }
-.srv-foot.bad { color: #ff8080; }
-.srv-note { padding: calc(14px * var(--tv-scale, 1)) calc(4px * var(--tv-scale, 1)); font-size: calc(13px * var(--tv-scale, 1)); color: var(--muted); line-height: 1.45; }
-
-/* up-next toast */
-.up-next { position: absolute; right: calc(28px * var(--tv-scale, 1)); bottom: calc(100px * var(--tv-scale, 1)); z-index: 22; width: calc(320px * var(--tv-scale, 1));
-  background: rgba(var(--bg-rgb),.92); border: calc(1px * var(--tv-scale, 1)) solid var(--line-glass); border-radius: var(--radius-lg); padding: calc(16px * var(--tv-scale, 1));
-  box-shadow: var(--shadow-16); backdrop-filter: blur(calc(20px * var(--tv-scale, 1))) saturate(1.4); -webkit-backdrop-filter: blur(calc(20px * var(--tv-scale, 1))) saturate(1.4); }
-.up-next-label { font-size: calc(12px * var(--tv-scale, 1)); color: var(--muted); text-transform: uppercase; letter-spacing: calc(.5px * var(--tv-scale, 1)); }
-.up-next-title { font-size: calc(16px * var(--tv-scale, 1)); font-weight: 700; margin: calc(6px * var(--tv-scale, 1)) 0 calc(12px * var(--tv-scale, 1)); }
-.up-next-actions { display: flex; gap: calc(8px * var(--tv-scale, 1)); }
-.up-next-actions .btn { padding: calc(8px * var(--tv-scale, 1)) calc(14px * var(--tv-scale, 1)); font-size: calc(14px * var(--tv-scale, 1)); }
-.up-next-bar { height: calc(3px * var(--tv-scale, 1)); background: rgba(255,255,255,.12); border-radius: var(--radius-pill); margin-top: calc(12px * var(--tv-scale, 1)); overflow: hidden; }
-.up-next-bar > div { height: 100%; width: 0; background: var(--accent); }
-
-/* ---- auth pages ---- */
-.auth { min-height: 100vh; display: flex; align-items: center; justify-content: center;
-  background: var(--bg); padding: calc(20px * var(--tv-scale, 1)); }
-.auth-card { background: var(--bg2); padding: calc(40px * var(--tv-scale, 1)); border-radius: var(--radius-xl);
-  border: calc(1px * var(--tv-scale, 1)) solid var(--line); width: calc(390px * var(--tv-scale, 1)); width: min(calc(390px * var(--tv-scale, 1)), 100%); }
-.auth-card h1 { color: var(--text); font-size: calc(24px * var(--tv-scale, 1)); font-weight: 600;
-  letter-spacing: calc(-.5px * var(--tv-scale, 1)); text-align: left; margin-bottom: calc(28px * var(--tv-scale, 1)); }
-.auth-card p { color: var(--muted); margin-bottom: calc(26px * var(--tv-scale, 1)); font-size: calc(14px * var(--tv-scale, 1)); text-align: center; }
-.auth-card label { display: block; font-size: calc(13px * var(--tv-scale, 1)); color: var(--muted); margin: calc(16px * var(--tv-scale, 1)) 0 calc(6px * var(--tv-scale, 1)); }
-.auth-card input { width: 100%; padding: calc(12px * var(--tv-scale, 1)) calc(14px * var(--tv-scale, 1)); border-radius: var(--radius); border: calc(1px * var(--tv-scale, 1)) solid var(--line);
-  background: var(--bg); color: var(--text); font-size: calc(15px * var(--tv-scale, 1));
-  transition: border-color .15s, box-shadow .15s; }
-.auth-card input:focus { outline: none; border-color: var(--accent);
-  box-shadow: 0 0 0 calc(3px * var(--tv-scale, 1)) var(--accent-dim); }
-.auth-card .btn { width: 100%; margin-top: calc(24px * var(--tv-scale, 1)); padding: calc(12px * var(--tv-scale, 1)); font-size: calc(15px * var(--tv-scale, 1)); }
-.err { color: #ff8296; font-size: calc(14px * var(--tv-scale, 1)); margin-top: calc(14px * var(--tv-scale, 1)); min-height: calc(18px * var(--tv-scale, 1)); text-align: center; }
-
-/* ---- admin ---- */
-.admin { max-width: calc(900px * var(--tv-scale, 1)); margin: 0 auto; padding: calc(30px * var(--tv-scale, 1)) calc(40px * var(--tv-scale, 1)); }
-.admin h1 { margin-bottom: calc(20px * var(--tv-scale, 1)); }
-.panel { background: var(--bg2); border: calc(1px * var(--tv-scale, 1)) solid var(--line); border-radius: var(--radius-lg);
-  padding: calc(22px * var(--tv-scale, 1)); margin-bottom: calc(24px * var(--tv-scale, 1)); }
-.panel h2 { font-size: calc(18px * var(--tv-scale, 1)); margin-bottom: calc(16px * var(--tv-scale, 1)); }
-.row-form { display: flex; gap: calc(10px * var(--tv-scale, 1)); flex-wrap: wrap; align-items: end; }
-.row-form input, .row-form select { padding: calc(10px * var(--tv-scale, 1)) calc(12px * var(--tv-scale, 1)); border-radius: var(--radius); border: calc(1px * var(--tv-scale, 1)) solid var(--line);
-  background: var(--bg); color: var(--text); }
-table { width: 100%; border-collapse: collapse; margin-top: calc(8px * var(--tv-scale, 1)); }
-th, td { text-align: left; padding: calc(10px * var(--tv-scale, 1)) calc(8px * var(--tv-scale, 1)); border-bottom: calc(1px * var(--tv-scale, 1)) solid var(--line); font-size: calc(14px * var(--tv-scale, 1)); }
-th { color: var(--muted); font-weight: 600; }
-.tag { padding: calc(2px * var(--tv-scale, 1)) calc(10px * var(--tv-scale, 1)); border-radius: var(--radius-pill); font-size: calc(12px * var(--tv-scale, 1)); background: var(--card); }
-.tag.admin { background: var(--accent-dim); color: var(--accent); }
-.tag.off { background: var(--card2); color: var(--muted); }
-.invite-link { background: var(--bg); border: calc(1px * var(--tv-scale, 1)) dashed var(--line); padding: calc(10px * var(--tv-scale, 1)); border-radius: var(--radius);
-  font-size: calc(13px * var(--tv-scale, 1)); word-break: break-all; margin-top: calc(12px * var(--tv-scale, 1)); color: var(--accent); }
-.center { text-align: center; }
-.loading { text-align: center; padding: calc(60px * var(--tv-scale, 1)); color: var(--muted); }
-
-/* Desktop navigation reads as a list; the same destinations form phone tabs. */
-@media (min-width: 721px) {
-  html:not(.tv) { --rail-w: calc(208px * var(--tv-scale, 1)); }
-  html:not(.tv) .rail { padding: calc(28px * var(--tv-scale, 1)) calc(16px * var(--tv-scale, 1)) calc(20px * var(--tv-scale, 1)); align-items: stretch; background: #141715; overflow-y: auto; }
-  html:not(.tv) .rail-mark { width: auto; height: auto; clip-path: none; background: none;
-    margin: 0 calc(12px * var(--tv-scale, 1)) calc(32px * var(--tv-scale, 1)); color: var(--text); font-size: calc(23px * var(--tv-scale, 1)); letter-spacing: calc(-.7px * var(--tv-scale, 1)); font-weight: 600; }
-  html:not(.tv) .rail-mark span { display: block; }
-  html:not(.tv) .rail-btn { width: 100%; flex-direction: row; gap: calc(12px * var(--tv-scale, 1)); padding: calc(12px * var(--tv-scale, 1));
-    min-height: calc(44px * var(--tv-scale, 1)); border-radius: var(--radius); font-size: calc(14px * var(--tv-scale, 1)); font-weight: 500; }
-  html:not(.tv) .rail-btn svg { width: calc(19px * var(--tv-scale, 1)); height: calc(19px * var(--tv-scale, 1)); }
-  html:not(.tv) .rail-btn.active { box-shadow: inset calc(2px * var(--tv-scale, 1)) 0 var(--accent); }
-  html:not(.tv) .rail-tail { align-items: stretch; }
-  html:not(.tv) .rail-who { text-align: left; font-size: calc(12px * var(--tv-scale, 1)); padding: calc(18px * var(--tv-scale, 1)) calc(12px * var(--tv-scale, 1)) 0; border-top: calc(1px * var(--tv-scale, 1)) solid var(--line); margin-top: calc(12px * var(--tv-scale, 1)); }
+.card {
+  min-width: 0;
+  position: relative;
 }
-
-/* ---- mobile ---- */
-@media (max-width: 720px) {
-  /* The rail lies on its side: same buttons, same order, now a bottom tab
-     bar. Everything past TV Shows folds behind the ⋯ button, which lifts
-     .rail-tail off the bar as a popover — the buttons themselves are the
-     ones already in the DOM, so nothing is duplicated or kept in step. */
-  .rail { top: auto; right: 0; width: auto; height: var(--rail-h);
-    flex-direction: row; align-items: stretch; gap: 0; padding: 0;
-    padding-bottom: env(safe-area-inset-bottom);
-    border-right: 0; border-top: calc(1px * var(--tv-scale, 1)) solid var(--line); }
-  body.app-shell { padding-left: 0;
-    padding-bottom: calc(var(--rail-h) + env(safe-area-inset-bottom)); }
-  .rail-mark, .rail-spacer { display: none; }
-  .rail-btn { flex: 1 1 0; width: auto; min-width: 0; gap: calc(4px * var(--tv-scale, 1));
-    padding: calc(8px * var(--tv-scale, 1)) calc(2px * var(--tv-scale, 1)) calc(6px * var(--tv-scale, 1)); border-radius: 0; font-size: calc(11px * var(--tv-scale, 1)); }
-  .rail-btn svg { width: calc(22px * var(--tv-scale, 1)); height: calc(22px * var(--tv-scale, 1)); }
-  /* a filled pill would collide with the bar edge — mark the tab with a rule */
-  .rail-btn.active { background: transparent; box-shadow: inset 0 calc(2px * var(--tv-scale, 1)) 0 var(--accent); }
-  .rail-more-btn { display: flex; }
-  .rail-tail { position: absolute; right: calc(8px * var(--tv-scale, 1)); bottom: 100%; margin-bottom: calc(8px * var(--tv-scale, 1));
-    display: none; width: auto; min-width: calc(200px * var(--tv-scale, 1)); padding: calc(6px * var(--tv-scale, 1));
-    background: var(--bg2); border: calc(1px * var(--tv-scale, 1)) solid var(--line);
-    border-radius: var(--radius-lg); box-shadow: var(--shadow-16); }
-  body.rail-more-open .rail-tail { display: flex; }
-  .rail-tail .rail-btn { flex: 0 0 auto; width: 100%; flex-direction: row;
-    justify-content: flex-start; gap: calc(12px * var(--tv-scale, 1)); padding: calc(11px * var(--tv-scale, 1)) calc(12px * var(--tv-scale, 1));
-    border-radius: var(--radius); font-size: calc(14px * var(--tv-scale, 1)); box-shadow: none; }
-  .rail-tail .rail-btn span { text-align: left; }
-  .rail-who { text-align: left; padding: calc(8px * var(--tv-scale, 1)) calc(12px * var(--tv-scale, 1)) calc(4px * var(--tv-scale, 1)); font-size: calc(12px * var(--tv-scale, 1)); }
-
-  /* the search strip spans the content column, which is the full width here */
-  .searchbar { padding: calc(10px * var(--tv-scale, 1)) calc(14px * var(--tv-scale, 1)); padding-top: max(calc(10px * var(--tv-scale, 1)), env(safe-area-inset-top)); }
-
-  .page-heading { padding: calc(24px * var(--tv-scale, 1)) calc(20px * var(--tv-scale, 1)); }
-  .page-heading h1 { font-size: calc(24px * var(--tv-scale, 1)); }
-  .text-link { font-size: calc(13px * var(--tv-scale, 1)); }
-  .library-empty { margin: 0 calc(20px * var(--tv-scale, 1)); padding: calc(32px * var(--tv-scale, 1)) 0; }
-  .hero-car { min-height: calc(400px * var(--tv-scale, 1)); margin: 0 calc(16px * var(--tv-scale, 1)) calc(24px * var(--tv-scale, 1)); }
-  .hero { min-height: calc(400px * var(--tv-scale, 1)); align-items: flex-end; padding: calc(24px * var(--tv-scale, 1)) calc(20px * var(--tv-scale, 1)) calc(76px * var(--tv-scale, 1)); }
-  .hero-content { gap: calc(12px * var(--tv-scale, 1)); max-width: 100%; }
-  .hero-title { font-size: calc(28px * var(--tv-scale, 1)); max-width: calc(360px * var(--tv-scale, 1)); }
-  .hero-badge { font-size: calc(13px * var(--tv-scale, 1)); }
-  .hero-scrim { background: linear-gradient(0deg, rgba(14,19,16,.97), rgba(14,19,16,.72) 65%, rgba(14,19,16,.15)); }
-  .hero-pager { bottom: calc(16px * var(--tv-scale, 1)); right: calc(16px * var(--tv-scale, 1)); }
-
-  .rows { padding: 0 calc(16px * var(--tv-scale, 1)) calc(40px * var(--tv-scale, 1)); }
-  .card { width: calc(128px * var(--tv-scale, 1)); }
-  .card img { height: calc(184px * var(--tv-scale, 1)); }
-  .row-scroller.posters .row-arrow { height: calc(184px * var(--tv-scale, 1)); }
-
-  /* search/category grids: three slim columns instead of one giant card
-     (minmax(160px) used to collapse to a single column on ~360px phones) */
-  .cards-grid { grid-template-columns: repeat(auto-fill, minmax(calc(100px * var(--tv-scale, 1)), 1fr)); gap: calc(14px * var(--tv-scale, 1)) calc(8px * var(--tv-scale, 1)); }
-  .cards-grid .cap { font-size: calc(12px * var(--tv-scale, 1)); }
-
-  /* filter bar: sort pills span the full row, the two selects share the next */
-  .filter-bar { gap: calc(8px * var(--tv-scale, 1)); }
-  .browse-types { gap: 0; }
-  .browse-types .mode-pill { flex: 1 1 0; }
-  .filter-bar .mode-pills { flex: 1 0 100%; }
-  .filter-bar .mode-pills .mode-pill { flex: 1; }
-  .filter-bar .picker { flex: 1 1 0; min-width: 0; max-width: none; }
-
-  /* minmax(0,…): a plain 1fr's auto minimum would let a long nowrap title
-     force the column (and the page) wider than the phone screen */
-  .sched-list { grid-template-columns: minmax(0, 1fr); }
-
-  .sheet-back { top: calc(12px * var(--tv-scale, 1)); left: calc(12px * var(--tv-scale, 1)); }
-  .sheet-body { padding: calc(18px * var(--tv-scale, 1)) calc(14px * var(--tv-scale, 1)) calc(40px * var(--tv-scale, 1)); }
-  .sheet-body h2 { font-size: calc(22px * var(--tv-scale, 1)); }
-  .detail-hero { aspect-ratio: 16/9; min-height: calc(220px * var(--tv-scale, 1)); padding: calc(18px * var(--tv-scale, 1)) calc(14px * var(--tv-scale, 1)); }
-  .eps { max-height: calc(300px * var(--tv-scale, 1)); }
-  /* The season column lies down into a scrolling strip above the episodes —
-     stacked full-width it would push the first episode off the screen. */
-  .eps-split { display: block; }
-  .season-list { flex-direction: row; max-width: none; max-height: none;
-    overflow-x: auto; overflow-y: hidden; margin-bottom: calc(14px * var(--tv-scale, 1)); padding-bottom: calc(4px * var(--tv-scale, 1)); }
-  .season-item { width: auto; flex: 0 0 auto; }
-  /* collections dropdown becomes a bottom sheet — reachable and never clipped */
-  .col-menu { position: fixed; left: calc(12px * var(--tv-scale, 1)); right: calc(12px * var(--tv-scale, 1)); top: auto; bottom: calc(12px * var(--tv-scale, 1));
-    min-width: 0; max-width: none; }
-
-  /* player: tighter chrome, drop the low-value controls */
-  .p-top { padding: calc(14px * var(--tv-scale, 1)) calc(12px * var(--tv-scale, 1)); }
-  .p-title-main { font-size: calc(16px * var(--tv-scale, 1)); }
-  .p-title-sub { font-size: calc(12px * var(--tv-scale, 1)); }
-  .p-bottom { padding: 0 calc(10px * var(--tv-scale, 1)) calc(8px * var(--tv-scale, 1)); padding-bottom: max(calc(8px * var(--tv-scale, 1)), env(safe-area-inset-bottom)); }
-  .p-controls { gap: calc(2px * var(--tv-scale, 1)); }
-  .p-icon { width: calc(36px * var(--tv-scale, 1)); height: calc(36px * var(--tv-scale, 1)); font-size: calc(16px * var(--tv-scale, 1)); }
-  #pPrev, #pPip, .p-vol { display: none; } /* phones have hardware volume */
-  #pEps span { display: none; }
-  .p-time { font-size: calc(12px * var(--tv-scale, 1)); margin-left: calc(4px * var(--tv-scale, 1)); }
-  .p-time .dim { display: none; }
-  /* skip button floats above the control bar instead of squeezing into it */
-  #pSkip { position: absolute; right: calc(10px * var(--tv-scale, 1)); bottom: calc(74px * var(--tv-scale, 1));
-    background: rgba(var(--scrim-rgb),.85); border: calc(1px * var(--tv-scale, 1)) solid var(--line-glass); }
-  .p-menu { left: calc(8px * var(--tv-scale, 1)); right: calc(8px * var(--tv-scale, 1)); bottom: calc(60px * var(--tv-scale, 1)); max-width: none; min-width: 0; }
-  .up-next { left: calc(8px * var(--tv-scale, 1)); right: calc(8px * var(--tv-scale, 1)); width: auto; bottom: calc(70px * var(--tv-scale, 1)); }
+.poster {
+  display: block;
+  position: relative;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #2b332b;
+  aspect-ratio: 2/3;
 }
-
-/* touch devices: no hover states to reveal things with */
-@media (hover: none) {
-  .srv-fav { width: calc(44px * var(--tv-scale, 1)); height: calc(44px * var(--tv-scale, 1)); } /* thumb-sized, and it sits next to a row-wide tap target */
-  .card-actions { opacity: 1; }
-  .card-act { width: calc(44px * var(--tv-scale, 1)); height: calc(44px * var(--tv-scale, 1)); }
-  .hero-pager { opacity: 1; }
-  .row-del { opacity: .7; }
-  .ep-row-play { opacity: 1; }
+.poster img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
-
-/* ---- TV / remote-control mode (added by tv.js when in TV mode) ---- */
-html.tv .row-arrow, html.tv .hero-pager { opacity: 1; } /* always show scroll affordances */
-html.tv .page-heading { padding: calc(32px * var(--tv-scale, 1)) var(--tv-pad) calc(16px * var(--tv-scale, 1)); }
-html.tv .page-heading h1 { font-size: calc(36px * var(--tv-scale, 1)); }
-html.tv .text-link { font-size: calc(22px * var(--tv-scale, 1)); }
-html.tv .hero-badge { position: static; padding: 0; background: none; border: 0; }
-.tv-focus { outline: calc(3px * var(--tv-scale, 1)) solid var(--accent) !important; outline-offset: calc(3px * var(--tv-scale, 1));
-  border-radius: var(--radius); box-shadow: 0 0 0 calc(6px * var(--tv-scale, 1)) var(--accent-dim); z-index: 20; }
-html.tv .card.tv-focus .card-art { transform: scale(1.06); }
-html.tv .card.tv-focus .card-scrim { opacity: 1; } /* show title/meta on focus */
-/* larger, TV-legible base sizing when driven by a remote at 10 feet */
-html.tv body { font-size: calc(17px * var(--tv-scale, 1)); }
-/* The remote is walking the control bar — the 3-second auto-hide must not fade
-   the buttons out from under the highlight. */
-html.tv .player-overlay.tv-controls .p-top,
-html.tv .player-overlay.tv-controls .p-bottom { opacity: 1; pointer-events: auto; }
-/* 10-foot legibility for the panels the remote can now open */
-html.tv .srv-t, html.tv .p-drawer-meta .t { font-size: calc(16px * var(--tv-scale, 1)); }
-html.tv .srv-s { font-size: calc(14px * var(--tv-scale, 1)); }
-html.tv .srv-res { font-size: calc(15px * var(--tv-scale, 1)); min-width: calc(58px * var(--tv-scale, 1)); }
-html.tv .p-menu-item, html.tv .p-menu-row, html.tv .p-menu-back { font-size: calc(16px * var(--tv-scale, 1)); padding: calc(14px * var(--tv-scale, 1)) calc(14px * var(--tv-scale, 1)); }
-html.tv .p-menu { min-width: calc(340px * var(--tv-scale, 1)); max-width: calc(460px * var(--tv-scale, 1)); }
-html.tv .p-drawer { width: calc(560px * var(--tv-scale, 1)); }
-
-/* Player notices share the TV scale; video and subtitle sizing stays based on
-   the actual picture dimensions. */
-.p-note { position: absolute; left: calc(24px * var(--tv-scale, 1));
-  bottom: calc(96px * var(--tv-scale, 1)); padding: calc(8px * var(--tv-scale, 1)) calc(14px * var(--tv-scale, 1));
-  background: rgba(0,0,0,.72); color: #fff; border-radius: calc(8px * var(--tv-scale, 1));
-  font-size: calc(13px * var(--tv-scale, 1)); z-index: 40; transition: opacity .4s; }
-.p-status .btn { margin-top: calc(12px * var(--tv-scale, 1)); }
-.p-source-note { margin-top: calc(10px * var(--tv-scale, 1)); font-size: calc(13px * var(--tv-scale, 1)); opacity: .65; }
-
-/* ---- acrylic fallback ----
-   The translucent chrome (nav, drawer, player menus) leans on backdrop-filter.
-   Where that doesn't exist (Tizen's Chromium 69), translucency over content is
-   just mush — swap those surfaces to near-opaque so text stays readable. */
-@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .nav { background: rgba(var(--bg-rgb), .97); }
-  .drawer-panel { background: var(--bg2); }
-  .p-menu, .up-next { background: rgba(var(--bg-rgb), .98); }
+.poster-placeholder {
+  height: 100%;
+  display: flex;
+  align-items: end;
+  padding: 18px;
+  font-size: 1.25rem;
+  color: #d1d8ca;
+  background: #2a372e;
 }
-
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { scroll-behavior: auto !important; animation: none !important; transition: none !important; }
+.card-name {
+  display: block;
+  margin-top: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 0.95rem;
+}
+.badge {
+  position: absolute;
+  left: 9px;
+  top: 9px;
+  background: #151918e8;
+  padding: 5px 8px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+}
+.card-action {
+  width: 100%;
+  margin-top: 10px;
+  font-size: 0.8rem;
+  padding: 8px;
+  min-height: 38px;
+}
+.resume-rail > .card {
+  flex-basis: 270px;
+}
+.resume-rail .poster {
+  aspect-ratio: 16/10;
+}
+.resume-rail .poster img {
+  object-position: 50% 28%;
+}
+.resume-rail .card-name {
+  font-size: 1rem;
+}
+.resume-actions {
+  display: flex;
+  align-items: center;
+}
+.resume-actions .card-action {
+  flex: 1;
+}
+.resume-actions .menu-button {
+  margin: 10px 0 0 6px;
+  padding: 8px 12px;
+  min-height: 38px;
+}
+.progress {
+  display: block;
+  width: 100%;
+  height: 4px;
+  border: 0;
+  background: #3f483f;
+}
+.progress::-webkit-progress-bar {
+  background: #3f483f;
+}
+.progress::-webkit-progress-value {
+  background: var(--accent);
+}
+.empty {
+  border-top: 1px solid var(--line);
+  padding: 48px 0;
+  max-width: 680px;
+}
+.empty h2 {
+  margin-bottom: 12px;
+}
+.empty p {
+  color: var(--muted);
+  margin-bottom: 22px;
+}
+.actions,
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+}
+.actions > * {
+  margin: 0 10px 10px 0;
+}
+.toolbar {
+  padding-bottom: 14px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--line);
+}
+.toolbar label:first-child {
+  flex: 1;
+  min-width: 180px;
+}
+.toolbar button {
+  margin-bottom: 12px;
+}
+.detail {
+  display: flex;
+  align-items: flex-start;
+  margin-bottom: 40px;
+}
+.detail-art {
+  width: 180px;
+  flex-shrink: 0;
+  margin-right: 32px;
+  aspect-ratio: 2/3;
+  object-fit: cover;
+  border-radius: 8px;
+  background: var(--surface);
+}
+.detail-copy {
+  max-width: 720px;
+  min-width: 0;
+}
+.runtime-facts,
+.episode-runtime {
+  color: var(--text);
+  font-weight: 500;
+}
+.metadata-details {
+  margin: 16px 0;
+}
+.metadata-details summary,
+.episode-description summary {
+  cursor: pointer;
+  color: var(--muted);
+}
+.metadata-list {
+  font-size: 14px;
+}
+.metadata-list > div {
+  display: grid;
+  grid-template-columns: 82px minmax(0, 1fr);
+  gap: 14px;
+  margin: 10px 0;
+}
+.metadata-list dt {
+  color: var(--muted);
+}
+.metadata-list dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.episode-runtime {
+  margin: 8px 0;
+  font-size: 14px;
+}
+.episode-description {
+  margin-top: 8px;
+  font-size: 14px;
+}
+.episode-description p {
+  line-height: 1.6;
+}
+.episode-thumbnail {
+  width: 140px;
+  max-width: 100%;
+  aspect-ratio: 16/9;
+  object-fit: cover;
+  border-radius: 4px;
+  margin-bottom: 10px;
+}
+.detail-copy p {
+  margin: 20px 0;
+}
+.episode {
+  display: flex;
+  align-items: center;
+  padding: 18px 0;
+  border-bottom: 1px solid var(--line);
+}
+.episode-number {
+  width: 52px;
+  flex-shrink: 0;
+  color: var(--muted);
+}
+.episode-body {
+  flex: 1;
+  min-width: 0;
+  padding-right: 20px;
+}
+.episode .progress {
+  max-width: 300px;
+  margin-top: 10px;
+}
+.episode .actions {
+  justify-content: flex-end;
+}
+.episode .actions > * {
+  margin-bottom: 0;
+}
+.season-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 32px 0 8px;
+}
+.row {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+  padding: 18px 0;
+}
+.row-main {
+  flex: 1;
+  min-width: 0;
+  margin-right: 20px;
+}
+.row .progress {
+  margin-top: 10px;
+}
+.row button {
+  margin-left: 8px;
+}
+.form {
+  max-width: 540px;
+}
+.form label {
+  margin-bottom: 20px;
+}
+.form button {
+  margin-top: 6px;
+}
+#torrent-rules {
+  max-width: 880px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 24px;
+}
+#torrent-rules > h2,
+#torrent-rules > p,
+#torrent-rules > fieldset,
+#torrent-rules > .check {
+  grid-column: 1 / -1;
+}
+#torrent-rules fieldset {
+  border: 1px solid var(--line);
+  margin-bottom: 20px;
+  padding: 16px;
+}
+#torrent-rules fieldset label {
+  display: inline-flex;
+  margin: 8px 20px 0 0;
+}
+dialog .release .meta {
+  display: block;
+  margin-top: 8px;
+}
+@media (max-width: 600px) {
+  #torrent-rules {
+    grid-template-columns: 1fr;
+  }
+}
+.error {
+  color: #edafa0;
+  line-height: 1.5;
+  margin: 12px 0;
+}
+.login {
+  max-width: 420px;
+  margin: 12vh auto;
+}
+.login h1 {
+  margin-bottom: 32px;
+}
+.login input {
+  width: 100%;
+}
+.loading {
+  color: var(--muted);
+  padding: 40px 0;
+}
+#toast {
+  position: fixed;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--accent);
+  color: #162115;
+  border-radius: 7px;
+  padding: 14px 22px;
+  z-index: 20;
+  max-width: 90vw;
+}
+dialog {
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 28px;
+  width: min(680px, 92vw);
+  max-height: 85vh;
+}
+dialog::backdrop {
+  background: #000a;
+}
+dialog h2 {
+  margin-bottom: 20px;
+}
+dialog #dialog-close {
+  margin-top: 22px;
+}
+dialog .release {
+  display: block;
+  width: 100%;
+  white-space: pre-line;
+  text-align: left;
+  margin-bottom: 10px;
+  font-size: 0.85rem;
+}
+#player {
+  position: fixed;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  background: #090b0a;
+  z-index: 10;
+  padding: 20px;
+  overflow: auto;
+}
+#player header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 16px;
+}
+#player header > div {
+  flex: 1;
+  margin: 0 22px;
+}
+#player-episode {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-top: 5px;
+}
+#video {
+  display: block;
+  width: 100%;
+  height: calc(100vh - 340px);
+  min-height: 240px;
+  background: black;
+}
+#player-transport {
+  margin-top: 12px;
+}
+.playback-times {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+#player-buffering {
+  color: var(--muted);
+}
+#player-seek {
+  width: 100%;
+  min-height: 32px;
+  padding: 0;
+  margin: 4px 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.transport-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.transport-buttons > * {
+  margin: 0;
+}
+.player-volume {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+#player-volume {
+  width: 85px;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--accent);
+}
+#player-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+#player-controls > * {
+  margin-right: 12px;
+}
+#player-controls label {
+  flex-direction: row;
+  align-items: center;
+}
+#player-controls select {
+  margin: 0 0 0 8px;
+  padding: 8px;
+  font-size: 0.85rem;
+}
+#player-message {
+  color: var(--muted);
+  margin-top: 12px;
+}
+#up-next {
+  position: absolute;
+  right: 38px;
+  bottom: 120px;
+  background: var(--surface);
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+#up-next span {
+  display: block;
+  margin-bottom: 16px;
+}
+[hidden] {
+  display: none !important;
+}
+.collection-links {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 16px 0;
+}
+.collection-links button {
+  margin: 0 10px 10px 0;
+}
+.check {
+  flex-direction: row;
+  align-items: center;
+}
+.check input {
+  margin: 0 10px 0 0;
+}
+.queue-current {
+  color: var(--accent);
+}
+@media (min-width: 2400px) {
+  :root {
+    font-size: 24px;
+  }
+  #sidebar {
+    width: 320px;
+  }
+  #main {
+    margin-left: 320px;
+    width: calc(100% - 320px);
+  }
+  .rail > .card {
+    flex-basis: 240px;
+  }
+  .resume-rail > .card {
+    flex-basis: 400px;
+  }
+  .grid {
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  }
+}
+@media (max-width: 900px) {
+  #sidebar {
+    width: 165px;
+    padding: 28px 20px;
+  }
+  #main {
+    margin-left: 165px;
+    width: calc(100% - 165px);
+    padding: 32px 24px;
+  }
+  .brand {
+    font-size: 1.6rem;
+  }
+  .brand span {
+    font-size: 0.43rem;
+  }
+  .detail-art {
+    width: 130px;
+    margin-right: 22px;
+  }
+  .episode {
+    flex-wrap: wrap;
+  }
+  .episode .actions {
+    margin-top: 12px;
+  }
+}
+@media (max-width: 600px) {
+  #shell {
+    display: block;
+  }
+  #sidebar {
+    position: sticky;
+    top: 0;
+    width: 100%;
+    height: auto;
+    padding: 14px 18px;
+    background: var(--bg);
+    z-index: 3;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .brand {
+    font-size: 1.45rem;
+  }
+  .brand span,
+  .sidebar-bottom {
+    display: none;
+  }
+  nav {
+    flex-direction: row;
+    margin-top: 14px;
+    overflow: auto;
+  }
+  nav a {
+    font-size: 0.8rem;
+    white-space: nowrap;
+    padding: 10px 12px;
+    margin: 0 4px 0 0;
+  }
+  #main {
+    margin: 0;
+    width: 100%;
+    padding: 28px 20px;
+  }
+  .page-heading {
+    margin-bottom: 24px;
+  }
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .rail > .card {
+    flex-basis: 140px;
+  }
+  .resume-rail > .card {
+    flex-basis: 240px;
+  }
+  .detail-art {
+    width: 90px;
+    margin-right: 18px;
+  }
+  .detail-copy h1 {
+    font-size: 1.8rem;
+  }
+  .detail-copy p {
+    font-size: 0.9rem;
+  }
+  .season-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .season-header .actions {
+    margin-top: 12px;
+  }
+  .episode-body {
+    padding-right: 0;
+  }
+  .episode .actions {
+    width: 100%;
+    justify-content: flex-start;
+    padding-left: 52px;
+  }
+  .episode .actions button {
+    font-size: 0.75rem;
+    padding: 8px 10px;
+  }
+  .row {
+    flex-wrap: wrap;
+  }
+  .row button {
+    margin: 10px 8px 0 0;
+  }
+  #player {
+    padding: 10px;
+  }
+  #video {
+    height: 55vh;
+  }
+  #player-title {
+    font-size: 0.9rem;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  button,
+  a {
+    transition:
+      background 0.15s,
+      color 0.15s;
+  }
+}
+@media (max-width: 600px) {
+  nav a {
+    padding: 10px 8px;
+    font-size: 0.75rem;
+  }
+}
+@supports not (aspect-ratio: 2/3) {
+  .poster {
+    height: 230px;
+  }
+  .resume-rail .poster {
+    height: 168px;
+  }
+  .detail-art {
+    height: 270px;
+  }
+  .poster img {
+    height: 100%;
+  }
+}
+dialog[open] {
+  z-index: 30;
 }

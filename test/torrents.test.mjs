@@ -1,196 +1,233 @@
-// Unit tests for the torrent-index pure logic: release-name parsing, quality
-// detection, episode matching, ranking, and magnet building. No network.
-import { test } from "node:test";
-import assert from "node:assert/strict";
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { configuration } from '../src/config.mjs';
+import { createStore } from '../src/store.mjs';
 import {
-  parseMovieName, parseQuality, releaseHasEpisode, rankReleases,
-  rankReleasesVerbose, magnetFromHash,
-} from "../lib/torrents.mjs";
+  createTorrentPolicy,
+  assessRelease,
+  releaseFacts,
+  defaultRules,
+} from '../src/torrent-policy.mjs';
+import { createTorrentDownloads } from '../src/torrent-downloads.mjs';
+import { createQbitClient } from '../src/qbittorrent.mjs';
 
-// ---- parseMovieName: title/year out of a release string ----
-test("parseMovieName: dotted name with year", () => {
-  assert.deepEqual(parseMovieName("Inception.2010.1080p.BrRip.x264.YIFY.mp4"), { title: "Inception", year: 2010 });
+const candidate = {
+  hash: 'a'.repeat(40),
+  fileIndex: 0,
+  label: 'Fixture.2160p.WEB-DL',
+  seeders: 12,
+  resolution: 2160,
+  sizeBytes: 100,
+};
+function fixture(t) {
+  const root = mkdtempSync(path.join(os.tmpdir(), 'mediawan-torrents-')),
+    store = createStore(':memory:');
+  store.run(
+    "INSERT INTO users(id,email,name,pw_hash,role) VALUES(1,'admin@test','Test','x','admin')",
+  );
+  const user = store.one('SELECT * FROM users'),
+    title = store.saveTitle({ kind: 'movie', external_id: 'tt1', name: 'Fixture' }),
+    item = store.saveItem({ title_id: title.id });
+  const policy = createTorrentPolicy(store),
+    calls = [];
+  let info,
+    progress = 0,
+    clock = 1000000;
+  const client = {
+    info: async () => info,
+    files: async () => [{ index: 0, name: 'fixture.mp4', size: 100, progress }],
+    stop: async () => {
+      calls.push('stop');
+      info.state = 'stoppedDL';
+    },
+    start: async () => {
+      calls.push('start');
+      info.state = 'downloading';
+    },
+    call: async (endpoint, data) => {
+      calls.push([endpoint, data]);
+      if (endpoint === 'torrents/add') {
+        assert.equal(data.stopCondition, 'MetadataReceived');
+        info = {
+          category: 'mediawan',
+          save_path: data.savepath,
+          state: 'stoppedDL',
+          num_seeds: 4,
+          num_leechs: 2,
+          dlspeed: 10,
+          availability: 1,
+        };
+      }
+      return 'Ok.';
+    },
+  };
+  const worker = createTorrentDownloads(
+    store,
+    {
+      ...configuration({}),
+      qbitUrl: 'http://fixture',
+      qbitSavePath: '/downloads',
+      torrentDir: root,
+      reserveBytes: 0,
+    },
+    policy,
+    {
+      client,
+      now: () => clock,
+      probeFile: async () => ({ duration: 5, video: 'h264', audio: [], subtitles: [] }),
+    },
+  );
+  t.after(async () => {
+    await worker.close();
+    store.close();
+    rmSync(root, { recursive: true, force: true });
+  });
+  return {
+    store,
+    user,
+    item,
+    title,
+    policy,
+    worker,
+    calls,
+    root,
+    client,
+    setInfo: (value) => {
+      info = value;
+    },
+    advance: (ms) => {
+      clock += ms;
+    },
+    complete: (job) => {
+      progress = 1;
+      mkdirSync(path.join(root, job.id), { recursive: true });
+      writeFileSync(path.join(root, job.id, 'fixture.mp4'), Buffer.alloc(100));
+    },
+  };
+}
+test('torrent search rules accept healthy 4K and reject low seeds, unknown facts, oversized and camera releases', () => {
+  const facts = releaseFacts({
+    name: 'Torrentio 4k',
+    title: 'Film.2160p.WEB-DL\n👤 18 💾 55.6 GB',
+  });
+  assert.equal(facts.seeders, 18);
+  assert.equal(facts.resolution, 2160);
+  assert(assessRelease(facts, 'movie', defaultRules).accepted);
+  for (const patch of [
+    { seeders: 0 },
+    { seeders: null },
+    { resolution: null },
+    { sizeBytes: 101 * 1073741824 },
+    { label: 'Film.1080p.HDCAM' },
+    { label: 'Film 720p HQ PreDVD' },
+    { label: 'Film - Prologue (2025) 4K' },
+    { label: 'Film 2026 (NOT The Chris Nolan FILM) 1080p' },
+  ])
+    assert(!assessRelease({ ...facts, ...patch }, 'movie', defaultRules).accepted);
+  assert(!assessRelease(facts, 'tv', defaultRules).accepted);
 });
-test("parseMovieName: strips trailing paren from 'Title (Year)'", () => {
-  assert.deepEqual(parseMovieName("Backrooms.(2026).1080p.WEB.mkv"), { title: "Backrooms", year: 2026 });
+test('torrent settings are durable and validate bounded values', (t) => {
+  const f = fixture(t);
+  f.policy.set({ minSeeders: 12 });
+  assert.equal(createTorrentPolicy(f.store).get().minSeeders, 12);
+  assert.throws(() => f.policy.set({ minSeeders: -1 }), /Invalid/);
+  assert.throws(() => f.policy.set({ maxConcurrent: 1.5 }), /whole/);
+  assert.throws(() => f.policy.set({ resolutions: [] }), /Invalid/);
 });
-test("parseMovieName: no year → title trimmed at quality tag", () => {
-  assert.equal(parseMovieName("Some Movie 1080p BluRay").title, "Some Movie");
+test('torrent worker selects only the requested file, pauses, resumes and publishes verified local media', async (t) => {
+  const f = fixture(t),
+    job = await f.worker.enqueue(f.user, f.item.id, candidate);
+  await f.worker.tick();
+  await f.worker.tick();
+  assert.equal(f.store.job(job.id).state, 'downloading');
+  assert.deepEqual(
+    f.calls.filter((c) => c[0] === 'torrents/filePrio').map((c) => c[1].priority),
+    ['0', '1'],
+  );
+  await f.worker.action(f.user, job.id, 'pause');
+  assert.equal(f.store.job(job.id).state, 'paused');
+  await f.worker.action(f.user, job.id, 'resume');
+  assert.equal(f.store.job(job.id).state, 'queued');
+  await f.worker.tick();
+  f.complete(job);
+  await f.worker.tick();
+  assert.equal(f.store.job(job.id).state, 'ready', f.store.job(job.id).error);
+  assert.equal(f.store.assets(f.item.id).length, 1);
 });
-
-// ---- parseQuality ----
-test("parseQuality: resolutions and 4k", () => {
-  assert.equal(parseQuality("Movie 2160p UHD"), 2160);
-  assert.equal(parseQuality("Movie 1080p"), 1080);
-  assert.equal(parseQuality("Movie 720p"), 720);
-  assert.equal(parseQuality("Movie DVDRip"), 0);
+test('stalled torrents stop without switching releases', async (t) => {
+  const f = fixture(t),
+    job = await f.worker.enqueue(f.user, f.item.id, candidate);
+  await f.worker.tick();
+  await f.worker.tick();
+  f.advance(11 * 60000);
+  await f.worker.tick();
+  assert.equal(f.store.job(job.id).state, 'failed');
+  assert.match(f.store.job(job.id).error, /stall timeout/);
+  assert.equal(f.calls.filter((c) => c[0] === 'torrents/add').length, 1);
+  assert(f.calls.includes('stop'));
 });
-
-// ---- releaseHasEpisode: match the wanted number, not years/resolution ----
-test("releaseHasEpisode: matches '- 07' and 'E07' and 'S01E07'", () => {
-  assert.ok(releaseHasEpisode("[SubsPlease] Frieren - 07 (1080p)", 7));
-  assert.ok(releaseHasEpisode("Show E07 [1080p]", 7));
-  assert.ok(releaseHasEpisode("Show S01E07 1080p", 7));
+test('metadata timeout and actual oversized files stop before downloading', async (t) => {
+  const f = fixture(t),
+    job = await f.worker.enqueue(f.user, f.item.id, candidate);
+  await f.worker.tick();
+  f.client.files = async () => [];
+  await f.worker.action(f.user, job.id, 'pause');
+  await f.worker.action(f.user, job.id, 'resume');
+  await f.worker.tick();
+  assert.equal(f.store.job(job.id).state, 'checking');
+  assert.equal(f.calls.filter((c) => c === 'start').length, 1);
+  f.advance(4 * 60000);
+  await f.worker.tick();
+  assert.equal(f.store.job(job.id).state, 'failed');
+  assert.match(f.store.job(job.id).error, /metadata/);
+  await f.worker.action(f.user, job.id, 'retry');
+  f.client.files = async () => [
+    { index: 0, name: 'fixture.mp4', size: 101 * 1073741824, progress: 0 },
+  ];
+  await f.worker.tick();
+  assert.equal(f.store.job(job.id).state, 'failed');
+  assert.match(f.store.job(job.id).error, /size limit/);
+  assert.equal(f.calls.filter((c) => c === 'start').length, 1);
 });
-test("releaseHasEpisode: does not match year/resolution digits", () => {
-  assert.equal(releaseHasEpisode("Movie 2010 1080p", 10), false);
-  assert.equal(releaseHasEpisode("Show - 05 (1080p)", 10), false);
+test('rules and item access cannot be bypassed at enqueue; unrelated torrents stay untouched', async (t) => {
+  const f = fixture(t);
+  await assert.rejects(
+    f.worker.enqueue(f.user, f.item.id, { ...candidate, seeders: 1 }),
+    /seeders/,
+  );
+  await assert.rejects(
+    f.worker.enqueue({ ...f.user, role: 'member', can_download: 0 }, f.item.id, candidate),
+    /permission/,
+  );
+  const job = await f.worker.enqueue(f.user, f.item.id, candidate);
+  f.setInfo({ category: 'personal', save_path: '/elsewhere', state: 'downloading' });
+  await f.worker.tick();
+  assert.equal(f.store.job(job.id).state, 'failed');
+  assert.equal(f.calls.length, 0);
 });
-test("releaseHasEpisode: non-numeric ep → always true (can't filter)", () => {
-  assert.ok(releaseHasEpisode("whatever", "movie"));
-});
-
-// ---- ranking (delegates to lib/quality.mjs; see test/quality.test.mjs) ----
-test("rankReleases: orders best-first and tags quality", () => {
-  const ranked = rankReleases([
-    { name: "Movie 2010 1080p WEBRip x264", seeders: 5 },
-    { name: "Movie 2010 2160p BluRay REMUX TrueHD 7.1", seeders: 40 },
-    { name: "Movie 2010 1080p BluRay REMUX DTS-HD MA 5.1", seeders: 900 },
-  ]);
-  assert.equal(ranked[0].quality, 2160); // 4K REMUX leads despite the fewest seeders
-  assert.equal(ranked[ranked.length - 1].quality, 1080);
-  assert.match(ranked[ranked.length - 1].name, /WEBRip/);
-});
-
-test("rankReleases: the floor drops sub-1080p and junk", () => {
-  const ranked = rankReleases([
-    { name: "Movie 2010 480p", seeders: 5 },
-    { name: "Movie 2010 1080p BluRay", seeders: 900 },
-    { name: "Movie 2010 CAM", seeders: 2000 },
-  ]);
-  assert.equal(ranked.length, 1);
-  assert.match(ranked[0].name, /1080p/);
-});
-
-test("rankReleases: a thin field degrades instead of returning nothing", () => {
-  // Everything is below the floor — an unplayable screen would be worse than
-  // the best of a bad lot, so the floor is dropped rather than the results.
-  const ranked = rankReleases([
-    { name: "Obscure Film 720p WEB-DL", seeders: 3 },
-    { name: "Obscure Film 480p DVDRip", seeders: 1 },
-  ]);
-  assert.equal(ranked.length, 2);
-  assert.match(ranked[0].name, /720p/);
-});
-
-test("rankReleasesVerbose: says what was dropped and whether the floor held", () => {
-  const strong = rankReleasesVerbose([
-    { name: "Movie 1080p WEB-DL DDP5.1", seeders: 100 },
-    { name: "Movie 720p WEB-DL", seeders: 100 },
-  ]);
-  assert.equal(strong.floorApplied, true);
-  assert.equal(strong.list.length, 1);
-  assert.equal(strong.rejected.length, 1);
-
-  const thin = rankReleasesVerbose([{ name: "Movie 720p WEB-DL", seeders: 100 }]);
-  assert.equal(thin.floorApplied, false);
-  assert.equal(thin.list.length, 1);
-});
-
-// ---- magnet building ----
-test("magnetFromHash: btih + name + trackers", () => {
-  const m = magnetFromHash("ABCDEF", "Some Movie");
-  assert.match(m, /^magnet:\?xt=urn:btih:ABCDEF/);
-  assert.match(m, /dn=Some%20Movie/);
-  assert.match(m, /tr=udp/);
-});
-
-// ---------- Nyaa RSS parsing ----------
-// Added when AnimeTosho's mirror went stale (nothing indexed after 2026-05-08),
-// which had silently reduced the debrid tier to zero candidates for every
-// currently-airing show. Nyaa has no JSON API, so its RSS is parsed directly.
-
-test("parseNyaaSize: RSS size strings to bytes", async () => {
-  const { parseNyaaSize } = await import("../lib/torrents.mjs");
-  assert.equal(parseNyaaSize("297.3 MiB"), Math.round(297.3 * 1024 ** 2));
-  assert.equal(parseNyaaSize("1.4 GiB"), Math.round(1.4 * 1024 ** 3));
-  assert.equal(parseNyaaSize("818.9 MiB"), Math.round(818.9 * 1024 ** 2));
-  // Unparseable → 0, which the ranker reads as "unknown" rather than "tiny".
-  assert.equal(parseNyaaSize("who knows"), 0);
-  assert.equal(parseNyaaSize(null), 0);
-});
-
-test("parseNyaaRss: extracts name, hash, seeders and size", async () => {
-  const { parseNyaaRss } = await import("../lib/torrents.mjs");
-  const xml = `<rss><channel>
-    <item>
-      <title>[ASW] Grand Blue S3 - 04 [1080p HEVC x265 10Bit][AAC]</title>
-      <nyaa:seeders>129</nyaa:seeders>
-      <nyaa:infoHash>6597456aaef7ee68f60e29a07b90ebc22f1ebdd6</nyaa:infoHash>
-      <nyaa:size>297.3 MiB</nyaa:size>
-    </item>
-    <item>
-      <title>Broken entry &amp; no hash</title>
-      <nyaa:seeders>5</nyaa:seeders>
-      <nyaa:infoHash>not-a-hash</nyaa:infoHash>
-      <nyaa:size>1.0 GiB</nyaa:size>
-    </item>
-  </channel></rss>`;
-  const rows = parseNyaaRss(xml);
-  assert.equal(rows.length, 1, "entries without a valid infoHash are unusable");
-  assert.equal(rows[0].name, "[ASW] Grand Blue S3 - 04 [1080p HEVC x265 10Bit][AAC]");
-  assert.equal(rows[0].hash, "6597456aaef7ee68f60e29a07b90ebc22f1ebdd6");
-  assert.equal(rows[0].seeders, 129);
-  assert.equal(rows[0].indexer, "nyaa");
-  assert.match(rows[0].magnet, /^magnet:\?xt=urn:btih:6597456a/);
-});
-
-test("parseNyaaRss: decodes HTML entities in titles", async () => {
-  const { parseNyaaRss } = await import("../lib/torrents.mjs");
-  const xml = `<rss><item>
-    <title>Show S01E01 &amp; friends &quot;special&quot;</title>
-    <nyaa:infoHash>aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa</nyaa:infoHash>
-    <nyaa:size>500 MiB</nyaa:size></item></rss>`;
-  assert.equal(parseNyaaRss(xml)[0].name, 'Show S01E01 & friends "special"');
-});
-
-test("parseNyaaRss: empty or junk input yields no candidates", async () => {
-  const { parseNyaaRss } = await import("../lib/torrents.mjs");
-  assert.deepEqual(parseNyaaRss(""), []);
-  assert.deepEqual(parseNyaaRss("<html>404</html>"), []);
-});
-
-// ---------- SubsPlease plumbing ----------
-//
-// Its magnets carry base32 infohashes; everything here (hash de-dup, debrid
-// cache checks) speaks hex. 32 base32 chars = the 160-bit infohash exactly.
-test("base32ToHex: round-trips a known infohash", async () => {
-  const { base32ToHex } = await import("../lib/torrents.mjs");
-  // AAAAA… is all zero bits; the mixed string exercises the full alphabet.
-  assert.equal(base32ToHex("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"), "0".repeat(40));
-  // 31 × "7" (11111) then "A" (00000): 155 one-bits, then five zeros.
-  assert.equal(base32ToHex("7777777777777777777777777777777A"), "f".repeat(38) + "e0");
-  assert.equal(base32ToHex("not-base32"), null);
-  assert.equal(base32ToHex(""), null);
-});
-
-test("hexHashFromMagnet: hex passes through, base32 converts, junk is null", async () => {
-  const { hexHashFromMagnet } = await import("../lib/torrents.mjs");
-  const hex = "a".repeat(40);
-  assert.equal(hexHashFromMagnet(`magnet:?xt=urn:btih:${hex.toUpperCase()}&dn=x`), hex);
-  assert.equal(hexHashFromMagnet("magnet:?xt=urn:btih:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"), "0".repeat(40));
-  assert.equal(hexHashFromMagnet("magnet:?xt=urn:btih:short"), null);
-  assert.equal(hexHashFromMagnet(null), null);
-});
-
-test("parseSubsPleaseDate: the API's US-style date becomes a timestamp", async () => {
-  const { parseSubsPleaseDate } = await import("../lib/torrents.mjs");
-  assert.equal(parseSubsPleaseDate("07/31/26"), Date.UTC(2026, 6, 31));
-  assert.equal(parseSubsPleaseDate("12/01/2025"), Date.UTC(2025, 11, 1));
-  assert.equal(parseSubsPleaseDate("yesterday"), null);
-  assert.equal(parseSubsPleaseDate(null), null);
-});
-
-// ---------- batch ranges ----------
-//
-// A complete-season pack names a SPAN, not each episode. Rejecting those made
-// every batch invisible to the episode filter — and once a sequel floods an
-// index's capped feed, a batch can be the only surviving copy of an older
-// season (the Frieren S1 regression).
-test("releaseHasEpisode: a batch range contains its episodes", () => {
-  assert.ok(releaseHasEpisode("[Judas] Sousou no Frieren (Season 1) [01-28] (1080p)", 13));
-  assert.ok(releaseHasEpisode("Show S01 E01~E24 batch", 5));
-  assert.equal(releaseHasEpisode("[Judas] Sousou no Frieren [01-28]", 29), false);
-  // A year is not a range, and neither is a resolution.
-  assert.equal(releaseHasEpisode("Movie 2010-2019 collection 1080p", 15), false);
+test('qBittorrent client accepts current 204 logins and renews expired sessions', async () => {
+  let logins = 0,
+    requests = 0;
+  const client = createQbitClient(
+    { qbitUrl: 'http://localhost:8801', qbitUsername: 'admin', qbitPassword: 'secret' },
+    async (url, options) => {
+      assert.equal(options.redirect, 'error');
+      if (url.endsWith('/login')) {
+        logins++;
+        return new Response(null, {
+          status: 204,
+          headers: { 'set-cookie': `SID=${logins}; HttpOnly` },
+        });
+      }
+      requests++;
+      if (requests === 1) return new Response('', { status: 403 });
+      assert.equal(options.headers.Cookie, 'SID=2');
+      return new Response('v5.2.4');
+    },
+  );
+  assert.equal((await client.health()).version, 'v5.2.4');
+  assert.equal(logins, 2);
 });

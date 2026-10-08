@@ -1,373 +1,79 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Mediawan</title>
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-  <meta name="theme-color" content="#171a19" />
-  <link rel="stylesheet" href="/styles.css" />
-  <link rel="stylesheet" href="/sports.css" />
-  <link rel="stylesheet" href="/watch-together.css" />
-  <!-- 10-foot overrides; every rule is scoped to html.tv, which tv.js sets -->
-  <link rel="stylesheet" href="/tv.css" />
-  <script src="/config.js"></script>
-  <script src="/vendor/hls.min.js"></script>
-  <!-- Google Cast SDK is loaded conditionally from app.js (only on Chromium
-       browsers that support it) to avoid its noisy http fallback elsewhere. -->
-</head>
-<body class="app-shell">
-  <a class="skip-link" href="#app">Skip to content</a>
-  <!-- ===== the rail: the app's only navigation, on every screen =====
-       A phone, a laptop and a television get the same destinations in the same
-       order. Only the geometry changes: a left column with room for labels on
-       a desktop or a TV, a bottom tab bar on a phone (styles.css <=720px),
-       where the secondary half folds into .rail-tail behind the More button.
-       Static markup rather than JS-built, so it survives app.js failing. -->
-  <nav class="rail" id="rail" aria-label="Main">
-    <a class="rail-mark" href="/" aria-label="Mediawan — home"><span>Mediawan</span></a>
-    <button class="rail-btn" data-act="search" id="railSearch">
-      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 1 0-.7.7l.27.28v.79l5 4.99L20.49 19zm-6 0A4.5 4.5 0 1 1 14 9.5 4.5 4.5 0 0 1 9.5 14z"/></svg><span>Search</span>
-    </button>
-    <button class="rail-btn" data-nav="/" data-id="home">
-      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3 2 12h3v8h6v-6h2v6h6v-8h3z"/></svg><span>Home</span>
-    </button>
-    <button class="rail-btn" data-nav="/library/anime" data-id="anime">
-      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3a9 9 0 1 0 9 9c0-.46-.04-.92-.1-1.36A5.39 5.39 0 0 1 16.5 13a5.4 5.4 0 0 1-5.4-5.4c0-1.7.79-3.22 2.02-4.22C12.75 3.13 12.38 3 12 3z"/></svg><span>Anime</span>
-    </button>
-    <button class="rail-btn" data-nav="/library/movies" data-id="movies">
-      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 3v2h-2V3H8v2H6V3H4v18h2v-2h2v2h8v-2h2v2h2V3h-2zM8 17H6v-2h2v2zm0-4H6v-2h2v2zm0-4H6V7h2v2zm10 8h-2v-2h2v2zm0-4h-2v-2h2v2zm0-4h-2V7h2v2z"/></svg><span>Movies</span>
-    </button>
-    <button class="rail-btn" data-nav="/library/tv" data-id="tv">
-      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 3H3a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h5v2h8v-2h5a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2zm0 14H3V5h18z"/></svg><span>TV</span>
-    </button>
-    <button class="rail-btn" data-nav="/sports" data-id="sports">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><path d="m12 7 5 4-2 6H9l-2-6zM12 7V3m5 8 4-2m-6 8 2 3m-8-3-2 3m0-9L3 9"/></svg><span>Sports</span>
-    </button>
-    <!-- phones only: opens .rail-tail as a popover above the bar -->
-    <button class="rail-btn rail-more-btn" data-act="more" aria-expanded="false">
-      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm6 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm6 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/></svg><span>More</span>
-    </button>
-    <div class="rail-spacer"></div>
-    <!-- The secondary half. Same buttons everywhere — it is the container that
-         moves, from the foot of the column to a popover on a phone. -->
-    <div class="rail-tail" id="railTail">
-      <button class="rail-btn rail-mobile-search" data-act="search"><span>Search library</span></button>
-      <button class="rail-btn" id="railTogether" data-act="together">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3 20v-2a6 6 0 0 1 12 0v2M16 5a3 3 0 0 1 0 6m2 3a5 5 0 0 1 3 4v2"/></svg><span>Watch together</span>
-      </button>
-      <button class="rail-btn anime-tool" data-act="schedule">
-        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 3h-1V1h-2v2H8V1H6v2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2zm0 16H5V9h14v10zM5 7V5h14v2H5zm2 4h5v5H7z"/></svg><span>Schedule</span>
-      </button>
-      <button class="rail-btn anime-tool" data-act="random">
-        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M10.59 9.17 5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg><span>Random</span>
-      </button>
-      <button class="rail-btn" data-act="admin" id="railAdmin" hidden>
-        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19.14 12.94a7.5 7.5 0 0 0 0-1.88l2.03-1.58a.5.5 0 0 0 .12-.61l-1.92-3.32a.5.5 0 0 0-.59-.22l-2.39.96a7 7 0 0 0-1.62-.94l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54a7 7 0 0 0-1.62.94l-2.39-.96a.5.5 0 0 0-.59.22L2.74 8.87a.5.5 0 0 0 .12.61l2.03 1.58a7.5 7.5 0 0 0 0 1.88l-2.03 1.58a.5.5 0 0 0-.12.61l1.92 3.32a.5.5 0 0 0 .59.22l2.39-.96a7 7 0 0 0 1.62.94l.36 2.54a.5.5 0 0 0 .5.42h3.84a.5.5 0 0 0 .5-.42l.36-2.54a7 7 0 0 0 1.62-.94l2.39.96a.5.5 0 0 0 .59-.22l1.92-3.32a.5.5 0 0 0-.12-.61l-2.03-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z"/></svg><span>Admin</span>
-      </button>
-      <button class="rail-btn" data-act="logout">
-        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8v-2H4z"/></svg><span>Sign out</span>
-      </button>
-      <div class="rail-who" id="railWho"></div>
-    </div>
-  </nav>
-
-  <!-- ===== search: summoned, never resident =====
-       One entry point on every device — the rail's Search button, or "/" on a
-       keyboard. A field that is always on screen costs a row of the page and,
-       on a remote, a D-pad stop above everything worth watching. -->
-  <div class="searchbar" id="searchbar">
-    <svg class="searchbar-ic" viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 1 0-.7.7l.27.28v.79l5 4.99L20.49 19zm-6 0A4.5 4.5 0 1 1 14 9.5 4.5 4.5 0 0 1 9.5 14z"/></svg>
-    <input class="search" id="search" type="search" placeholder="Search anime, movies &amp; shows…"
-           autocomplete="off" spellcheck="false" enterkeyhint="search" aria-label="Search anime, movies and shows" />
-    <button class="searchbar-close" id="searchClose" title="Close search" aria-label="Close search">
-      <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M18.3 5.71 12 12l6.3 6.29-1.42 1.42L10.59 13.4 4.29 19.7 2.88 18.3 9.17 12 2.88 5.71 4.29 4.29l6.3 6.3 6.29-6.3z"/></svg>
-    </button>
-  </div>
-
-  <main id="app" tabindex="-1"><div class="loading" role="status">Loading library…</div></main>
-
-  <!-- ===== detail modal (info + episode list) ===== -->
-  <div class="overlay" id="detail">
-    <div class="sheet">
-      <button class="sheet-back" id="detailClose" title="Back" aria-label="Back to library">
-        <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20z"/></svg>
-      </button>
-      <div class="detail-hero" id="detailHero">
-        <div class="detail-hero-bg" id="detailHeroBg"></div>
-        <div class="detail-hero-art" id="detailHeroArt"></div>
-        <div class="detail-hero-fade"></div>
-        <button class="btn detail-play" id="detailPlay">▶ Play</button>
-      </div>
-      <div class="sheet-body">
-        <h2 id="d-title"></h2>
-        <div class="sheet-meta" id="d-meta"></div>
-        <div class="detail-actions" id="detailActions"></div>
-        <div class="genres" id="d-genres"></div>
-        <p id="d-desc" class="d-desc"></p>
-        <div class="eps-head">
-          <div class="eps-head-left">
-            <div class="eps-title">Episodes</div>
-          </div>
-          <div class="mode-pills" id="d-modePills"></div>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="theme-color" content="#151918" />
+    <title>Mediawan</title>
+    <link rel="icon" href="/favicon.svg" />
+    <link rel="stylesheet" href="/styles.css" />
+    <script defer src="/vendor/hls.min.js"></script>
+    <script defer src="/app.bundle.js"></script>
+  </head>
+  <body>
+    <div id="shell">
+      <aside id="sidebar">
+        <a class="brand" href="#/">mediawan</a>
+        <nav aria-label="Main navigation">
+          <a href="#/" data-nav="home">Home</a><a href="#/discover" data-nav="discover">Discover</a
+          ><a href="#/library" data-nav="library">Library</a
+          ><a href="#/list" data-nav="list">My List</a
+          ><a href="#/downloads" data-nav="downloads">Downloads</a>
+        </nav>
+        <div class="sidebar-bottom">
+          <a href="#/settings">Settings</a><button id="signout" class="text-button">Sign out</button
+          ><span id="account"></span>
         </div>
-        <!-- Seasons as tabs beside the episodes, never a dropdown. A menu has
-             to be opened before it can be read; a column of tabs shows every
-             season at once and puts each one a single press away. Films and
-             shows use the identical block below. -->
-        <div class="eps-split">
-          <aside class="season-list" id="d-seasonList"></aside>
-          <div class="eps" id="d-eps"></div>
+      </aside>
+      <main id="main" tabindex="-1"><p class="loading">Opening your library…</p></main>
+    </div>
+    <div id="toast" role="status" hidden></div>
+    <dialog id="dialog">
+      <div id="dialog-content"></div>
+      <button id="dialog-close" class="quiet">Close</button>
+    </dialog>
+    <section id="player" hidden aria-label="Media player">
+      <header>
+        <button id="player-close">Back to library</button>
+        <div><strong id="player-title"></strong><span id="player-episode"></span></div>
+        <button id="player-queue">Queue</button>
+      </header>
+      <video id="video" playsinline></video>
+      <div id="player-transport" aria-label="Playback controls">
+        <div class="playback-times">
+          <span id="player-time">0:00 / 0:00</span><span id="player-buffering" role="status"></span>
         </div>
-        <div class="src-note" id="d-note"></div>
-        <div class="fr-wrap" id="d-franchise" hidden></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ===== media detail (Movies + TV Shows) =====
-       Same full-bleed .overlay/.sheet treatment as the anime detail above —
-       TV shows used to render inside #app, so they sat under the nav bar
-       instead of covering the screen, and films had no detail page at all.
-       Films hide the season/episode block; TV hides nothing. -->
-  <div class="overlay" id="mDetail">
-    <div class="sheet">
-      <button class="sheet-back" id="mDetailClose" title="Back" aria-label="Back to library">
-        <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20z"/></svg>
-      </button>
-      <div class="detail-hero" id="mHero">
-        <div class="detail-hero-bg" id="mHeroBg"></div>
-        <div class="detail-hero-art" id="mHeroArt"></div>
-        <div class="detail-hero-fade"></div>
-        <button class="btn detail-play" id="mPlay">▶ Play</button>
-      </div>
-      <div class="sheet-body">
-        <h2 id="m-title"></h2>
-        <div class="sheet-meta" id="m-meta"></div>
-        <div class="genres" id="m-genres"></div>
-        <p id="m-desc" class="d-desc"></p>
-        <dl class="facts" id="m-facts"></dl>
-        <div class="eps-head" id="m-epsHead" hidden>
-          <div class="eps-head-left">
-            <div class="eps-title">Episodes</div>
-          </div>
+        <input
+          id="player-seek"
+          type="range"
+          min="0"
+          max="0"
+          step="1"
+          value="0"
+          aria-label="Playback position"
+        />
+        <div class="transport-buttons">
+          <button id="player-toggle">Play</button>
+          <button id="player-back" aria-label="Rewind 10 seconds">−10s</button>
+          <button id="player-forward" aria-label="Forward 10 seconds">+10s</button>
+          <button id="player-mute">Mute</button>
+          <label class="player-volume"
+            >Volume<input id="player-volume" type="range" min="0" max="1" step="0.05" value="1"
+          /></label>
+          <button id="player-fullscreen">Fullscreen</button>
         </div>
-        <!-- Same season tabs as the anime sheet above, same renderer. -->
-        <div class="eps-split">
-          <aside class="season-list" id="m-seasonList"></aside>
-          <div class="eps" id="m-eps"></div>
-        </div>
-        <div class="src-note" id="m-note"></div>
       </div>
-    </div>
-  </div>
-
-  <!-- ===== immersive Netflix-style player ===== -->
-  <div class="player-overlay" id="player">
-    <video id="video" playsinline></video>
-    <!-- Subtitles are painted here, by us, not by the browser. `::cue` can
-         colour cue text and give it a box, but it cannot MOVE it — there is no
-         way to say "higher up" or "along the left edge" — and the Tizen
-         webview's cue renderer ignores most of what it is handed anyway. So the
-         <track> is left in "hidden" mode (cues stay live, nothing is drawn) and
-         SubStyle renders the active ones in here, where size, place and colour
-         are all ours to set. -->
-    <div class="sub-layer" id="subLayer"></div>
-
-    <!-- center: spinner / status -->
-    <div class="p-center" id="pCenter">
-      <div class="spinner" id="pSpinner"></div>
-      <div class="p-status" id="pStatus" hidden></div>
-      <!-- brief "-10s / +10s" flash so a D-pad seek is legible from the sofa -->
-      <div class="p-seek-osd" id="pSeekOsd" hidden></div>
-    </div>
-
-    <!-- top bar (title, back) -->
-    <div class="p-top" id="pTop">
-      <button class="p-icon" id="pBack" title="Back (Esc)">‹</button>
-      <div class="p-titles">
-        <div class="p-title-main" id="pTitleMain"></div>
-        <div class="p-title-sub" id="pTitleSub"></div>
+      <div id="player-controls">
+        <button id="previous">Previous</button><button id="next">Next episode</button
+        ><label>Audio<select id="audio"></select></label
+        ><label>Subtitles<select id="subtitles"></select></label
+        ><button id="convert">Compatibility playback</button><button id="chapters">Chapters</button>
       </div>
-      <button class="p-icon wide" id="pTogether" aria-controls="watchMenu" aria-expanded="false">Watch together</button>
-    </div>
-
-    <!-- next-episode toast -->
-    <div class="up-next" id="upNext" hidden>
-      <div class="up-next-label">Next episode</div>
-      <div class="up-next-title" id="upNextTitle"></div>
-      <div class="up-next-actions">
-        <button class="btn" id="upNextPlay">▶ Play now</button>
-        <button class="btn ghost" id="upNextCancel">Cancel</button>
+      <div id="player-message" role="status"></div>
+      <div id="up-next" hidden>
+        <span id="up-next-label"></span><button id="up-next-play">Play now</button
+        ><button id="up-next-cancel">Cancel</button>
       </div>
-      <div class="up-next-bar"><div id="upNextFill"></div></div>
-    </div>
-
-    <!-- bottom controls -->
-    <div class="p-bottom" id="pBottom">
-      <div class="scrub" id="scrub">
-        <div class="scrub-track">
-          <div class="scrub-buffered" id="scrubBuffered"></div>
-          <div class="scrub-played" id="scrubPlayed"></div>
-          <div class="scrub-knob" id="scrubKnob"></div>
-        </div>
-        <div class="scrub-tip" id="scrubTip" hidden></div>
-      </div>
-      <div class="p-controls">
-        <button class="p-icon" id="pBack10" title="Back 10 seconds"></button>
-        <button class="p-icon" id="pPlay" title="Play/Pause (k)">▶</button>
-        <button class="p-icon" id="pFwd10" title="Forward 10 seconds"></button>
-        <button class="p-icon" id="pPrev" title="Previous episode">⏮</button>
-        <button class="p-icon" id="pNext" title="Next episode (n)">⏭</button>
-        <div class="p-vol">
-          <button class="p-icon" id="pMute" title="Mute (m)"></button>
-          <input type="range" id="pVol" class="vol-slider" min="0" max="1" step="0.05" value="1" />
-        </div>
-        <div class="p-time"><span id="pCur">0:00</span> <span class="dim">/ <span id="pDur">0:00</span></span></div>
-        <div class="spacer"></div>
-        <button class="p-icon wide" id="pSkip" title="Skip intro" hidden>Skip Intro</button>
-        <button class="p-icon" id="pAud" title="Audio"></button>
-        <button class="p-icon" id="pCc" title="Subtitles (c)"></button>
-        <button class="p-icon" id="pGear" title="Settings">⚙</button>
-        <button class="p-icon wide" id="pEps" title="Episodes">☰ Eps</button>
-        <button class="p-icon" id="pCast" title="Cast to TV" hidden></button>
-        <button class="p-icon" id="pPip" title="Picture-in-picture">⧉</button>
-        <button class="p-icon" id="pFs" title="Fullscreen (f)">⛶</button>
-      </div>
-    </div>
-
-    <!-- collapsible: audio menu -->
-    <section class="p-menu watch-menu" id="watchMenu" aria-label="Watch together" hidden>
-      <div class="watch-heading"><h2>Watch together</h2><button class="p-icon" id="watchClose" aria-label="Close watch together">×</button></div>
-      <div id="watchSetup">
-        <button class="btn" id="watchCreate">Create room</button>
-        <p class="watch-note">The host controls playback. Everyone uses their own signed-in account.</p>
-        <form data-watch-join>
-          <label for="watchCode">Room code</label>
-          <div class="watch-input-row"><input id="watchCode" name="code" maxlength="16" autocomplete="off" spellcheck="false" placeholder="ABCDEFGH" required /><button class="btn ghost" type="submit">Join room</button></div>
-        </form>
-      </div>
-      <div id="watchRoom" hidden>
-        <div class="watch-code-row"><span>Room code</span><strong id="watchRoomCode"></strong></div>
-        <label for="watchLink">Invite link</label>
-        <div class="watch-input-row"><input id="watchLink" readonly /><button class="btn ghost" id="watchCopy">Copy link</button></div>
-        <p class="watch-note" id="watchRole"></p>
-        <ul class="watch-members" id="watchMembers" aria-label="Participants"></ul>
-        <button class="btn" id="watchStart" hidden>Start playback</button>
-        <button class="btn ghost" id="watchLeave">Leave room</button>
-      </div>
-      <p class="watch-feedback" id="watchFeedback" role="status" aria-live="polite"></p>
     </section>
-
-    <div class="p-menu aud-menu" id="audMenu" hidden>
-      <div class="p-menu-title">Audio</div>
-      <div class="p-menu-section" id="audList"></div>
-      <div class="p-menu-note" id="audNote"></div>
-    </div>
-
-    <!-- collapsible: subtitles menu -->
-    <div class="p-menu cc-menu" id="ccMenu" hidden>
-      <div class="p-menu-title">Subtitles</div>
-      <div class="p-menu-section" id="ccList"></div>
-      <div class="p-menu-note" id="ccNote"></div>
-    </div>
-
-    <!-- collapsible: settings menu (nested submenus; servers live here too) -->
-    <div class="p-menu settings-menu" id="settingsMenu" hidden>
-      <div class="p-submenu" data-sub="root">
-        <button class="p-menu-row" data-goto="quality"><span>Quality</span><span class="p-menu-val" id="valQuality">Auto</span></button>
-        <!-- Resolution is its own row, one below Quality, because they answer
-             two different questions: Quality is WHICH RELEASE plays, this is
-             how big a picture the server encodes out of it. -->
-        <button class="p-menu-row" data-goto="res"><span>Resolution</span><span class="p-menu-val" id="valRes">Auto</span></button>
-        <button class="p-menu-row" data-goto="servers"><span>Server</span><span class="p-menu-val" id="valServer">Auto</span></button>
-        <button class="p-menu-row" data-goto="speed"><span>Playback speed</span><span class="p-menu-val" id="valSpeed">Normal</span></button>
-        <button class="p-menu-row" data-goto="subs"><span>Subtitle style</span><span class="p-menu-val" id="valSubStyle">Medium</span></button>
-      </div>
-      <div class="p-submenu" data-sub="quality" hidden>
-        <button class="p-menu-back" data-goto="root">‹ Quality</button>
-        <div id="qualityList"></div>
-      </div>
-      <div class="p-submenu" data-sub="res" hidden>
-        <button class="p-menu-back" data-goto="root">‹ Resolution</button>
-        <div id="resList"></div>
-        <div class="p-menu-note" id="resNote"></div>
-      </div>
-      <div class="p-submenu" data-sub="servers" hidden>
-        <button class="p-menu-back" data-goto="root">‹ Server</button>
-        <div class="srv-head-s" id="srvCount">Looking for sources…</div>
-        <div class="p-menu-section" id="srvList"></div>
-        <div class="srv-foot" id="srvFoot" hidden></div>
-      </div>
-      <div class="p-submenu" data-sub="speed" hidden>
-        <button class="p-menu-back" data-goto="root">‹ Playback speed</button>
-        <div id="speedList"></div>
-      </div>
-      <!-- Subtitle appearance. One page per property rather than one long
-           list: on a remote every extra row is a press, and each of these is a
-           choice you make once and then forget. A sample cue shows on the video
-           for as long as any of these pages is open, so the effect of a change
-           is visible without hunting for a line of dialogue. -->
-      <div class="p-submenu" data-sub="subs" hidden>
-        <button class="p-menu-back" data-goto="root">‹ Subtitle style</button>
-        <div class="p-menu-section" id="subStyleList"></div>
-        <div class="p-menu-note">Applies to every title, on this device.</div>
-      </div>
-      <div class="p-submenu" data-sub="subsize" hidden>
-        <button class="p-menu-back" data-goto="subs">‹ Text size</button>
-        <div id="subSizeList"></div>
-      </div>
-      <div class="p-submenu" data-sub="subpos" hidden>
-        <button class="p-menu-back" data-goto="subs">‹ Position</button>
-        <div id="subPosList"></div>
-      </div>
-      <div class="p-submenu" data-sub="subcolor" hidden>
-        <button class="p-menu-back" data-goto="subs">‹ Text colour</button>
-        <div class="p-menu-section" id="subColorList"></div>
-      </div>
-      <div class="p-submenu" data-sub="subbg" hidden>
-        <button class="p-menu-back" data-goto="subs">‹ Background</button>
-        <div class="p-menu-section" id="subBgList"></div>
-      </div>
-    </div>
-
-    <!-- collapsible: episodes drawer -->
-    <div class="p-drawer" id="epsDrawer" hidden>
-      <div class="p-drawer-head">
-        <span>Episodes</span>
-        <button class="p-icon" id="epsDrawerClose">✕</button>
-      </div>
-      <div class="p-drawer-list" id="epsDrawerList"></div>
-    </div>
-  </div>
-
-  <div class="overlay watch-lobby" id="watchLobby" role="dialog" aria-modal="true" aria-labelledby="watchLobbyTitle">
-    <div class="sheet watch-lobby-sheet">
-      <div class="watch-heading"><h2 id="watchLobbyTitle">Watch together</h2><button class="p-icon" id="watchLobbyClose" data-close-modal aria-label="Close watch together">×</button></div>
-      <form data-watch-join>
-        <label for="watchLobbyCode">Room code</label>
-        <div class="watch-input-row"><input id="watchLobbyCode" name="code" maxlength="16" autocomplete="off" spellcheck="false" placeholder="ABCDEFGH" required /><button class="btn" type="submit">Join room</button></div>
-      </form>
-      <p class="watch-note">To host, play a title and select Watch together → Create room.</p>
-      <p class="watch-feedback" id="watchLobbyFeedback" role="status" aria-live="polite"></p>
-    </div>
-  </div>
-
-  <div class="overlay watch-lobby collection-delete" id="collectionDeleteDialog" role="dialog" aria-modal="true" aria-labelledby="collectionDeleteTitle" aria-describedby="collectionDeleteNote" hidden>
-    <div class="sheet watch-lobby-sheet">
-      <div class="watch-heading"><h2 id="collectionDeleteTitle">Delete collection?</h2></div>
-      <p class="watch-note" id="collectionDeleteNote">Titles stay in your library.</p>
-      <div class="empty-actions">
-        <button class="btn ghost" id="collectionDeleteCancel" data-tv-key="collection-delete-cancel" data-close-modal>Cancel</button>
-        <button class="btn" id="collectionDeleteConfirm" data-tv-key="collection-delete-confirm">Delete collection</button>
-      </div>
-      <p class="watch-feedback" id="collectionDeleteFeedback" role="alert"></p>
-    </div>
-  </div>
-
-  <script src="/sports.js"></script>
-  <script src="/watch-together.js"></script>
-  <script src="/app.js"></script>
-  <script src="/tv.js"></script>
-</body>
+  </body>
 </html>

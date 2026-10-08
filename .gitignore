@@ -35,3 +35,6 @@ tizen/Mediawan/.buildResult/
 # Local editor metadata and host-specific preflight notes.
 .idea/
 /docs/phase-0.local.md
+
+/.recovery/
+/.runtime/
