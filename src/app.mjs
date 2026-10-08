@@ -275,7 +275,7 @@ export function createApplication(config, dependencies = {}) {
   app.get(
     '/api/discover',
     wrap(async (req, res) =>
-      res.json({ items: await catalog.search(req.query.kind || 'movie', req.query.q || '') }),
+      res.json({ items: await catalog.search(req.query.kind || 'all', req.query.q || '') }),
     ),
   );
   app.post(

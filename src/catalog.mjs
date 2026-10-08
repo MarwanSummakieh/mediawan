@@ -65,6 +65,20 @@ export function createCatalog(store, config, dependencies = {}) {
       return task;
     },
     async search(kind, q) {
+      if (kind === 'all') {
+        const results = await Promise.allSettled(
+          ['movie', 'tv', 'anime'].map((type) => api.search(type, q)),
+        );
+        const catalogs = results
+          .filter((result) => result.status === 'fulfilled')
+          .map((result) => result.value);
+        if (!catalogs.length) throw results[0].reason;
+        // Mix catalogs so series and anime remain visible alongside movies.
+        return Array.from(
+          { length: Math.max(0, ...catalogs.map((items) => items.length)) },
+          (_, index) => catalogs.flatMap((items) => (items[index] ? [items[index]] : [])),
+        ).flat();
+      }
       if (!['movie', 'tv', 'anime'].includes(kind)) fail(400, 'Unknown catalog');
       if (kind === 'anime') {
         const data = await anilist(

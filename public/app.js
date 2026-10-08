@@ -170,23 +170,22 @@ async function route({ quiet = false } = {}) {
         location.hash = `/${page}?${query}`;
       };
     } else if (page === 'discover') {
-      const kind = url.searchParams.get('kind') || 'movie',
-        q = url.searchParams.get('q') || '';
+      const q = url.searchParams.get('q') || '';
       draw(
         heading('Discover') +
-          `<form id="search" class="toolbar"><label>Search<input name="q" type="search" placeholder="Search movies and series" value="${esc(q)}"></label><label>Type<select name="kind">${option('movie', 'Movies', kind)}${option('tv', 'Series', kind)}${option('anime', 'Anime', kind)}</select></label><button class="primary">Search</button></form><div id="results"><p class="loading">Finding titles…</p></div>`,
+          `<form id="search" class="toolbar"><label>Search<input name="q" type="search" placeholder="Search movies, series and anime" value="${esc(q)}"></label><button class="primary">Search</button></form><div id="results"><p class="loading">Finding titles…</p></div>`,
       );
       $('#search').onsubmit = (e) => {
         e.preventDefault();
         location.hash = `/discover?${new URLSearchParams(new FormData(e.target))}`;
       };
       try {
-        const data = await api(`/api/discover?kind=${kind}&q=${encodeURIComponent(q)}`);
+        const data = await api(`/api/discover?q=${encodeURIComponent(q)}`);
         if (ticket !== generation) return;
         discoverResults = data.items;
         $('#results').innerHTML = data.items.length
           ? `<div class="grid">${data.items.map((t, i) => `<article class="card"><button class="poster" data-action="discover-title" data-index="${i}" aria-label="Open ${esc(t.name)}">${poster(t)}</button><h3 class="card-name">${esc(t.name)}</h3><p class="meta">${esc(t.year)}</p></article>`).join('')}</div>`
-          : empty('No matching titles', 'Try another title or media type.');
+          : empty('No matching titles', 'Try another title.');
       } catch (error) {
         if (ticket === generation)
           $('#results').innerHTML = empty('Discovery is unavailable', error.message);
