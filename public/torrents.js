@@ -1,5 +1,85 @@
 import { $, api, esc, modal, closeModal, toast } from './core.js';
 
+export async function downloadSeason(title, season) {
+  modal('<h2>Checking season…</h2>');
+  $('#dialog-content').onclick = null;
+  try {
+    const path = `/api/titles/${title.id}/seasons/${season}/downloads`;
+    const data = await api(path);
+    if (!$('#dialog').open) return;
+    const count = (state) => data.items.filter((item) => item.state === state).length;
+    const label =
+      title.kind === 'anime' && !season ? 'all episodes' : season ? `season ${season}` : 'specials';
+    const enabled = data.torrentConfigured || data.debridConfigured;
+    $('#dialog-content').innerHTML = `<h2>Download ${esc(label)}</h2>
+      <p>${count('pending')} episodes to download${count('downloaded') ? ` · ${count('downloaded')} already downloaded` : ''}${count('already_queued') ? ` · ${count('already_queued')} already queued` : ''}${count('unreleased') ? ` · ${count('unreleased')} not released` : ''}</p>
+      ${
+        data.active
+          ? '<p>This season is already being queued.</p><button id="season-view" class="primary">View downloads</button>'
+          : `<form id="season-download-form" class="form">
+      <label>Download with<select name="provider"><option value="realdebrid" ${!data.debridConfigured ? 'disabled' : ''} ${data.debridConfigured ? 'selected' : ''}>Real-Debrid</option><option value="torrent" ${!data.torrentConfigured ? 'disabled' : ''} ${!data.debridConfigured && data.torrentConfigured ? 'selected' : ''}>Direct torrent · qBittorrent</option></select></label>
+      <label>Quality<select name="resolution">${data.resolutions.map((resolution) => `<option value="${resolution}" ${resolution === (data.resolutions.includes(1080) ? 1080 : data.resolutions[0]) ? 'selected' : ''}>${resolution === 2160 ? '4K' : resolution + 'p'}</option>`).join('')}</select></label>
+      <p class="meta">Chooses a matching release for each episode. Downloaded and queued episodes are skipped. Unavailable episodes appear in Downloads.</p>
+      <p id="season-provider-note" class="meta"></p>
+      ${!enabled ? '<p class="error">No download provider is configured.</p>' : ''}
+      <button class="primary" ${!enabled || !count('pending') ? 'disabled' : ''}>Download ${count('pending')} episodes</button><p id="season-error" class="error" role="alert"></p></form>`
+      }`;
+    if (data.active) {
+      $('#season-view').onclick = () => {
+        closeModal();
+        location.hash = '/downloads';
+      };
+      return;
+    }
+    const form = $('#season-download-form');
+    const providerNote = () => {
+      $('#season-provider-note').textContent =
+        form.elements.provider.value === 'torrent'
+          ? 'Torrent rules apply. Episodes sharing an existing torrent may need a separate release or Real-Debrid.'
+          : 'Downloads original episode files through Real-Debrid.';
+    };
+    form.elements.provider.onchange = providerNote;
+    providerNote();
+    form.onsubmit = async (event) => {
+      event.preventDefault();
+      const submit = form.querySelector('button');
+      if (submit.disabled) return;
+      submit.disabled = true;
+      $('#season-error').textContent = '';
+      try {
+        await api(path, {
+          provider: form.elements.provider.value,
+          resolution: Number(form.elements.resolution.value),
+        });
+        closeModal();
+        toast('Season download queued');
+        location.hash = '/downloads';
+      } catch (error) {
+        submit.disabled = false;
+        $('#season-error').textContent = error.message;
+      }
+    };
+  } catch (error) {
+    if ($('#dialog').open)
+      $('#dialog-content').innerHTML =
+        `<h2>Season unavailable</h2><p class="error">${esc(error.message)}</p>`;
+  }
+}
+
+export function seasonDownloadRow(batch) {
+  const count = (state) => batch.items.filter((item) => item.state === state).length;
+  const active = ['queued', 'finding'].includes(batch.state);
+  const unavailable = batch.items.filter((item) => item.state === 'unavailable');
+  const label = batch.season ? `Season ${batch.season}` : 'Episodes';
+  return `<div class="row"><div class="row-main"><h3>${esc(batch.name)} · ${label}</h3>
+    <p class="meta">${batch.resolution === 2160 ? '4K' : batch.resolution + 'p'} · ${batch.provider === 'torrent' ? 'Direct torrent' : 'Real-Debrid'} · ${active ? `Finding releases (${batch.items.length - count('pending')}/${batch.items.length})` : batch.state === 'stopped' ? 'Queueing stopped' : 'Queueing finished'}</p>
+    <p class="meta">${count('queued')} queued${count('downloaded') ? ` · ${count('downloaded')} downloaded` : ''}${count('already_queued') ? ` · ${count('already_queued')} already queued` : ''}${count('unreleased') ? ` · ${count('unreleased')} not released` : ''}${!active && count('pending') ? ` · ${count('pending')} not queued` : ''}</p>
+    ${batch.error ? `<p class="error">${esc(batch.error)}</p>` : ''}
+    ${unavailable.length ? `<details><summary>${unavailable.length} unavailable</summary>${unavailable.map((item) => `<p class="error">Episode ${esc(item.episode)}: ${esc(item.error)}</p>`).join('')}</details>` : ''}
+    ${active ? '<p class="meta">Stopping queueing leaves existing downloads running.</p>' : ''}</div>
+    <div class="actions">${active ? `<button data-action="season-stop" data-id="${esc(batch.id)}">Stop queueing</button>` : ''}<button data-action="download-title" data-title="${esc(batch.title_id)}">Open title</button></div></div>`;
+}
+
 export async function releases(itemId) {
   modal('<h2>Finding releases…</h2>');
   $('#dialog-content').onclick = null;

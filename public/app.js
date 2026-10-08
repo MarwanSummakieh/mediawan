@@ -1,5 +1,12 @@
 import { metadataHtml, episodeMetadata } from './metadata.js';
-import { releases, downloadRow, torrentRulesForm, bindTorrentRules } from './torrents.js';
+import {
+  releases,
+  downloadSeason,
+  seasonDownloadRow,
+  downloadRow,
+  torrentRulesForm,
+  bindTorrentRules,
+} from './torrents.js';
 import {
   $,
   esc,
@@ -190,9 +197,17 @@ async function route({ quiet = false } = {}) {
       currentTitle = title;
       draw(detailHtml(title));
     } else if (page === 'downloads') {
-      const jobs = await api('/api/downloads');
+      const [jobs, seasons] = await Promise.all([
+        api('/api/downloads'),
+        api('/api/season-downloads'),
+      ]);
       draw(
         heading('Downloads') +
+          (seasons.length
+            ? '<section class="section"><h2>Season downloads</h2>' +
+              seasons.map(seasonDownloadRow).join('') +
+              '</section><h2>Episodes</h2>'
+            : '') +
           (jobs.length
             ? jobs.map(downloadRow).join('')
             : empty('No downloads yet', 'Choose a release on a title page to save it locally.')),
@@ -239,7 +254,7 @@ function detailHtml(title) {
   const seasons = [...new Set(title.items.map((i) => i.season))];
   for (const season of seasons) {
     const items = title.items.filter((i) => i.season === season);
-    html += `<section><div class="season-header"><h2>${title.kind === 'movie' ? 'Your copy' : season ? `Season ${season}` : 'Specials'}</h2><div class="actions">${title.kind !== 'movie' && items.some((i) => i.available) ? button('Shuffle season', 'shuffle', `data-title="${title.id}" data-season="${season}"`) : ''}${button(items.every((i) => i.state.completed) ? 'Mark unwatched' : 'Mark watched', 'bulk-watched', `data-season="${season}" data-watched="${!items.every((i) => i.state.completed)}"`)}</div></div>${items.map((i) => `<div class="episode"><span class="episode-number">${i.episode || '—'}</span><div class="episode-body">${i.thumbnail ? `<img class="episode-thumbnail" src="${esc(i.thumbnail)}" alt="" loading="lazy">` : ''}<h3>${esc(i.name || episodeLabel(i))}</h3><p class="meta">${i.available ? 'Downloaded' : 'Not downloaded'} · ${i.state.completed ? 'Watched' : i.state.position >= 10 ? 'In progress' : 'Unwatched'}${i.released ? ' · ' + esc(String(i.released).slice(0, 10)) : ''}</p>${episodeMetadata(i)}${progress(i.state)}</div><div class="actions">${button(i.available ? (i.state.position >= 10 && !i.state.completed ? 'Resume' : 'Play') : 'Download', i.available ? 'play' : 'release', `data-item="${i.id}" data-title="${title.id}"`, i.available ? '' : 'quiet')}${button('More', 'item-menu', `data-item="${i.id}"`)}</div></div>`).join('')}</section>`;
+    html += `<section><div class="season-header"><h2>${title.kind === 'movie' ? 'Your copy' : season ? `Season ${season}` : title.kind === 'anime' ? 'Episodes' : 'Specials'}</h2><div class="actions">${title.kind !== 'movie' && user.canDownload && items.some((i) => !i.available) ? button(title.kind === 'anime' && !season ? 'Download all episodes' : 'Download season', 'download-season', `data-season="${season}"`) : ''}${title.kind !== 'movie' && items.some((i) => i.available) ? button('Shuffle season', 'shuffle', `data-title="${title.id}" data-season="${season}"`) : ''}${button(items.every((i) => i.state.completed) ? 'Mark unwatched' : 'Mark watched', 'bulk-watched', `data-season="${season}" data-watched="${!items.every((i) => i.state.completed)}"`)}</div></div>${items.map((i) => `<div class="episode"><span class="episode-number">${i.episode || '—'}</span><div class="episode-body">${i.thumbnail ? `<img class="episode-thumbnail" src="${esc(i.thumbnail)}" alt="" loading="lazy">` : ''}<h3>${esc(i.name || episodeLabel(i))}</h3><p class="meta">${i.available ? 'Downloaded' : 'Not downloaded'} · ${i.state.completed ? 'Watched' : i.state.position >= 10 ? 'In progress' : 'Unwatched'}${i.released ? ' · ' + esc(String(i.released).slice(0, 10)) : ''}</p>${episodeMetadata(i)}${progress(i.state)}</div><div class="actions">${button(i.available ? (i.state.position >= 10 && !i.state.completed ? 'Resume' : 'Play') : 'Download', i.available ? 'play' : 'release', `data-item="${i.id}" data-title="${title.id}"`, i.available ? '' : 'quiet')}${button('More', 'item-menu', `data-item="${i.id}"`)}</div></div>`).join('')}</section>`;
   }
   return html;
 }
@@ -296,7 +311,12 @@ async function action(event) {
       closeModal();
       await play(b.dataset.item, b.dataset.title, { replay: b.dataset.replay === 'true' });
     } else if (actionName === 'release') await releases(b.dataset.item);
-    else if (actionName === 'discover-title') {
+    else if (actionName === 'download-season')
+      await downloadSeason(currentTitle, Number(b.dataset.season));
+    else if (actionName === 'season-stop') {
+      await api(`/api/season-downloads/${b.dataset.id}/stop`, {});
+      await route({ quiet: true });
+    } else if (actionName === 'discover-title') {
       const title = discoverResults[Number(b.dataset.index)];
       const stored = await api('/api/discover', {
         kind: title.kind,

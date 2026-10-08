@@ -12,6 +12,7 @@ import { createDownloads } from './downloads.mjs';
 import { createTorrentPolicy, assessRelease } from './torrent-policy.mjs';
 import { createTorrentDownloads } from './torrent-downloads.mjs';
 import { createMedia, probe } from './media.mjs';
+import { createSeasonDownloads } from './season-downloads.mjs';
 
 const publicPath = fileURLToPath(new URL('../public/', import.meta.url));
 const wrap = (fn) => (req, res, next) =>
@@ -29,6 +30,7 @@ export function createApplication(config, dependencies = {}) {
     media = createMedia(store, config);
   const torrentPolicy = createTorrentPolicy(store);
   const torrents = dependencies.torrents || createTorrentDownloads(store, config, torrentPolicy);
+  const seasons = createSeasonDownloads(store, config, catalog, downloads, torrents, torrentPolicy);
   app.disable('x-powered-by');
   app.set('trust proxy', config.trustProxy);
   app.use((req, res, next) => {
@@ -318,6 +320,28 @@ export function createApplication(config, dependencies = {}) {
     '/api/downloads',
     wrap((req, res) => res.json(downloads.list(req.user))),
   );
+  app.get(
+    '/api/titles/:id/seasons/:season/downloads',
+    wrap((req, res) =>
+      res.json(seasons.options(req.user, req.params.id, Number(req.params.season))),
+    ),
+  );
+  app.post(
+    '/api/titles/:id/seasons/:season/downloads',
+    wrap((req, res) =>
+      res
+        .status(202)
+        .json(seasons.create(req.user, req.params.id, Number(req.params.season), req.body)),
+    ),
+  );
+  app.get(
+    '/api/season-downloads',
+    wrap((req, res) => res.json(seasons.list(req.user))),
+  );
+  app.post(
+    '/api/season-downloads/:id/stop',
+    wrap((req, res) => res.json(seasons.stop(req.user, req.params.id))),
+  );
   app.post(
     '/api/downloads/:id',
     wrap(async (req, res) => {
@@ -490,11 +514,14 @@ export function createApplication(config, dependencies = {}) {
     queues,
     downloads,
     media,
+    seasons,
     start() {
       downloads.start();
       torrents.start();
+      seasons.start();
     },
     async close() {
+      await seasons.close();
       await downloads.close();
       await torrents.close();
       await media.close();

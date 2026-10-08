@@ -25,6 +25,7 @@ Ensure the configured PUID/PGID owns the data, media and runtime bind folders. O
 
 - Movies and series through Cinemeta; anime through AniList with Kitsu release mapping.
 - Release discovery, Real-Debrid cloud transfer, verified local download, retry/cancel and free-space checks.
+- Download a season at a chosen quality through Real-Debrid or qBittorrent. Existing downloads and future episodes are skipped, and unavailable episodes are reported in Downloads.
 - Automatic space reclamation across both download engines, ranked by the latest watch across all users.
 - Home with Continue Watching, Next Up, Recently Added and My List.
 - Per-user episode history, replay, dismissal, final-position reporting and stale-session protection.

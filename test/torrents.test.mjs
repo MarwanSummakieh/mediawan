@@ -157,6 +157,14 @@ test('torrent worker selects only the requested file, pauses, resumes and publis
   assert.equal(f.store.job(job.id).state, 'ready', f.store.job(job.id).error);
   assert.equal(f.store.assets(f.item.id).length, 1);
 });
+
+test('the same hash cannot be queued twice before qBittorrent receives the first job', async (t) => {
+  const f = fixture(t);
+  const other = f.store.saveItem({ title_id: f.title.id, season: 1, episode: 2 });
+  await f.worker.enqueue(f.user, f.item.id, candidate);
+  await assert.rejects(f.worker.enqueue(f.user, other.id, candidate), /queued for another episode/);
+  assert.equal(f.store.all('SELECT * FROM jobs').length, 1);
+});
 test('stalled torrents stop without switching releases', async (t) => {
   const f = fixture(t),
     job = await f.worker.enqueue(f.user, f.item.id, candidate);

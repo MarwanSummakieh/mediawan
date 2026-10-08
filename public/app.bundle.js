@@ -117,6 +117,75 @@
   }
 
   // public/torrents.js
+  async function downloadSeason(title, season) {
+    modal("<h2>Checking season\u2026</h2>");
+    $("#dialog-content").onclick = null;
+    try {
+      const path = `/api/titles/${title.id}/seasons/${season}/downloads`;
+      const data = await api(path);
+      if (!$("#dialog").open) return;
+      const count = (state) => data.items.filter((item) => item.state === state).length;
+      const label = title.kind === "anime" && !season ? "all episodes" : season ? `season ${season}` : "specials";
+      const enabled = data.torrentConfigured || data.debridConfigured;
+      $("#dialog-content").innerHTML = `<h2>Download ${esc(label)}</h2>
+      <p>${count("pending")} episodes to download${count("downloaded") ? ` \xB7 ${count("downloaded")} already downloaded` : ""}${count("already_queued") ? ` \xB7 ${count("already_queued")} already queued` : ""}${count("unreleased") ? ` \xB7 ${count("unreleased")} not released` : ""}</p>
+      ${data.active ? '<p>This season is already being queued.</p><button id="season-view" class="primary">View downloads</button>' : `<form id="season-download-form" class="form">
+      <label>Download with<select name="provider"><option value="realdebrid" ${!data.debridConfigured ? "disabled" : ""} ${data.debridConfigured ? "selected" : ""}>Real-Debrid</option><option value="torrent" ${!data.torrentConfigured ? "disabled" : ""} ${!data.debridConfigured && data.torrentConfigured ? "selected" : ""}>Direct torrent \xB7 qBittorrent</option></select></label>
+      <label>Quality<select name="resolution">${data.resolutions.map((resolution) => `<option value="${resolution}" ${resolution === (data.resolutions.includes(1080) ? 1080 : data.resolutions[0]) ? "selected" : ""}>${resolution === 2160 ? "4K" : resolution + "p"}</option>`).join("")}</select></label>
+      <p class="meta">Chooses a matching release for each episode. Downloaded and queued episodes are skipped. Unavailable episodes appear in Downloads.</p>
+      <p id="season-provider-note" class="meta"></p>
+      ${!enabled ? '<p class="error">No download provider is configured.</p>' : ""}
+      <button class="primary" ${!enabled || !count("pending") ? "disabled" : ""}>Download ${count("pending")} episodes</button><p id="season-error" class="error" role="alert"></p></form>`}`;
+      if (data.active) {
+        $("#season-view").onclick = () => {
+          closeModal();
+          location.hash = "/downloads";
+        };
+        return;
+      }
+      const form = $("#season-download-form");
+      const providerNote = () => {
+        $("#season-provider-note").textContent = form.elements.provider.value === "torrent" ? "Torrent rules apply. Episodes sharing an existing torrent may need a separate release or Real-Debrid." : "Downloads original episode files through Real-Debrid.";
+      };
+      form.elements.provider.onchange = providerNote;
+      providerNote();
+      form.onsubmit = async (event) => {
+        event.preventDefault();
+        const submit = form.querySelector("button");
+        if (submit.disabled) return;
+        submit.disabled = true;
+        $("#season-error").textContent = "";
+        try {
+          await api(path, {
+            provider: form.elements.provider.value,
+            resolution: Number(form.elements.resolution.value)
+          });
+          closeModal();
+          toast("Season download queued");
+          location.hash = "/downloads";
+        } catch (error) {
+          submit.disabled = false;
+          $("#season-error").textContent = error.message;
+        }
+      };
+    } catch (error) {
+      if ($("#dialog").open)
+        $("#dialog-content").innerHTML = `<h2>Season unavailable</h2><p class="error">${esc(error.message)}</p>`;
+    }
+  }
+  function seasonDownloadRow(batch) {
+    const count = (state) => batch.items.filter((item) => item.state === state).length;
+    const active2 = ["queued", "finding"].includes(batch.state);
+    const unavailable = batch.items.filter((item) => item.state === "unavailable");
+    const label = batch.season ? `Season ${batch.season}` : "Episodes";
+    return `<div class="row"><div class="row-main"><h3>${esc(batch.name)} \xB7 ${label}</h3>
+    <p class="meta">${batch.resolution === 2160 ? "4K" : batch.resolution + "p"} \xB7 ${batch.provider === "torrent" ? "Direct torrent" : "Real-Debrid"} \xB7 ${active2 ? `Finding releases (${batch.items.length - count("pending")}/${batch.items.length})` : batch.state === "stopped" ? "Queueing stopped" : "Queueing finished"}</p>
+    <p class="meta">${count("queued")} queued${count("downloaded") ? ` \xB7 ${count("downloaded")} downloaded` : ""}${count("already_queued") ? ` \xB7 ${count("already_queued")} already queued` : ""}${count("unreleased") ? ` \xB7 ${count("unreleased")} not released` : ""}${!active2 && count("pending") ? ` \xB7 ${count("pending")} not queued` : ""}</p>
+    ${batch.error ? `<p class="error">${esc(batch.error)}</p>` : ""}
+    ${unavailable.length ? `<details><summary>${unavailable.length} unavailable</summary>${unavailable.map((item) => `<p class="error">Episode ${esc(item.episode)}: ${esc(item.error)}</p>`).join("")}</details>` : ""}
+    ${active2 ? '<p class="meta">Stopping queueing leaves existing downloads running.</p>' : ""}</div>
+    <div class="actions">${active2 ? `<button data-action="season-stop" data-id="${esc(batch.id)}">Stop queueing</button>` : ""}<button data-action="download-title" data-title="${esc(batch.title_id)}">Open title</button></div></div>`;
+  }
   async function releases(itemId) {
     modal("<h2>Finding releases\u2026</h2>");
     $("#dialog-content").onclick = null;
@@ -827,9 +896,12 @@
         currentTitle = title;
         draw(detailHtml(title));
       } else if (page === "downloads") {
-        const jobs = await api("/api/downloads");
+        const [jobs, seasons] = await Promise.all([
+          api("/api/downloads"),
+          api("/api/season-downloads")
+        ]);
         draw(
-          heading("Downloads") + (jobs.length ? jobs.map(downloadRow).join("") : empty("No downloads yet", "Choose a release on a title page to save it locally."))
+          heading("Downloads") + (seasons.length ? '<section class="section"><h2>Season downloads</h2>' + seasons.map(seasonDownloadRow).join("") + "</section><h2>Episodes</h2>" : "") + (jobs.length ? jobs.map(downloadRow).join("") : empty("No downloads yet", "Choose a release on a title page to save it locally."))
         );
         poll = setInterval(() => {
           if (!document.hidden && !playing()) route({ quiet: true });
@@ -872,7 +944,7 @@
     const seasons = [...new Set(title.items.map((i) => i.season))];
     for (const season of seasons) {
       const items = title.items.filter((i) => i.season === season);
-      html += `<section><div class="season-header"><h2>${title.kind === "movie" ? "Your copy" : season ? `Season ${season}` : "Specials"}</h2><div class="actions">${title.kind !== "movie" && items.some((i) => i.available) ? button("Shuffle season", "shuffle", `data-title="${title.id}" data-season="${season}"`) : ""}${button(items.every((i) => i.state.completed) ? "Mark unwatched" : "Mark watched", "bulk-watched", `data-season="${season}" data-watched="${!items.every((i) => i.state.completed)}"`)}</div></div>${items.map((i) => `<div class="episode"><span class="episode-number">${i.episode || "\u2014"}</span><div class="episode-body">${i.thumbnail ? `<img class="episode-thumbnail" src="${esc(i.thumbnail)}" alt="" loading="lazy">` : ""}<h3>${esc(i.name || episodeLabel(i))}</h3><p class="meta">${i.available ? "Downloaded" : "Not downloaded"} \xB7 ${i.state.completed ? "Watched" : i.state.position >= 10 ? "In progress" : "Unwatched"}${i.released ? " \xB7 " + esc(String(i.released).slice(0, 10)) : ""}</p>${episodeMetadata(i)}${progress(i.state)}</div><div class="actions">${button(i.available ? i.state.position >= 10 && !i.state.completed ? "Resume" : "Play" : "Download", i.available ? "play" : "release", `data-item="${i.id}" data-title="${title.id}"`, i.available ? "" : "quiet")}${button("More", "item-menu", `data-item="${i.id}"`)}</div></div>`).join("")}</section>`;
+      html += `<section><div class="season-header"><h2>${title.kind === "movie" ? "Your copy" : season ? `Season ${season}` : title.kind === "anime" ? "Episodes" : "Specials"}</h2><div class="actions">${title.kind !== "movie" && user.canDownload && items.some((i) => !i.available) ? button(title.kind === "anime" && !season ? "Download all episodes" : "Download season", "download-season", `data-season="${season}"`) : ""}${title.kind !== "movie" && items.some((i) => i.available) ? button("Shuffle season", "shuffle", `data-title="${title.id}" data-season="${season}"`) : ""}${button(items.every((i) => i.state.completed) ? "Mark unwatched" : "Mark watched", "bulk-watched", `data-season="${season}" data-watched="${!items.every((i) => i.state.completed)}"`)}</div></div>${items.map((i) => `<div class="episode"><span class="episode-number">${i.episode || "\u2014"}</span><div class="episode-body">${i.thumbnail ? `<img class="episode-thumbnail" src="${esc(i.thumbnail)}" alt="" loading="lazy">` : ""}<h3>${esc(i.name || episodeLabel(i))}</h3><p class="meta">${i.available ? "Downloaded" : "Not downloaded"} \xB7 ${i.state.completed ? "Watched" : i.state.position >= 10 ? "In progress" : "Unwatched"}${i.released ? " \xB7 " + esc(String(i.released).slice(0, 10)) : ""}</p>${episodeMetadata(i)}${progress(i.state)}</div><div class="actions">${button(i.available ? i.state.position >= 10 && !i.state.completed ? "Resume" : "Play" : "Download", i.available ? "play" : "release", `data-item="${i.id}" data-title="${title.id}"`, i.available ? "" : "quiet")}${button("More", "item-menu", `data-item="${i.id}"`)}</div></div>`).join("")}</section>`;
     }
     return html;
   }
@@ -927,7 +999,12 @@
         closeModal();
         await play(b.dataset.item, b.dataset.title, { replay: b.dataset.replay === "true" });
       } else if (actionName === "release") await releases(b.dataset.item);
-      else if (actionName === "discover-title") {
+      else if (actionName === "download-season")
+        await downloadSeason(currentTitle, Number(b.dataset.season));
+      else if (actionName === "season-stop") {
+        await api(`/api/season-downloads/${b.dataset.id}/stop`, {});
+        await route({ quiet: true });
+      } else if (actionName === "discover-title") {
         const title = discoverResults[Number(b.dataset.index)];
         const stored = await api("/api/discover", {
           kind: title.kind,

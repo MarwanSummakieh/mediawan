@@ -309,6 +309,16 @@ export function createTorrentDownloads(
           )
           .map(store.unpack)[0];
         if (duplicate) return duplicate;
+        if (
+          store.one(
+            "SELECT id FROM jobs WHERE json_extract(json,'$.provider')='torrent' AND lower(json_extract(json,'$.hash'))=? AND state NOT IN ('failed','cancelled','evicted')",
+            release.hash.toLowerCase(),
+          )
+        )
+          fail(
+            409,
+            'This torrent is already queued for another episode. Select a different release.',
+          );
         if (await client.info(release.hash))
           fail(
             409,

@@ -33,6 +33,9 @@ export function createStore(file) {
     CREATE TABLE IF NOT EXISTS undo(id TEXT PRIMARY KEY,user_id INTEGER NOT NULL,expires INTEGER NOT NULL,json TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS migrations(name TEXT PRIMARY KEY,completed INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY,json TEXT NOT NULL);`);
+  db.exec(
+    `CREATE TABLE IF NOT EXISTS season_downloads(id TEXT PRIMARY KEY,user_id INTEGER NOT NULL,title_id TEXT NOT NULL,season INTEGER NOT NULL,state TEXT NOT NULL,updated INTEGER NOT NULL,json TEXT NOT NULL);`,
+  );
   const playbackColumns = new Set(
     db
       .prepare('PRAGMA table_info(playback)')
