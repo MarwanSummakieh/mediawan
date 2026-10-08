@@ -1,5 +1,10 @@
 # NAS downloader and encoder
 
+For the current v2 installation's automatic release updates, see
+[NAS automatic updates](nas-auto-updates.md). Its NAS-local updater checks every
+five minutes and retains image rollback. The Watchtower instructions below
+describe the older update setup.
+
 Mediawan is available at https://media.marwansummakieh.me. The previous
 `anime.marwansummakieh.me` address remains an alias on the same Cloudflare tunnel,
 whose origin is `http://web:8787`.
