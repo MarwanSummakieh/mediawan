@@ -326,6 +326,54 @@
   var loading = false;
   var scrubbing = false;
   var video = () => $("#video");
+  var icons = {
+    back: '<path d="m14 5-7 7 7 7"/>',
+    play: '<path d="m8 5 11 7-11 7Z" fill="currentColor" stroke="none"/>',
+    pause: '<path d="M7 5h3v14H7zm7 0h3v14h-3z" fill="currentColor" stroke="none"/>',
+    rewind: '<path d="M4 8a9 9 0 1 1-1 7M4 3v5h5"/><text x="12" y="16" text-anchor="middle" font-size="9" font-family="sans-serif" fill="currentColor" stroke="none">10</text>',
+    forward: '<path d="M20 8a9 9 0 1 0 1 7M20 3v5h-5"/><text x="12" y="16" text-anchor="middle" font-size="9" font-family="sans-serif" fill="currentColor" stroke="none">10</text>',
+    volume: '<path d="M11 4 6 8H3v8h3l5 4ZM15 8a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14"/>',
+    muted: '<path d="M11 4 6 8H3v8h3l5 4Zm5 5 5 6m0-6-5 6"/>',
+    fullscreen: '<path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/>',
+    exitFullscreen: '<path d="M3 8h5V3m8 0v5h5M8 21v-5H3m18 0h-5v5"/>',
+    previous: '<path d="M6 5v14m12-14L8 12l10 7Z"/>',
+    next: '<path d="M18 5v14M6 5l10 7-10 7Z"/>',
+    queue: '<path d="M4 6h16M4 12h10M4 18h10m4-5 4 3-4 3Z"/>',
+    chapters: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16m4-10h4m-4 4h4"/>',
+    settings: '<path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3" fill="#171918"/><circle cx="15" cy="17" r="3" fill="#171918"/>',
+    close: '<path d="m6 6 12 12M6 18 18 6"/>'
+  };
+  function iconButton(id, icon, label, shortcut = "") {
+    const button2 = $("#" + id);
+    if (button2.dataset.icon !== icon) {
+      button2.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">${icons[icon]}</svg>`;
+      button2.dataset.icon = icon;
+    }
+    button2.setAttribute("aria-label", label);
+    button2.title = shortcut ? `${label} (${shortcut})` : label;
+  }
+  var controlsTimer = null;
+  var keyboardControls = false;
+  function showControls() {
+    $("#player").classList.remove("controls-idle");
+    $("#player").classList.toggle("keyboard-controls", keyboardControls);
+    clearTimeout(controlsTimer);
+    if (!active || video().paused || loading || keyboardControls || !$("#player-settings").hidden)
+      return;
+    controlsTimer = setTimeout(() => {
+      if (video().paused || loading || scrubbing || $("#dialog").open || !$("#up-next").hidden)
+        return;
+      if ($("#player").contains(document.activeElement)) $("#player").focus();
+      clearTimeout(controlsTimer);
+      $("#player").classList.add("controls-idle");
+    }, 3e3);
+  }
+  function closeSettings(restoreFocus2 = false) {
+    $("#player-settings").hidden = true;
+    $("#player-settings-toggle").setAttribute("aria-expanded", "false");
+    if (restoreFocus2) $("#player-settings-toggle").focus();
+    showControls();
+  }
   var playing = () => !!active;
   function currentQueue() {
     return queue;
@@ -382,14 +430,17 @@
     video().removeAttribute("src");
     video().load();
     active = null;
+    clearTimeout(controlsTimer);
+    closeSettings();
     queue = null;
     loading = false;
     $("#player").hidden = true;
+    document.body.classList.remove("player-open");
     $("#shell").removeAttribute("inert");
     window.dispatchEvent(new Event("library-changed"));
   }
   async function play(itemId, titleId, { replay = false, queueId = null } = {}) {
-    var _a, _b;
+    var _a, _b, _c;
     clearInterval(timer);
     cancelNext();
     await report("stop");
@@ -424,9 +475,11 @@
       scrubbing = false;
       updateTransport();
       $("#player").hidden = false;
+      document.body.classList.add("player-open");
+      closeSettings();
       $("#shell").setAttribute("inert", "");
       $("#player-title").textContent = title.name;
-      $("#player-episode").textContent = `${episodeLabel(item)}${item.name ? " \xB7 " + item.name : ""}`;
+      $("#player-episode").textContent = title.kind === "movie" ? "" : `${episodeLabel(item)}${item.name ? " \xB7 " + item.name : ""}`;
       $("#player-message").textContent = "";
       $("#audio").innerHTML = info.audio.map(
         (t) => `<option value="${t.index}">${esc(t.language)} \xB7 ${esc(t.title || t.codec)} ${t.channels || ""}</option>`
@@ -437,12 +490,14 @@
       $("#previous").disabled = !queue || queue.index <= 0;
       $("#next").disabled = !queue || queue.index >= queue.items.length - 1;
       $("#player-queue").disabled = !queue;
-      $("#chapters").disabled = !((_a = info.chapters) == null ? void 0 : _a.length);
+      $("#previous").hidden = $("#next").hidden = $("#player-queue").hidden = !queue;
+      $("#chapters").hidden = !((_a = info.chapters) == null ? void 0 : _a.length);
+      $("#chapters").disabled = !((_b = info.chapters) == null ? void 0 : _b.length);
       const preferred = info.audio.find(
         (t) => preferences.audioLanguage && t.language === preferences.audioLanguage
       );
       if (preferred) $("#audio").value = String(preferred.index);
-      if (info.direct && (!preferred || preferred.index === ((_b = info.audio[0]) == null ? void 0 : _b.index)))
+      if (info.direct && (!preferred || preferred.index === ((_c = info.audio[0]) == null ? void 0 : _c.index)))
         await source(`/api/items/${itemId}/file`, session.position);
       else await convert(session.position);
       if (preferences.subtitleMode === "preferred") {
@@ -457,6 +512,7 @@
       updateTransport();
       timer = setInterval(() => void report(), 1e4);
       $("#player-close").focus();
+      showControls();
     } catch (error) {
       loading = false;
       if (active) active.pendingPosition = null;
@@ -511,9 +567,10 @@
     if (!active) return;
     const owner = active;
     loading = true;
+    showControls();
     active.pendingPosition = position;
     updateTransport();
-    $("#player-message").textContent = "Preparing compatibility playback\u2026";
+    $("#player-message").textContent = "";
     video().pause();
     try {
       await releaseConversion();
@@ -530,11 +587,12 @@
       active.offset = result.offset;
       await source(result.url, 0, autoplay);
       setSubtitles();
-      $("#player-message").textContent = "Compatibility playback";
+      $("#player-message").textContent = "";
     } finally {
       loading = false;
       if (active) active.pendingPosition = null;
       updateTransport();
+      showControls();
     }
   }
   function setSubtitles() {
@@ -630,12 +688,24 @@
     slider.disabled = loading || !duration;
     if (!scrubbing) slider.value = String(position);
     const shown = scrubbing ? Number(slider.value) : position;
+    slider.style.setProperty("--played", `${duration ? shown / duration * 100 : 0}%`);
     $("#player-time").textContent = `${clockTime(shown)} / ${clockTime(duration)}`;
     slider.setAttribute("aria-valuetext", `${clockTime(shown)} of ${clockTime(duration)}`);
-    $("#player-toggle").textContent = video().paused ? "Play" : "Pause";
-    $("#player-mute").textContent = video().muted ? "Unmute" : "Mute";
+    iconButton(
+      "player-toggle",
+      video().paused ? "play" : "pause",
+      video().paused ? "Play" : "Pause",
+      "Space"
+    );
+    iconButton(
+      "player-mute",
+      video().muted || !video().volume ? "muted" : "volume",
+      video().muted ? "Unmute" : "Mute",
+      "M"
+    );
     $("#player-volume").value = String(video().volume);
     $("#player-buffering").textContent = loading ? "Preparing\u2026" : !video().paused && video().readyState < 3 ? "Buffering\u2026" : "";
+    $("#player-loading").hidden = !$("#player-buffering").textContent;
     for (const id of [
       "player-toggle",
       "player-back",
@@ -661,6 +731,60 @@
     updateTransport();
   }
   function initPlayer() {
+    for (const [id, icon, label] of [
+      ["player-close", "back", "Back to library"],
+      ["player-toggle", "play", "Play"],
+      ["player-back", "rewind", "Rewind 10 seconds"],
+      ["player-forward", "forward", "Forward 10 seconds"],
+      ["player-mute", "volume", "Mute"],
+      ["player-fullscreen", "fullscreen", "Fullscreen"],
+      ["previous", "previous", "Previous episode"],
+      ["next", "next", "Next episode"],
+      ["player-queue", "queue", "Episode queue"],
+      ["chapters", "chapters", "Chapters"],
+      ["player-settings-toggle", "settings", "Playback settings"],
+      ["player-settings-close", "close", "Close playback settings"]
+    ])
+      iconButton(id, icon, label);
+    $("#player-settings-toggle").onclick = () => {
+      const open = $("#player-settings").hidden;
+      $("#player-settings").hidden = !open;
+      $("#player-settings-toggle").setAttribute("aria-expanded", String(open));
+      showControls();
+      if (open) $("#player-settings-close").focus();
+    };
+    $("#player-settings-close").onclick = () => closeSettings(true);
+    $("#player").addEventListener("pointermove", () => {
+      keyboardControls = false;
+      showControls();
+    });
+    $("#player").addEventListener("pointerdown", (event) => {
+      keyboardControls = false;
+      if (!event.target.closest("#player-settings, #player-settings-toggle")) closeSettings();
+      showControls();
+    });
+    $("#player").addEventListener("focusin", showControls);
+    document.addEventListener("keydown", (event) => {
+      if (!active || $("#dialog").open) return;
+      keyboardControls = true;
+      showControls();
+      if ((event.key === "Escape" || event.keyCode === 10009) && !$("#player-settings").hidden) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        closeSettings(true);
+        return;
+      }
+      if (["INPUT", "SELECT", "TEXTAREA"].includes(event.target.tagName)) return;
+      const key = event.key.toLowerCase();
+      if (key === " " && event.target.tagName !== "BUTTON" || key === "k" || event.keyCode === 10252) {
+        event.preventDefault();
+        if (!loading) $("#player-toggle").click();
+      } else if (key === "m") $("#player-mute").click();
+      else if (key === "f") $("#player-fullscreen").click();
+      else if (event.keyCode === 415 && !loading)
+        void video().play().catch((e) => toast(e.message));
+      else if (event.keyCode === 19) video().pause();
+    });
     $("#player-toggle").onclick = () => {
       if (video().paused)
         video().play().catch((e) => toast(e.message));
@@ -670,11 +794,13 @@
     $("#player-forward").onclick = () => seekTo((video().currentTime || 0) + ((active == null ? void 0 : active.offset) || 0) + 10).catch((e) => toast(e.message));
     $("#player-seek").oninput = () => {
       scrubbing = true;
+      showControls();
       updateTransport();
     };
     $("#player-seek").onchange = () => {
       const target = Number($("#player-seek").value);
       scrubbing = false;
+      showControls();
       seekTo(target).catch((e) => {
         toast(e.message);
         updateTransport();
@@ -701,8 +827,19 @@
       }
     };
     document.addEventListener("fullscreenchange", () => {
-      $("#player-fullscreen").textContent = document.fullscreenElement ? "Exit fullscreen" : "Fullscreen";
+      iconButton(
+        "player-fullscreen",
+        document.fullscreenElement ? "exitFullscreen" : "fullscreen",
+        document.fullscreenElement ? "Exit fullscreen" : "Fullscreen",
+        "F"
+      );
     });
+    video().onclick = () => {
+      if (!loading) $("#player-toggle").click();
+    };
+    video().ondblclick = () => $("#player-fullscreen").click();
+    for (const event of ["playing", "pause", "waiting"])
+      video().addEventListener(event, showControls);
     for (const event of [
       "timeupdate",
       "durationchange",
