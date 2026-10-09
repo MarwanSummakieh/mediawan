@@ -909,7 +909,8 @@ body.player-open {
   color: #fff;
 }
 #player button.player-icon:hover,
-#player button.player-icon[aria-expanded='true'] {
+#player button.player-icon[aria-expanded='true'],
+#player button.player-icon.subtitles-active {
   background: #ffffff20;
 }
 #player button:disabled {
@@ -1008,7 +1009,8 @@ body.player-open {
   padding: 0;
   accent-color: #fff;
 }
-#player-settings {
+#player-settings,
+#player-subtitles {
   position: absolute;
   right: var(--player-inset);
   bottom: 132px;
@@ -1028,7 +1030,8 @@ body.player-open {
   justify-content: space-between;
   margin: -8px -8px 16px 0;
 }
-#player-settings label {
+#player-settings label,
+#player-subtitles label {
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -1036,7 +1039,9 @@ body.player-open {
   font-size: 0.8rem;
   color: #ffffffb3;
 }
-#player-settings select {
+#player-settings select,
+#player-subtitles select,
+#player-subtitles input {
   width: 100%;
   margin: 0;
   font-size: 0.875rem;
@@ -1049,6 +1054,53 @@ body.player-open {
   font-size: 0.8rem;
   background: transparent;
   border-color: #ffffff30;
+}
+#player-subtitles > button,
+#player-subtitles-settings,
+#subtitle-style-reset {
+  width: 100%;
+  margin-bottom: 16px;
+}
+#subtitle-status:empty {
+  display: none;
+}
+#subtitle-appearance {
+  border-top: 1px solid #ffffff26;
+  padding-top: 16px;
+}
+#subtitle-appearance summary {
+  cursor: pointer;
+  margin-bottom: 20px;
+}
+#subtitle-appearance summary:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 4px;
+}
+#subtitle-layer {
+  position: absolute;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 1;
+  font-weight: 600;
+}
+.subtitle-stack {
+  position: absolute;
+  left: 2%;
+  right: 2%;
+  display: flex;
+  flex-direction: column;
+}
+.subtitle-cue {
+  unicode-bidi: plaintext;
+  max-width: 100%;
+  padding: 0.16em 0.5em;
+  border-radius: 4px;
+  line-height: 1.34;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+.subtitle-cue + .subtitle-cue {
+  margin-top: 0.28em;
 }
 #player-message {
   color: #ffffffe0;
@@ -1163,7 +1215,8 @@ body.player-open {
   #player-volume {
     width: 104px;
   }
-  #player-settings {
+  #player-settings,
+  #player-subtitles {
     bottom: 164px;
     width: 420px;
   }
@@ -1322,7 +1375,8 @@ body.player-open {
     margin-left: auto;
     gap: 0;
   }
-  #player-settings {
+  #player-settings,
+  #player-subtitles {
     bottom: 128px;
   }
 }
@@ -1335,7 +1389,8 @@ body.player-open {
     padding-top: 32px;
     padding-bottom: 12px;
   }
-  #player-settings {
+  #player-settings,
+  #player-subtitles {
     bottom: 108px;
     max-height: calc(100vh - 124px);
   }

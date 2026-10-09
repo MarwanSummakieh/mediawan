@@ -12,6 +12,7 @@ import { createDownloads } from './downloads.mjs';
 import { createTorrentPolicy, assessRelease, assessQuality, qualityRule } from './torrent-policy.mjs';
 import { createTorrentDownloads } from './torrent-downloads.mjs';
 import { createMedia, probe } from './media.mjs';
+import { createSubtitles } from './subtitles.mjs';
 import { createSeasonDownloads } from './season-downloads.mjs';
 import { createLiveStore } from './live/store.mjs';
 import { createLivePlayback } from './live/playback.mjs';
@@ -31,6 +32,7 @@ export function createApplication(config, dependencies = {}) {
     downloads = dependencies.downloads || createDownloads(store, config),
     media = createMedia(store, config);
   const torrentPolicy = createTorrentPolicy(store);
+  const subtitles = createSubtitles(store, dependencies.subtitles);
   const torrents = dependencies.torrents || createTorrentDownloads(store, config, torrentPolicy);
   const seasons = createSeasonDownloads(store, config, catalog, downloads, torrents, torrentPolicy);
   const live = createLiveStore(store, config, dependencies.live);
@@ -450,7 +452,10 @@ export function createApplication(config, dependencies = {}) {
     }),
   );
   app.use('/api/items/:id', (req, res, next) => {
-    if (!['/media', '/file', '/convert'].includes(req.path) && !req.path.startsWith('/subtitles/'))
+    if (
+      !['/media', '/file', '/convert', '/subtitles'].includes(req.path) &&
+      !req.path.startsWith('/subtitles/')
+    )
       return next();
     try {
       const release = store.retainItem(req.params.id);
@@ -468,6 +473,16 @@ export function createApplication(config, dependencies = {}) {
   app.get(
     '/api/items/:id/file',
     wrap((req, res) => res.sendFile(media.file(req.user, req.params.id))),
+  );
+  app.get(
+    '/api/items/:id/subtitles',
+    wrap(async (req, res) => res.json(await subtitles.list(req.user, req.params.id))),
+  );
+  app.get(
+    '/api/items/:id/subtitles/online/:track',
+    wrap(async (req, res) =>
+      res.type('text/vtt').send(await subtitles.file(req.user, req.params.id, req.params.track)),
+    ),
   );
   app.get(
     '/api/items/:id/subtitles/:index',

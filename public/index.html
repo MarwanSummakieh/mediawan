@@ -44,6 +44,7 @@
         <div><strong id="player-title"></strong><span id="player-episode"></span></div>
       </header>
       <video id="video" playsinline></video>
+      <div id="subtitle-layer" hidden aria-hidden="true"></div>
       <div id="player-loading" hidden role="status">
         <span class="player-spinner"></span><span id="player-buffering"></span>
       </div>
@@ -123,6 +124,16 @@
               title="Chapters"
             ></button>
             <button
+              id="player-subtitles-toggle"
+              class="player-icon"
+              aria-label="Subtitles"
+              title="Subtitles (C)"
+              aria-expanded="false"
+              aria-controls="player-subtitles"
+            >
+              CC
+            </button>
+            <button
               id="player-settings-toggle"
               class="player-icon"
               aria-label="Playback settings"
@@ -149,8 +160,80 @@
             ></button>
           </div>
           <label>Audio<select id="audio"></select></label>
-          <label>Subtitles<select id="subtitles"></select></label>
+          <button id="player-subtitles-settings">Subtitles & appearance</button>
           <button id="convert">Compatibility playback</button>
+        </div>
+        <div id="player-subtitles" hidden role="region" aria-label="Subtitles">
+          <div class="player-settings-heading">
+            <strong>Subtitles</strong
+            ><button
+              id="player-subtitles-close"
+              class="player-icon"
+              aria-label="Close subtitles"
+            ></button>
+          </div>
+          <label
+            >Track<select id="subtitles">
+              <option value="">Off</option>
+            </select></label
+          >
+          <p id="subtitle-status" class="meta" role="status"></p>
+          <button id="subtitle-find">Find online subtitles</button>
+          <label class="subtitle-file"
+            >Open subtitle file<input
+              id="subtitle-file"
+              type="file"
+              accept=".srt,.vtt,text/vtt,application/x-subrip"
+          /></label>
+          <label
+            >Subtitle file encoding<select id="subtitle-file-encoding">
+              <option value="">Automatic</option>
+              <option value="ara">Arabic (Windows-1256)</option>
+            </select></label
+          >
+          <label
+            >Delay (seconds)<input
+              id="subtitle-delay"
+              type="number"
+              min="-120"
+              max="120"
+              step="0.5"
+              value="0"
+          /></label>
+          <p class="meta">Negative: earlier. Positive: later.</p>
+          <button id="subtitle-sync-reset">Reset timing</button>
+          <details id="subtitle-appearance">
+            <summary>Appearance</summary>
+            <label>Text size<select id="subtitle-size"></select></label>
+            <label>Text colour<select id="subtitle-color"></select></label>
+            <label>Background<select id="subtitle-bg"></select></label>
+            <label
+              >Background opacity<select id="subtitle-bg-opacity">
+                <option value="0">Transparent</option>
+                <option value="0.25">25%</option>
+                <option value="0.5">50%</option>
+                <option value="0.75">75%</option>
+                <option value="1">100%</option>
+              </select></label
+            >
+            <label
+              >Height above bottom (%)<input
+                id="subtitle-pos"
+                type="number"
+                min="0"
+                max="80"
+                step="2"
+                value="6"
+            /></label>
+            <label
+              >Alignment<select id="subtitle-align">
+                <option value="left">Left</option>
+                <option value="center">Centre</option>
+                <option value="right">Right</option>
+              </select></label
+            >
+            <button id="subtitle-style-reset">Reset appearance</button>
+          </details>
         </div>
       </div>
       <div id="up-next" hidden>

@@ -1,5 +1,5 @@
 (() => {
-  // public/core.js
+  // .runtime/subtitle-release/public/core.js
   var $ = (selector) => document.querySelector(selector);
   var esc = (value) => String(value == null ? "" : value).replace(
     /[&<>"']/g,
@@ -56,7 +56,7 @@
   }
   var empty = (name, description, action2 = "") => `<div class="empty"><h2>${esc(name)}</h2><p>${esc(description)}</p>${action2}</div>`;
 
-  // public/metadata.js
+  // .runtime/subtitle-release/public/metadata.js
   function durationLabel(seconds) {
     if (!(seconds > 0)) return "Runtime unavailable";
     if (seconds < 60) return `${Math.round(seconds)} sec`;
@@ -116,7 +116,7 @@
     return `<p class="episode-runtime">${esc(itemRuntime(item))}</p>${item.description ? `<details class="episode-description"><summary>Synopsis</summary><p class="muted">${esc(item.description)}</p></details>` : ""}${technical ? `<details class="episode-description"><summary>File details</summary><p class="meta">${esc(technical)}</p></details>` : ""}`;
   }
 
-  // public/sports.js
+  // .runtime/subtitle-release/public/sports.js
   var schedule = null;
   var channels = [];
   var liveSession = null;
@@ -488,7 +488,7 @@
       });
   });
 
-  // public/torrents.js
+  // .runtime/subtitle-release/public/torrents.js
   async function downloadSeason(title, season) {
     modal("<h2>Checking season\u2026</h2>");
     $("#dialog-content").onclick = null;
@@ -668,7 +668,7 @@
     };
   }
 
-  // public/playback-time.js
+  // .runtime/subtitle-release/public/playback-time.js
   function clockTime(value) {
     const seconds = Math.max(0, Math.floor(Number(value) || 0));
     const minutes = Math.floor(seconds / 60);
@@ -687,7 +687,197 @@
     return duration > 0 && position >= duration - 2;
   }
 
-  // public/player.js
+  // .runtime/subtitle-release/public/subtitles.js
+  var subtitleSizes = [
+    ["s", "Small", 0.03],
+    ["m", "Medium", 0.038],
+    ["l", "Large", 0.048],
+    ["xl", "Extra large", 0.06],
+    ["xxl", "Huge", 0.075]
+  ];
+  var subtitleColors = [
+    ["white", "White", "#ffffff"],
+    ["yellow", "Yellow", "#ffe066"],
+    ["green", "Green", "#a5e6a2"],
+    ["cyan", "Cyan", "#8ce4ef"],
+    ["pink", "Pink", "#ffb3d1"],
+    ["grey", "Grey", "#c9ced8"],
+    ["black", "Black", "#000000"]
+  ];
+  var subtitleBackgrounds = [
+    ["none", "None", null],
+    ["black", "Black", "#000000"],
+    ["grey", "Grey", "#333333"],
+    ["white", "White", "#ffffff"],
+    ["navy", "Deep blue", "#101a34"],
+    ["yellow", "Yellow", "#ffe867"]
+  ];
+  var subtitleDefaults = {
+    size: "m",
+    color: "white",
+    bg: "black",
+    bgOpacity: 0.75,
+    pos: 6,
+    align: "center"
+  };
+  function subtitleStyle(saved) {
+    const s = { ...subtitleDefaults };
+    if (!saved || typeof saved !== "object") return s;
+    for (const [key, choices] of [
+      ["size", subtitleSizes],
+      ["color", subtitleColors],
+      ["bg", subtitleBackgrounds]
+    ])
+      if (choices.some(([id]) => id === saved[key])) s[key] = saved[key];
+    if (["left", "center", "right"].includes(saved.align)) s.align = saved.align;
+    if (Number.isFinite(saved.pos)) s.pos = Math.max(0, Math.min(80, Math.round(saved.pos)));
+    if (Number.isFinite(saved.bgOpacity)) s.bgOpacity = Math.max(0, Math.min(1, saved.bgOpacity));
+    return s;
+  }
+  function srtToVtt(text) {
+    text = text.replace(/^\uFEFF/, "").replace(/\r/g, "");
+    return /^WEBVTT(?:\s|$)/.test(text) ? text : "WEBVTT\n\n" + text.replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, "$1.$2");
+  }
+  function decodeSubtitle(bytes, language = "") {
+    const buffer = new Uint8Array(bytes);
+    if (buffer[0] === 255 && buffer[1] === 254) return new TextDecoder("utf-16le").decode(buffer);
+    if (buffer[0] === 254 && buffer[1] === 255) return new TextDecoder("utf-16be").decode(buffer);
+    try {
+      return new TextDecoder("utf-8", { fatal: true }).decode(buffer);
+    } catch {
+      const encodings = {
+        ara: "windows-1256",
+        ar: "windows-1256",
+        per: "windows-1256",
+        fas: "windows-1256",
+        rus: "windows-1251",
+        bul: "windows-1251",
+        ukr: "windows-1251",
+        srp: "windows-1251",
+        gre: "windows-1253",
+        ell: "windows-1253",
+        heb: "windows-1255",
+        tur: "windows-1254",
+        tha: "windows-874",
+        vie: "windows-1258"
+      };
+      return new TextDecoder(encodings[language.toLowerCase()] || "windows-1252").decode(buffer);
+    }
+  }
+  var isArabic = (language) => /^(ar|ara)(-|$)/i.test(language || "");
+  var subtitleLanguageLabel = (language) => isArabic(language) ? "Arabic \xB7 \u0627\u0644\u0639\u0631\u0628\u064A\u0629" : language;
+  function shiftSubtitleCues(cues, delay, offset = 0, originals = /* @__PURE__ */ new WeakMap()) {
+    for (const cue of Array.from(cues || [])) {
+      if (!originals.has(cue)) originals.set(cue, [cue.startTime, cue.endTime]);
+      const [start, end] = originals.get(cue);
+      cue.startTime = start + delay - offset;
+      cue.endTime = end + delay - offset;
+    }
+    return originals;
+  }
+  function createSubtitleRenderer(video2, layer) {
+    let style, track = null, preview = false;
+    try {
+      style = subtitleStyle(JSON.parse(localStorage.getItem("mw:substyle")));
+    } catch {
+      style = subtitleStyle();
+    }
+    function render() {
+      layer.textContent = "";
+      const cues = preview ? [] : Array.from((track == null ? void 0 : track.track.cues) || []).filter(
+        (cue) => cue.startTime <= video2.currentTime && cue.endTime > video2.currentTime
+      );
+      layer.hidden = !preview && !cues.length;
+      if (layer.hidden) return;
+      const bounds = video2.getBoundingClientRect(), parent = layer.parentElement.getBoundingClientRect();
+      const scale = video2.videoWidth && video2.videoHeight ? Math.min(bounds.width / video2.videoWidth, bounds.height / video2.videoHeight) : 1;
+      const width = video2.videoWidth ? video2.videoWidth * scale : bounds.width;
+      const height = video2.videoHeight ? video2.videoHeight * scale : bounds.height;
+      Object.assign(layer.style, {
+        left: `${bounds.left - parent.left + (bounds.width - width) / 2}px`,
+        top: `${bounds.top - parent.top + (bounds.height - height) / 2}px`,
+        width: `${width}px`,
+        height: `${height}px`
+      });
+      const stacks = {};
+      function add(content, edge = "bottom") {
+        if (!stacks[edge]) {
+          const stack = document.createElement("div");
+          stack.className = "subtitle-stack";
+          stack.style[edge] = `${style.pos}%`;
+          stack.style.alignItems = { left: "flex-start", center: "center", right: "flex-end" }[style.align];
+          layer.appendChild(stack);
+          stacks[edge] = stack;
+        }
+        const box = document.createElement("div");
+        box.className = "subtitle-cue";
+        box.dir = "auto";
+        const color = subtitleColors.find(([id]) => id === style.color)[2];
+        const bg = subtitleBackgrounds.find(([id]) => id === style.bg)[2];
+        const rgb = bg && [1, 3, 5].map((i) => parseInt(bg.slice(i, i + 2), 16)).join(",");
+        Object.assign(box.style, {
+          fontSize: `${Math.max(13, height * subtitleSizes.find(([id]) => id === style.size)[2])}px`,
+          color,
+          textAlign: style.align,
+          background: bg ? `rgba(${rgb},${style.bgOpacity})` : "transparent",
+          textShadow: bg && style.bgOpacity >= 0.5 ? "none" : "0 0 4px #000, 0 2px 5px #000"
+        });
+        if (typeof content === "string") box.textContent = content;
+        else box.appendChild(content);
+        stacks[edge].appendChild(box);
+      }
+      if (preview) add("Subtitles will look like this.");
+      for (const cue of cues) {
+        const top = cue.line !== "auto" && Number.isFinite(Number(cue.line)) && (cue.snapToLines === false ? Number(cue.line) < 50 : Number(cue.line) >= 0 && Number(cue.line) < 6);
+        add(
+          cue.getCueAsHTML ? cue.getCueAsHTML() : String(cue.text).replace(/<[^>]*>/g, ""),
+          top ? "top" : "bottom"
+        );
+      }
+    }
+    const renderer = {
+      get style() {
+        return style;
+      },
+      set(next) {
+        style = subtitleStyle(next);
+        try {
+          localStorage.setItem("mw:substyle", JSON.stringify(style));
+        } catch {
+        }
+        render();
+      },
+      reset() {
+        this.set(subtitleDefaults);
+      },
+      preview(on) {
+        preview = on;
+        render();
+      },
+      attach(element) {
+        this.detach();
+        track = element;
+        track.track.mode = "hidden";
+        track.track.addEventListener("cuechange", render);
+        render();
+      },
+      detach() {
+        track == null ? void 0 : track.track.removeEventListener("cuechange", render);
+        track = null;
+        render();
+      },
+      render
+    };
+    window.addEventListener("resize", render);
+    document.addEventListener("fullscreenchange", render);
+    video2.addEventListener("loadedmetadata", render);
+    video2.addEventListener("resize", render);
+    video2.addEventListener("timeupdate", render);
+    return renderer;
+  }
+
+  // .runtime/subtitle-release/public/player.js
+  var subtitleRenderer = null;
   var active = null;
   var queue = null;
   var hls2 = null;
@@ -712,6 +902,7 @@
     queue: '<path d="M4 6h16M4 12h10M4 18h10m4-5 4 3-4 3Z"/>',
     chapters: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16m4-10h4m-4 4h4"/>',
     settings: '<path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3" fill="#171918"/><circle cx="15" cy="17" r="3" fill="#171918"/>',
+    subtitles: '<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M10 9H7v6h3m7-6h-3v6h3"/>',
     close: '<path d="m6 6 12 12M6 18 18 6"/>'
   };
   function iconButton(id, icon, label, shortcut = "") {
@@ -729,7 +920,7 @@
     $("#player").classList.remove("controls-idle");
     $("#player").classList.toggle("keyboard-controls", keyboardControls);
     clearTimeout(controlsTimer);
-    if (!active || video().paused || loading || keyboardControls || !$("#player-settings").hidden)
+    if (!active || video().paused || loading || keyboardControls || !$("#player-settings").hidden || !$("#player-subtitles").hidden)
       return;
     controlsTimer = setTimeout(() => {
       if (video().paused || loading || scrubbing || $("#dialog").open || !$("#up-next").hidden)
@@ -744,6 +935,31 @@
     $("#player-settings-toggle").setAttribute("aria-expanded", "false");
     if (restoreFocus2) $("#player-settings-toggle").focus();
     showControls();
+  }
+  function closeSubtitles(restoreFocus2 = false) {
+    $("#player-subtitles").hidden = true;
+    $("#player-subtitles-toggle").setAttribute("aria-expanded", "false");
+    subtitleRenderer == null ? void 0 : subtitleRenderer.preview(false);
+    if (restoreFocus2) $("#player-subtitles-toggle").focus();
+    showControls();
+  }
+  function openSubtitles() {
+    closeSettings();
+    $("#player-subtitles").hidden = false;
+    $("#player-subtitles-toggle").setAttribute("aria-expanded", "true");
+    subtitleRenderer.preview($("#subtitle-appearance").open);
+    showControls();
+    $("#subtitles").focus();
+  }
+  function clearSubtitleTrack() {
+    subtitleRenderer == null ? void 0 : subtitleRenderer.detach();
+    for (const track of Array.from(video().textTracks || [])) track.mode = "disabled";
+    video().querySelectorAll("track").forEach((t) => t.remove());
+  }
+  function releaseSubtitleFile() {
+    clearSubtitleTrack();
+    if (active == null ? void 0 : active.subtitleFile) URL.revokeObjectURL(active.subtitleFile);
+    $("#subtitle-file").value = "";
   }
   var playing = () => !!active;
   function currentQueue() {
@@ -797,12 +1013,14 @@
     await report("stop");
     loading = true;
     video().pause();
+    releaseSubtitleFile();
     await releaseConversion();
     video().removeAttribute("src");
     video().load();
     active = null;
     clearTimeout(controlsTimer);
     closeSettings();
+    closeSubtitles();
     queue = null;
     loading = false;
     $("#player").hidden = true;
@@ -818,6 +1036,7 @@
     await report("stop");
     loading = true;
     video().pause();
+    releaseSubtitleFile();
     await releaseConversion();
     try {
       const title = await api(`/api/titles/${titleId}`), item = title.items.find((i) => i.id === itemId);
@@ -842,13 +1061,25 @@
         session,
         seq: 0,
         offset: 0,
-        pendingPosition: session.position
+        pendingPosition: session.position,
+        subtitleDelay: 0,
+        onlineSubtitles: []
       };
+      try {
+        const saved = Number(localStorage.getItem(`mw:subsync:${itemId}`));
+        if (Number.isFinite(saved)) active.subtitleDelay = Math.max(-120, Math.min(120, saved));
+      } catch {
+      }
+      $("#subtitle-delay").value = String(active.subtitleDelay);
+      $("#subtitle-status").textContent = "";
+      $("#subtitle-find").disabled = false;
+      $("#player-subtitles-toggle").classList.remove("subtitles-active");
       scrubbing = false;
       updateTransport();
       $("#player").hidden = false;
       document.body.classList.add("player-open");
       closeSettings();
+      closeSubtitles();
       $("#shell").setAttribute("inert", "");
       $("#player-title").textContent = title.name;
       $("#player-episode").textContent = title.kind === "movie" ? "" : `${episodeLabel(item)}${item.name ? " \xB7 " + item.name : ""}`;
@@ -856,9 +1087,14 @@
       $("#audio").innerHTML = info.audio.map(
         (t) => `<option value="${t.index}">${esc(t.language)} \xB7 ${esc(t.title || t.codec)} ${t.channels || ""}</option>`
       ).join("");
-      $("#subtitles").innerHTML = '<option value="">Off</option>' + info.subtitles.filter((t) => ["subrip", "ass", "ssa", "webvtt", "mov_text"].includes(t.codec)).map(
-        (t) => `<option value="${t.index}">${esc(t.language)} \xB7 ${esc(t.title || t.codec)}</option>`
+      const supportedSubtitles = info.subtitles.filter(
+        (t) => ["subrip", "ass", "ssa", "webvtt", "mov_text"].includes(t.codec)
+      );
+      $("#subtitles").innerHTML = '<option value="">Off</option>' + supportedSubtitles.map(
+        (t) => `<option value="${t.index}">${esc(subtitleLanguageLabel(t.language))} \xB7 ${esc(t.title || t.codec)}</option>`
       ).join("");
+      if (!supportedSubtitles.length)
+        $("#subtitle-status").textContent = info.subtitles.length ? "This file only has image subtitles. Find online subtitles or open an SRT/VTT file." : "No subtitles in this file. Find online subtitles or open an SRT/VTT file.";
       $("#previous").disabled = !queue || queue.index <= 0;
       $("#next").disabled = !queue || queue.index >= queue.items.length - 1;
       $("#player-queue").disabled = !queue;
@@ -873,7 +1109,9 @@
         await source(`/api/items/${itemId}/file`, session.position);
       else await convert(session.position);
       if (preferences.subtitleMode === "preferred") {
-        const track = info.subtitles.find((t) => t.language === preferences.subtitleLanguage);
+        const track = supportedSubtitles.find(
+          (t) => t.language === preferences.subtitleLanguage || isArabic(t.language) && isArabic(preferences.subtitleLanguage)
+        );
         if (track) {
           $("#subtitles").value = String(track.index);
           setSubtitles();
@@ -883,6 +1121,8 @@
       active.pendingPosition = null;
       updateTransport();
       timer = setInterval(() => void report(), 1e4);
+      if (preferences.subtitleMode === "preferred" && preferences.subtitleLanguage && $("#subtitles").value === "")
+        void findSubtitles(true);
       $("#player-close").focus();
       showControls();
     } catch (error) {
@@ -895,7 +1135,7 @@
     }
   }
   async function source(url, seek = 0, autoplay = true) {
-    video().querySelectorAll("track").forEach((t) => t.remove());
+    clearSubtitleTrack();
     return new Promise((resolve, reject) => {
       var _a;
       const timeout = setTimeout(() => {
@@ -968,17 +1208,92 @@
     }
   }
   function setSubtitles() {
-    video().querySelectorAll("track").forEach((t) => t.remove());
+    var _a, _b, _c;
+    clearSubtitleTrack();
     const index = $("#subtitles").value;
+    $("#player-subtitles-toggle").classList.toggle("subtitles-active", index !== "");
     if (index === "" || !active) return;
+    const owner = active;
     const track = document.createElement("track");
     track.kind = "subtitles";
-    track.label = "Selected subtitles";
-    track.src = `/api/items/${active.item.id}/subtitles/${index}?offset=${active.offset}`;
+    track.label = ((_a = $("#subtitles").selectedOptions[0]) == null ? void 0 : _a.textContent) || "Subtitles";
+    const language = index.startsWith("online:") ? (_b = active.onlineSubtitles.find((t) => t.id === index.slice(7))) == null ? void 0 : _b.language : (_c = active.info.subtitles.find((t) => String(t.index) === index)) == null ? void 0 : _c.language;
+    if (language) track.srclang = isArabic(language) ? "ar" : language;
+    const external = index.startsWith("online:") || index === "file";
+    track.src = index === "file" ? active.subtitleFile : index.startsWith("online:") ? `/api/items/${active.item.id}/subtitles/online/${encodeURIComponent(index.slice(7))}` : `/api/items/${active.item.id}/subtitles/${index}?offset=${active.offset}`;
     track.default = true;
+    const originals = /* @__PURE__ */ new WeakMap();
+    active.syncSubtitles = () => {
+      if (active !== owner || !track.isConnected) return;
+      shiftSubtitleCues(
+        track.track.cues,
+        active.subtitleDelay,
+        external ? active.offset : 0,
+        originals
+      );
+      subtitleRenderer.render();
+    };
+    track.addEventListener("load", () => {
+      if (active !== owner || !track.isConnected) return;
+      active.syncSubtitles();
+      $("#subtitle-status").textContent = "";
+    });
+    track.addEventListener("error", () => {
+      if (active !== owner || !track.isConnected) return;
+      $("#subtitle-status").textContent = "These subtitles could not be loaded. Choose another track or open a subtitle file.";
+      toast("These subtitles could not be loaded");
+    });
     video().appendChild(track);
-    track.addEventListener("load", () => track.track.mode = "showing");
-    track.addEventListener("error", () => toast("These subtitles could not be loaded"));
+    subtitleRenderer.attach(track);
+  }
+  async function findSubtitles(selectPreferred = false) {
+    var _a;
+    if (!active || $("#subtitle-find").disabled) return;
+    const owner = active;
+    $("#subtitle-find").disabled = true;
+    $("#subtitle-status").textContent = "Finding subtitles\u2026";
+    try {
+      const tracks = await api(`/api/items/${owner.item.id}/subtitles`);
+      if (active !== owner) return;
+      const selection = $("#subtitles").value;
+      active.onlineSubtitles = tracks;
+      (_a = $("#subtitles-online")) == null ? void 0 : _a.remove();
+      if (tracks.length) {
+        const group = document.createElement("optgroup");
+        group.id = "subtitles-online";
+        group.label = "Online \xB7 OpenSubtitles";
+        group.innerHTML = tracks.map((t) => `<option value="online:${esc(t.id)}">${esc(t.label)}</option>`).join("");
+        $("#subtitles").appendChild(group);
+        $("#subtitles").value = selection;
+        if (selectPreferred && !selection && !active.subtitleUserChoice) {
+          const preferred = tracks.find(
+            (t) => t.language === active.preferences.subtitleLanguage || isArabic(t.language) && isArabic(active.preferences.subtitleLanguage)
+          );
+          if (preferred) {
+            $("#subtitles").value = `online:${preferred.id}`;
+            setSubtitles();
+          }
+        }
+      }
+      $("#subtitle-status").textContent = tracks.length ? "Choose an online track. Adjust delay if needed." : "No online subtitles found. You can open an SRT/VTT file.";
+    } catch (error) {
+      if (active === owner)
+        $("#subtitle-status").textContent = `${error.message} You can open an SRT/VTT file.`;
+    } finally {
+      if (active === owner) $("#subtitle-find").disabled = false;
+    }
+  }
+  function updateSubtitleStyleControls() {
+    for (const [id, key] of [
+      ["size", "size"],
+      ["color", "color"],
+      ["bg", "bg"],
+      ["bg-opacity", "bgOpacity"],
+      ["pos", "pos"],
+      ["align", "align"]
+    ])
+      $("#subtitle-" + id).value = String(subtitleRenderer.style[key]);
+    $("#subtitle-bg-opacity").disabled = subtitleRenderer.style.bg === "none";
   }
   async function advance(delta) {
     if (!queue || loading) return;
@@ -1103,6 +1418,102 @@
     updateTransport();
   }
   function initPlayer() {
+    subtitleRenderer = createSubtitleRenderer(video(), $("#subtitle-layer"));
+    for (const [id, choices] of [
+      ["size", subtitleSizes],
+      ["color", subtitleColors],
+      ["bg", subtitleBackgrounds]
+    ])
+      $("#subtitle-" + id).innerHTML = choices.map(([value, label]) => `<option value="${value}">${label}</option>`).join("");
+    updateSubtitleStyleControls();
+    for (const [id, key] of [
+      ["size", "size"],
+      ["color", "color"],
+      ["bg", "bg"],
+      ["bg-opacity", "bgOpacity"],
+      ["pos", "pos"],
+      ["align", "align"]
+    ])
+      $("#subtitle-" + id).onchange = () => {
+        const value = $("#subtitle-" + id).value;
+        subtitleRenderer.set({
+          ...subtitleRenderer.style,
+          [key]: ["pos", "bgOpacity"].includes(key) ? Number(value) : value
+        });
+        updateSubtitleStyleControls();
+      };
+    $("#subtitle-style-reset").onclick = () => {
+      subtitleRenderer.reset();
+      updateSubtitleStyleControls();
+    };
+    $("#subtitle-pos").oninput = () => {
+      const value = $("#subtitle-pos").value;
+      if (value !== "" && Number.isFinite(Number(value)))
+        subtitleRenderer.set({ ...subtitleRenderer.style, pos: Number(value) });
+    };
+    $("#subtitle-appearance").ontoggle = () => subtitleRenderer.preview($("#subtitle-appearance").open && !$("#player-subtitles").hidden);
+    const changeSubtitleDelay = (normalize) => {
+      var _a;
+      if (!active) return;
+      const delay = Number($("#subtitle-delay").value);
+      active.subtitleDelay = Number.isFinite(delay) ? Math.max(-120, Math.min(120, delay)) : 0;
+      if (normalize) $("#subtitle-delay").value = String(active.subtitleDelay);
+      try {
+        localStorage.setItem(`mw:subsync:${active.item.id}`, String(active.subtitleDelay));
+      } catch {
+      }
+      (_a = active.syncSubtitles) == null ? void 0 : _a.call(active);
+    };
+    $("#subtitle-delay").onchange = () => changeSubtitleDelay(true);
+    $("#subtitle-delay").oninput = () => {
+      if ($("#subtitle-delay").value !== "") changeSubtitleDelay(false);
+    };
+    $("#subtitle-sync-reset").onclick = () => {
+      $("#subtitle-delay").value = "0";
+      $("#subtitle-delay").onchange();
+    };
+    $("#subtitle-find").onclick = () => void findSubtitles();
+    $("#subtitle-file").onchange = async () => {
+      var _a;
+      const file = $("#subtitle-file").files[0] || (active == null ? void 0 : active.subtitleUpload), owner = active;
+      if (!file || !owner) return;
+      try {
+        if (file.size > 2 * 1024 * 1024) throw new Error("Choose a subtitle file smaller than 2 MB.");
+        const text = srtToVtt(
+          decodeSubtitle(
+            await new Promise((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve(reader.result);
+              reader.onerror = () => reject(new Error("This subtitle file could not be read."));
+              reader.readAsArrayBuffer(file);
+            }),
+            $("#subtitle-file-encoding").value || owner.preferences.subtitleLanguage
+          )
+        );
+        if (!/(?:\d{2}:)?\d{2}:\d{2}\.\d{3}\s*-->/.test(text))
+          throw new Error("Choose a valid SRT or WebVTT file.");
+        if (active !== owner) return;
+        active.subtitleUpload = file;
+        active.subtitleUserChoice = true;
+        if (active.subtitleFile) URL.revokeObjectURL(active.subtitleFile);
+        active.subtitleFile = URL.createObjectURL(new Blob([text], { type: "text/vtt" }));
+        (_a = $("#subtitle-file-option")) == null ? void 0 : _a.remove();
+        const option3 = document.createElement("option");
+        option3.id = "subtitle-file-option";
+        option3.value = "file";
+        option3.textContent = file.name;
+        $("#subtitles").appendChild(option3);
+        $("#subtitles").value = "file";
+        setSubtitles();
+      } catch (error) {
+        if (active === owner) $("#subtitle-status").textContent = error.message;
+      } finally {
+        if (active === owner) $("#subtitle-file").value = "";
+      }
+    };
+    $("#subtitle-file-encoding").onchange = () => {
+      if (active == null ? void 0 : active.subtitleUpload) void $("#subtitle-file").onchange();
+    };
     for (const [id, icon, label] of [
       ["player-close", "back", "Back to library"],
       ["player-toggle", "play", "Play"],
@@ -1115,17 +1526,23 @@
       ["player-queue", "queue", "Episode queue"],
       ["chapters", "chapters", "Chapters"],
       ["player-settings-toggle", "settings", "Playback settings"],
-      ["player-settings-close", "close", "Close playback settings"]
+      ["player-settings-close", "close", "Close playback settings"],
+      ["player-subtitles-toggle", "subtitles", "Subtitles"],
+      ["player-subtitles-close", "close", "Close subtitles"]
     ])
       iconButton(id, icon, label);
     $("#player-settings-toggle").onclick = () => {
       const open = $("#player-settings").hidden;
+      closeSubtitles();
       $("#player-settings").hidden = !open;
       $("#player-settings-toggle").setAttribute("aria-expanded", String(open));
       showControls();
       if (open) $("#player-settings-close").focus();
     };
     $("#player-settings-close").onclick = () => closeSettings(true);
+    $("#player-subtitles-toggle").onclick = () => $("#player-subtitles").hidden ? openSubtitles() : closeSubtitles(true);
+    $("#player-subtitles-settings").onclick = openSubtitles;
+    $("#player-subtitles-close").onclick = () => closeSubtitles(true);
     $("#player").addEventListener("pointermove", () => {
       keyboardControls = false;
       showControls();
@@ -1133,6 +1550,10 @@
     $("#player").addEventListener("pointerdown", (event) => {
       keyboardControls = false;
       if (!event.target.closest("#player-settings, #player-settings-toggle")) closeSettings();
+      if (!event.target.closest(
+        "#player-subtitles, #player-subtitles-toggle, #player-subtitles-settings"
+      ))
+        closeSubtitles();
       showControls();
     });
     $("#player").addEventListener("focusin", showControls);
@@ -1140,6 +1561,12 @@
       if (!active || $("#dialog").open) return;
       keyboardControls = true;
       showControls();
+      if ((event.key === "Escape" || event.keyCode === 10009) && !$("#player-subtitles").hidden) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        closeSubtitles(true);
+        return;
+      }
       if ((event.key === "Escape" || event.keyCode === 10009) && !$("#player-settings").hidden) {
         event.preventDefault();
         event.stopImmediatePropagation();
@@ -1153,6 +1580,7 @@
         if (!loading) $("#player-toggle").click();
       } else if (key === "m") $("#player-mute").click();
       else if (key === "f") $("#player-fullscreen").click();
+      else if (key === "c") $("#player-subtitles-toggle").click();
       else if (event.keyCode === 415 && !loading)
         void video().play().catch((e) => toast(e.message));
       else if (event.keyCode === 19) video().pause();
@@ -1233,7 +1661,10 @@
       (e) => toast(e.message)
     );
     $("#audio").onchange = $("#convert").onclick;
-    $("#subtitles").onchange = setSubtitles;
+    $("#subtitles").onchange = () => {
+      if (active) active.subtitleUserChoice = true;
+      setSubtitles();
+    };
     $("#chapters").onclick = () => {
       modal(
         `<h2>Chapters</h2>${((active == null ? void 0 : active.info.chapters) || []).map((c, i) => `<button class="release" data-chapter="${i}">${esc(c.name)} \xB7 ${Math.floor(c.start / 60)}:${String(Math.floor(c.start % 60)).padStart(2, "0")}</button>`).join("")}`
@@ -1281,7 +1712,7 @@
     window.addEventListener("pagehide", () => void report("stop", true));
   }
 
-  // public/app.js
+  // .runtime/subtitle-release/public/app.js
   var user = null;
   var generation = 0;
   var poll = null;
@@ -1754,7 +2185,7 @@
       if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key) || ["INPUT", "SELECT", "TEXTAREA", "VIDEO"].includes(document.activeElement.tagName))
         return;
       const root = $("#dialog").open ? $("#dialog") : livePlaying() ? $("#live-player") : playing() ? $("#player") : document;
-      const candidates = [...root.querySelectorAll("a,button,input,select")].filter(
+      const candidates = [...root.querySelectorAll("a,button,input,select,summary")].filter(
         (el) => !el.disabled && el.getClientRects().length
       );
       const origin = document.activeElement.getBoundingClientRect(), cx = origin.x + origin.width / 2, cy = origin.y + origin.height / 2;

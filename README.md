@@ -34,6 +34,8 @@ Ensure the configured PUID/PGID owns the data, media and runtime bind folders. O
 - Favorites, watchlist, collections, account playback preferences and administrator-managed accounts.
 - Local file import from administrator-approved roots. Files remain in place.
 - Direct local playback, compatibility HLS conversion, audio/text-subtitle selection and chapter navigation.
+- A CC menu with online subtitle languages and release variants, local SRT/VTT files, timing adjustment, and saved size, colour, background, position and alignment settings with a live preview.
+- Arabic subtitles support right-to-left and mixed-language text, UTF-8/UTF-16, and older Windows-1256 files. Choose Arabic in the online tracks, or select Arabic file encoding for a legacy local file. A preferred subtitle language of `ara` or `ar` selects Arabic automatically when available.
 - Responsive layout, keyboard/remote directional navigation and a Chromium-69 JavaScript bundle.
 
 Only completed local media is offered for playback. Playback never silently acquires media or streams it from a provider. Download completion preserves the original file and tracks. Missing sequential episodes stop automatic advancement; shuffle only includes available files. Provider polling continues after restart; interrupted local downloads restart from byte zero with a fresh URL.

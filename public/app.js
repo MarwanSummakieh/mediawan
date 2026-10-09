@@ -583,7 +583,7 @@ async function boot() {
         : playing()
           ? $('#player')
           : document;
-    const candidates = [...root.querySelectorAll('a,button,input,select')].filter(
+    const candidates = [...root.querySelectorAll('a,button,input,select,summary')].filter(
       (el) => !el.disabled && el.getClientRects().length,
     );
     const origin = document.activeElement.getBoundingClientRect(),
