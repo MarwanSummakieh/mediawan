@@ -18,7 +18,7 @@ import { createQbitClient } from '../src/qbittorrent.mjs';
 const candidate = {
   hash: 'a'.repeat(40),
   fileIndex: 0,
-  label: 'Fixture.2160p.WEB-DL [YTS.MX]',
+  label: 'Fixture.2160p.WEB-DL [OTHER]',
   seeders: 12,
   resolution: 2160,
   sizeBytes: 100,
@@ -145,7 +145,7 @@ test('torrent settings are durable and validate bounded values', (t) => {
   assert.deepEqual(f.policy.get().resolutions, [1080, 2160]);
 });
 
-test('mandatory YTS quality is exact for every media kind and cannot be relaxed by torrent settings', () => {
+test('mandatory WEB-DL quality accepts any release group and cannot be relaxed by torrent settings', () => {
   const episode = { ...candidate, label: 'Show.1080p.WEB-DL [YTS.MX]', resolution: 1080 };
   const relaxed = {
     ...defaultRules,
@@ -154,14 +154,22 @@ test('mandatory YTS quality is exact for every media kind and cannot be relaxed 
     resolutions: [480, 720, 1080, 2160],
   };
   assert(assessQuality(candidate, 'movie').accepted);
+  for (const kind of ['movie', 'tv', 'anime']) {
+    const resolution = kind === 'movie' ? 2160 : 1080;
+    for (const group of ['[YTS]', '[OTHER]', ''])
+      assert(
+        assessQuality(
+          { ...candidate, resolution, label: `Fixture ${resolution}p WEB-DL ${group}` },
+          kind,
+        ).accepted,
+      );
+  }
   for (const source of ['WEB-DL', 'WEB DL', 'WEB.DL', 'WEB_DL', 'WEBDL'])
     assert(assessQuality({ ...candidate, label: `Film 2160p ${source} [YTS]` }, 'movie').accepted);
   for (const kind of ['tv', 'anime']) {
     for (const source of ['WEB-DL', 'WEB DL', 'WEB.DL', 'WEB_DL', 'WEBDL'])
       assert(assessQuality({ ...episode, label: `Show 1080p ${source} [yts.mx]` }, kind).accepted);
     for (const patch of [
-      { label: 'Show 1080p WEB-DL [OTHER]' },
-      { label: 'Show 1080p WEB-DL [YTSFake]' },
       { label: 'Show 1080p BluRay [YTS]' },
       { label: 'Show 1080p WEBRip [YTS]' },
       { label: 'Show 1080p WEB-DL BluRay [YTS]' },

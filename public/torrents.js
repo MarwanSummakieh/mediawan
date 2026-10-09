@@ -18,7 +18,7 @@ export async function downloadSeason(title, season) {
           ? '<p>This season is already being queued.</p><button id="season-view" class="primary">View downloads</button>'
           : `<form id="season-download-form" class="form">
       <label>Download with<select name="provider"><option value="realdebrid" ${!data.debridConfigured ? 'disabled' : ''} ${data.debridConfigured ? 'selected' : ''}>Real-Debrid</option><option value="torrent" ${!data.torrentConfigured ? 'disabled' : ''} ${!data.debridConfigured && data.torrentConfigured ? 'selected' : ''}>Direct torrent · qBittorrent</option></select></label>
-      <label>Quality<select name="resolution">${data.resolutions.map((resolution) => `<option value="${resolution}">${resolution}p WEB-DL · YTS only</option>`).join('')}</select></label>
+      <label>Quality<select name="resolution">${data.resolutions.map((resolution) => `<option value="${resolution}">${resolution}p WEB-DL</option>`).join('')}</select></label>
       <p class="meta">Chooses a matching release for each episode. Downloaded and queued episodes are skipped. Unavailable episodes appear in Downloads.</p>
       <p id="season-provider-note" class="meta"></p>
       ${!enabled ? '<p class="error">No download provider is configured.</p>' : ''}
@@ -175,7 +175,7 @@ export function torrentRulesForm(admin) {
     ['seedRatio', 'Stop seeding at ratio', 0, 10, 0.1],
     ['seedMinutes', 'Or after seeding (minutes)', 0, 1440, 1],
   ];
-  return `<section class="section"><form id="torrent-rules" class="form"><h2>Torrent rules</h2><p class="meta">qBittorrent: ${admin.torrentConfigured ? 'Configured' : 'Not configured'}. Rules apply to new jobs and retries. Existing jobs keep their saved rules. CAM / TS / screeners are always excluded.</p><p class="meta">Required quality for both providers: YTS only · 1080p WEB-DL for anime and TV shows · 2160p WEB-DL for movies. This rule cannot be changed.</p>${fields.map(([key, label, min, max, step]) => `<label>${label}<input type="number" name="${key}" min="${min}" max="${max}" step="${step}" required value="${r[key]}"></label>`).join('')}
+  return `<section class="section"><form id="torrent-rules" class="form"><h2>Torrent rules</h2><p class="meta">qBittorrent: ${admin.torrentConfigured ? 'Configured' : 'Not configured'}. Rules apply to new jobs and retries. Existing jobs keep their saved rules. CAM / TS / screeners are always excluded.</p><p class="meta">Required quality for both providers: 1080p WEB-DL for anime and TV shows · 2160p WEB-DL for movies. This rule cannot be changed.</p>${fields.map(([key, label, min, max, step]) => `<label>${label}<input type="number" name="${key}" min="${min}" max="${max}" step="${step}" required value="${r[key]}"></label>`).join('')}
     <label class="check"><input type="checkbox" name="rejectUnknown" ${r.rejectUnknown ? 'checked' : ''}>Reject unknown seed count or size</label><p class="meta">Timeouts stop the selected torrent and retain partial data. They never choose another release automatically. Uploads can continue until the ratio or time limit is reached.</p><button class="primary">Save torrent rules</button><button type="button" id="torrent-health">Test connection</button><p id="torrent-status" role="status"></p></form></section>`;
 }
 export function bindTorrentRules() {

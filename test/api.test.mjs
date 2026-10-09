@@ -122,7 +122,7 @@ test('authentication, CSRF, preferences, role checks and anonymous API denial', 
   assert.equal((await fetch(base + '/api/home', { headers })).status, 401);
 });
 
-test('both download providers enforce server-reported YTS quality despite forged browser metadata', async (t) => {
+test('both download providers accept any release group and enforce server-reported WEB-DL quality', async (t) => {
   const store = createStore(':memory:');
   let release;
   const calls = [];
@@ -159,7 +159,6 @@ test('both download providers enforce server-reported YTS quality despite forged
     const expected = kind === 'movie' ? 2160 : 1080;
     for (const provider of ['torrent', 'realdebrid']) {
       for (const patch of [
-        { label: `Fixture ${expected}p WEB-DL OTHER` },
         { label: `Fixture ${expected}p [YTS]` },
         { label: `Fixture ${expected}p WEBRip [YTS]` },
         { label: `Fixture ${expected}p BluRay [YTS]` },
@@ -199,7 +198,7 @@ test('both download providers enforce server-reported YTS quality despite forged
         hash: 'a'.repeat(40),
         fileIndex: 0,
         resolution: expected,
-        label: `Fixture ${expected}p WEB-DL [YTS]`,
+        label: `Fixture ${expected}p WEB-DL OTHER`,
       };
       const response = await fetch(base + `/api/items/${item.id}/download`, {
         method: 'POST',

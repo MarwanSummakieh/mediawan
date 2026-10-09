@@ -8,7 +8,7 @@ import { createStore } from '../src/store.mjs';
 import { createDownloads } from '../src/downloads.mjs';
 import { createStorage } from '../src/storage.mjs';
 
-const release = { hash: 'a'.repeat(40), label: 'Fixture 2160p WEB-DL [YTS.MX]', resolution: 2160 };
+const release = { hash: 'a'.repeat(40), label: 'Fixture 2160p WEB-DL [OTHER]', resolution: 2160 };
 
 test('provider legal blocks explain the failure and cannot be retried automatically or manually', async (t) => {
   const store = createStore(':memory:');
@@ -113,7 +113,7 @@ test('Real-Debrid reclaims old media, persists provider state and publishes only
   });
   assert.throws(
     () => downloads.enqueue(user, item.id, { ...release, label: 'Fixture 2160p' }),
-    /YTS/,
+    /WEB-DL/,
   );
   assert.throws(() => downloads.enqueue(user, item.id, { ...release, resolution: 1080 }), /2160p/);
   const job = downloads.enqueue(user, item.id, release);

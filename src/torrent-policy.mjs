@@ -38,12 +38,11 @@ export function releaseFacts(stream) {
 }
 export const requiredResolution = (kind) => (kind === 'movie' ? 2160 : 1080);
 export const qualityRule = (kind) =>
-  kind === 'movie' ? 'YTS only · 2160p WEB-DL movies' : 'YTS only · 1080p WEB-DL episodes';
+  kind === 'movie' ? '2160p WEB-DL movies' : '1080p WEB-DL episodes';
 
 export function assessQuality(release, kind) {
   const label = `${release.label || ''} ${release.name || ''}`;
   const reasons = [];
-  if (!/(?:^|[^a-z0-9])YTS(?:$|[^a-z0-9])/i.test(label)) reasons.push('YTS releases only');
   if (release.resolution !== requiredResolution(kind))
     reasons.push(
       `${requiredResolution(kind)}p required for ${kind === 'movie' ? 'movies' : 'anime and TV shows'}`,
