@@ -21,6 +21,7 @@ import {
   card,
   heading,
   empty,
+  icon,
 } from './core.js';
 import {
   initPlayer,
@@ -37,17 +38,27 @@ let user = null,
   currentTitle = null,
   discoverResults = [],
   locationKey = '',
-  returnPositions = {};
+  returnPositions = {},
+  featuredTitles = [],
+  featuredIndex = 0;
 const main = () => $('#main');
 const button = (label, action, attrs = '', style = '') =>
   `<button class="${style}" data-action="${action}" ${attrs}>${esc(label)}</button>`;
 const option = (value, label, current) =>
   `<option value="${esc(value)}" ${value === current ? 'selected' : ''}>${esc(label)}</option>`;
 const grid = (items) => `<div class="grid">${items.map((t) => card(t)).join('')}</div>`;
-function shelf(label, items, mode) {
+function shelf(label, items, mode = 'landscape') {
   return items.length
-    ? `<section class="section"><div class="section-heading"><h2>${esc(label)}</h2></div><div class="rail ${mode ? 'resume-rail' : ''}">${items.map((t) => card(t, mode)).join('')}</div></section>`
+    ? `<section class="section media-shelf"><div class="section-heading"><h2>${esc(label)}</h2><div class="rail-controls"><button data-action="rail-back" aria-label="Scroll ${esc(label)} left">${icon('left')}</button><button data-action="rail-next" aria-label="Scroll ${esc(label)} right">${icon('right')}</button></div></div><div class="rail ${mode === 'resume' || mode === 'next' ? 'resume-rail' : ''}" aria-label="${esc(label)}">${items.map((t) => card(t, mode)).join('')}</div></section>`
     : '';
+}
+function featureHtml() {
+  const title = featuredTitles[featuredIndex];
+  if (!title) return '';
+  const artwork = [title.background, title.poster].find((url) => /^https?:\/\//.test(url || ''));
+  const item = title.primary;
+  const saved = title.tags.includes('watchlist');
+  return `<div class="hero-art ${title.background ? '' : 'hero-poster'}" aria-hidden="true">${artwork ? `<img src="${esc(artwork)}" alt="" fetchpriority="high">` : '<span class="hero-monogram">m.</span>'}</div><div class="hero-shade"></div><div class="hero-copy"><p class="hero-label">Featured in your library</p><h2>${esc(title.name)}</h2><p class="hero-facts">${esc([title.year, title.kind === 'movie' ? 'Movie' : title.kind === 'anime' ? 'Anime' : 'Series', ...(title.genres || []).slice(0, 2)].filter(Boolean).join(' · '))}</p>${title.description ? `<p class="hero-description">${esc(title.description)}</p>` : ''}<div class="hero-actions">${item?.available ? `<button class="hero-play" data-action="play" data-item="${esc(item.id)}" data-title="${esc(title.id)}">${icon('play')}${title.resumable ? 'Resume watching' : 'Watch now'}</button>` : `<a class="hero-play" href="#/title/${esc(title.id)}">View title</a>`}<a class="hero-round" href="#/title/${esc(title.id)}" aria-label="Details for ${esc(title.name)}" title="Title details">${icon('info')}</a><button class="hero-round" data-action="feature-save" data-title="${esc(title.id)}" aria-label="${saved ? 'Remove from' : 'Add to'} My List" aria-pressed="${saved}" title="${saved ? 'Remove from' : 'Add to'} My List">${icon(saved ? 'check' : 'plus')}</button></div>${title.readyCount ? `<p class="hero-availability">${icon('check')}Available in your library</p>` : ''}</div>${featuredTitles.length > 1 ? `<div class="feature-controls"><button class="feature-arrow" data-action="feature-prev" aria-label="Previous featured title">${icon('left')}</button><div class="feature-dots" role="group" aria-label="Featured titles">${featuredTitles.map((t, i) => `<button class="feature-dot" data-action="feature-select" data-index="${i}" aria-label="Feature ${esc(t.name)}" aria-pressed="${i === featuredIndex}"></button>`).join('')}</div><button class="feature-arrow" data-action="feature-next" aria-label="Next featured title">${icon('right')}</button></div>` : ''}`;
 }
 async function route({ quiet = false } = {}) {
   if (!user) return;
@@ -65,14 +76,15 @@ async function route({ quiet = false } = {}) {
     };
     locationKey = hash;
   }
-  document
-    .querySelectorAll('[data-nav]')
-    .forEach((a) =>
-      a.classList.toggle(
-        'active',
-        a.dataset.nav === page || (page === 'title' && a.dataset.nav === 'library'),
-      ),
-    );
+  document.querySelectorAll('[data-nav]').forEach((a) => {
+    const active = a.dataset.nav === page || (page === 'title' && a.dataset.nav === 'library');
+    a.classList.toggle('active', active);
+    if (active) a.setAttribute('aria-current', 'page');
+    else a.removeAttribute('aria-current');
+  });
+  document.querySelector('.account-menu').removeAttribute('open');
+  main().classList.toggle('home-page', page === 'home');
+  main().classList.toggle('title-page', page === 'title');
   const draw = (html) => {
     if (ticket !== generation) return;
     main().innerHTML = html;
@@ -106,18 +118,47 @@ async function route({ quiet = false } = {}) {
     } else if (page === 'home') {
       const data = await api('/api/home'),
         queues = await api('/api/queues');
-      const count = data.continueWatching.length + data.nextUp.length + data.recentlyAdded.length;
+      const kind = ['movie', 'tv', 'anime'].includes(url.searchParams.get('kind'))
+        ? url.searchParams.get('kind')
+        : '';
+      const visible = (items) => items.filter((t) => !kind || t.kind === kind);
+      const count = Object.values(data).reduce((total, items) => total + visible(items).length, 0);
+      featuredTitles = [
+        ...new Map(
+          [
+            ...visible(data.recentlyAdded),
+            ...visible(data.continueWatching),
+            ...visible(data.watchlist),
+          ].map((t) => [t.id, t]),
+        ).values(),
+      ].slice(0, 5);
+      if (!quiet || featuredIndex >= featuredTitles.length) featuredIndex = 0;
       draw(
-        heading('Home', '', `<a class="quiet" href="#/settings">${esc(user.name)}</a>`) +
-          shelf('Continue watching', data.continueWatching, 'resume') +
-          shelf('Next up', data.nextUp, 'next') +
-          shelf('Recently added', data.recentlyAdded) +
-          shelf('My list', data.watchlist) +
+        '<h1 class="sr-only">Home</h1>' +
+          `<nav class="browse-tabs" aria-label="Browse library">${[
+            ['', 'All'],
+            ['movie', 'Movies'],
+            ['tv', 'TV shows'],
+            ['anime', 'Anime'],
+          ]
+            .map(
+              ([value, label]) =>
+                `<a href="#/${value ? '?kind=' + value : ''}" ${kind === value ? 'aria-current="page"' : ''}>${label}</a>`,
+            )
+            .join('')}</nav>` +
+          (featuredTitles.length
+            ? `<section class="feature" id="feature" aria-label="Featured title">${featureHtml()}</section>`
+            : '') +
+          '<div class="home-content">' +
+          shelf('Continue watching', visible(data.continueWatching), 'resume') +
+          shelf('Next up', visible(data.nextUp), 'next') +
+          shelf('Recently added', visible(data.recentlyAdded)) +
+          shelf('My List', visible(data.watchlist)) +
           (!count
             ? empty(
-                'Make yourself at home',
-                'Find a movie or series, download it to your library, and watch it here.',
-                `<a class="primary card-action" href="#/discover">Discover something to watch</a>`,
+                kind ? 'No titles in this category yet' : 'Your library starts here',
+                'Find a title in Discover to add it to your library.',
+                `<a class="primary empty-action" href="#/discover">Browse titles</a>`,
               )
             : '') +
           (queues.some((q) => q.items.length)
@@ -129,7 +170,8 @@ async function route({ quiet = false } = {}) {
                     `<div class="row"><div class="row-main"><h3>${esc(q.name)}</h3><p class="meta">${q.mode === 'shuffle' ? 'Shuffle' : 'In order'} · ${q.items.length} items</p></div>${button('Open queue', 'queue', `data-id="${q.id}"`)}</div>`,
                 )
                 .join('')}</section>`
-            : ''),
+            : '') +
+          '</div>',
       );
     } else if (page === 'library' || page === 'list') {
       const params = new URLSearchParams(url.search);
@@ -264,7 +306,7 @@ async function route({ quiet = false } = {}) {
 }
 function detailHtml(title) {
   const primary = title.primary;
-  let html = `<div class="detail"><div class="detail-art poster">${poster(title)}</div><div class="detail-copy"><p class="eyebrow">${esc(title.kind === 'movie' ? 'Movie' : title.kind === 'anime' ? 'Anime' : 'Series')} ${esc(title.year)}</p><h1>${esc(title.name)}</h1>${metadataHtml(title)}<p class="muted">${esc(title.description)}</p><div class="actions">${primary ? button(primary.available ? (title.resumable ? 'Resume ' + episodeLabel(primary) : primary.state.completed ? 'Replay' : 'Play ' + episodeLabel(primary)) : 'Find a release', primary.available ? 'play' : 'release', `data-item="${primary.id}" data-title="${title.id}"`, 'primary') : ''}${title.kind !== 'movie' && title.readyCount ? button('Shuffle episodes', 'shuffle', `data-title="${title.id}"`) : ''}${button(title.tags.includes('watchlist') ? 'In My List' : 'Add to My List', 'tag', `data-tag="watchlist" data-active="${!title.tags.includes('watchlist')}"`)}${button(title.tags.includes('favorite') ? 'Favorited' : 'Favorite', 'tag', `data-tag="favorite" data-active="${!title.tags.includes('favorite')}"`)}${button('Collections', 'add-collection')}</div><p class="meta">${title.readyCount} downloaded${title.genres?.length ? ' · ' + esc(title.genres.join(' / ')) : ''}</p></div></div>`;
+  let html = `<div class="detail">${/^https?:\/\//.test(title.background || '') ? `<div class="detail-backdrop" aria-hidden="true"><img src="${esc(title.background)}" alt=""></div>` : ''}<div class="detail-art poster">${poster(title)}</div><div class="detail-copy"><p class="eyebrow">${esc(title.kind === 'movie' ? 'Movie' : title.kind === 'anime' ? 'Anime' : 'Series')} ${esc(title.year)}</p><h1>${esc(title.name)}</h1>${metadataHtml(title)}<p class="muted">${esc(title.description)}</p><div class="actions">${primary ? button(primary.available ? (title.resumable ? 'Resume ' + episodeLabel(primary) : primary.state.completed ? 'Replay' : 'Play ' + episodeLabel(primary)) : 'Find a release', primary.available ? 'play' : 'release', `data-item="${primary.id}" data-title="${title.id}"`, 'primary') : ''}${title.kind !== 'movie' && title.readyCount ? button('Shuffle episodes', 'shuffle', `data-title="${title.id}"`) : ''}${button(title.tags.includes('watchlist') ? 'In My List' : 'Add to My List', 'tag', `data-tag="watchlist" data-active="${!title.tags.includes('watchlist')}"`)}${button(title.tags.includes('favorite') ? 'Favorited' : 'Favorite', 'tag', `data-tag="favorite" data-active="${!title.tags.includes('favorite')}"`)}${button('Collections', 'add-collection')}</div><p class="meta">${title.readyCount} downloaded${title.genres?.length ? ' · ' + esc(title.genres.join(' / ')) : ''}</p></div></div>`;
   const seasons = [...new Set(title.items.map((i) => i.season))];
   for (const season of seasons) {
     const items = title.items.filter((i) => i.season === season);
@@ -315,7 +357,34 @@ async function action(event) {
   const actionName = b.dataset.action;
   b.disabled = true;
   try {
-    if (actionName.startsWith('sports-'))
+    if (actionName === 'rail-back' || actionName === 'rail-next') {
+      const rail = b.closest('.media-shelf').querySelector('.rail');
+      rail.scrollBy({
+        left: rail.clientWidth * (actionName === 'rail-next' ? 0.85 : -0.85),
+        behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+      });
+    } else if (actionName.startsWith('feature-')) {
+      if (actionName === 'feature-save') {
+        const title = featuredTitles[featuredIndex];
+        const active = !title.tags.includes('watchlist');
+        await api(`/api/titles/${title.id}/tags`, { tag: 'watchlist', active });
+        await route({ quiet: true });
+        toast(active ? 'Added to My List' : 'Removed from My List');
+        $('#feature [data-action="feature-save"]')?.focus({ preventScroll: true });
+      } else {
+        featuredIndex =
+          actionName === 'feature-select'
+            ? Number(b.dataset.index)
+            : (featuredIndex + (actionName === 'feature-next' ? 1 : -1) + featuredTitles.length) %
+              featuredTitles.length;
+        $('#feature').innerHTML = featureHtml();
+        const selector =
+          actionName === 'feature-select'
+            ? `[data-action="feature-select"][data-index="${featuredIndex}"]`
+            : `[data-action="${actionName}"]`;
+        $('#feature').querySelector(selector)?.focus({ preventScroll: true });
+      }
+    } else if (actionName.startsWith('sports-'))
       await sportsAction(b, {
         refresh: () => route({ quiet: true }),
         closeVod: async () => {
@@ -528,9 +597,8 @@ async function boot() {
   user = auth.user;
   if (!user) {
     $('#sidebar').hidden = true;
-    main().style.marginLeft = '0';
-    main().style.width = '100%';
-    main().innerHTML = `<div class="login"><p class="eyebrow">Mediawan</p><h1>Your library awaits.</h1>${auth.setupRequired ? '<p>Set ADMIN_EMAIL and an ADMIN_PASSWORD of at least 10 characters on the server, then restart Mediawan.</p>' : '<form id="login" class="form"><label>Email<input name="email" type="email" autocomplete="username" required></label><label>Password<input name="password" type="password" autocomplete="current-password" required></label><button class="primary">Sign in</button><p id="login-error" class="error" role="alert"></p></form>'}</div>`;
+    main().classList.add('auth-page');
+    main().innerHTML = `<div class="login"><a class="brand" href="#/">mediawan</a><h1>Sign in</h1>${auth.setupRequired ? '<p>Set ADMIN_EMAIL and an ADMIN_PASSWORD of at least 10 characters on the server, then restart Mediawan.</p>' : '<form id="login" class="form"><label>Email<input name="email" type="email" autocomplete="username" required></label><label>Password<input name="password" type="password" autocomplete="current-password" required></label><button class="primary">Sign in</button><p id="login-error" class="error" role="alert"></p></form>'}</div>`;
     if ($('#login'))
       $('#login').onsubmit = async (e) => {
         e.preventDefault();
@@ -545,6 +613,11 @@ async function boot() {
     return;
   }
   $('#account').textContent = user.name;
+  $('#avatar').textContent = user.name.slice(0, 1).toUpperCase();
+  document.addEventListener('click', (event) => {
+    if (!event.target.closest('.account-menu'))
+      document.querySelector('.account-menu').removeAttribute('open');
+  });
   $('#signout').onclick = logout;
   $('#dialog-close').onclick = closeModal;
   main().onclick = action;
@@ -559,7 +632,10 @@ async function boot() {
   });
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' || e.keyCode === 10009) {
-      if ($('#dialog').open) {
+      if (document.querySelector('.account-menu').open) {
+        document.querySelector('.account-menu').removeAttribute('open');
+        document.querySelector('.account-menu summary').focus();
+      } else if ($('#dialog').open) {
         e.preventDefault();
         closeModal();
       } else if (livePlaying()) {

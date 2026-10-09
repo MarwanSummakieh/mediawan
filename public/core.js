@@ -46,18 +46,29 @@ export const progress = (state) =>
   state?.duration
     ? `<progress class="progress" aria-label="Watch progress" value="${Math.min(state.position, state.duration)}" max="${state.duration}"></progress>`
     : '';
-export function poster(title) {
-  const url = String(title.poster || '');
+export function poster(title, landscape = false) {
+  const url = String((landscape && title.background) || title.poster || '');
   return /^https?:\/\//.test(url)
     ? `<img src="${esc(url)}" alt="" loading="lazy">`
     : `<div class="poster-placeholder">${esc(title.name)}</div>`;
 }
+export const icon = (name) => {
+  const paths = {
+    play: '<path d="m8 5 11 7-11 7Z" fill="currentColor" stroke="none"/>',
+    plus: '<path d="M12 5v14M5 12h14"/>',
+    check: '<path d="m5 12 4 4L19 6"/>',
+    info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7v1"/>',
+    left: '<path d="m15 5-7 7 7 7"/>',
+    right: '<path d="m9 5 7 7-7 7"/>',
+  };
+  return `<svg viewBox="0 0 24 24" aria-hidden="true">${paths[name] || ''}</svg>`;
+};
 export function card(title, mode = 'library') {
   const item = mode === 'resume' ? title.resumable : mode === 'next' ? title.next : null;
   const remaining = item?.state.duration
     ? `${Math.ceil(Math.max(0, item.state.duration - item.state.position) / 60)} min left`
     : '';
-  return `<article class="card"><a class="poster" href="#/title/${esc(title.id)}" aria-label="Open ${esc(title.name)}">${poster(title)}${item ? `<span class="badge">${esc(episodeLabel(item))}</span>` : title.readyCount ? '<span class="badge">Downloaded</span>' : ''}</a>${item ? progress(item.state) : ''}<a class="card-name" href="#/title/${esc(title.id)}">${esc(title.name)}</a><p class="meta">${esc(item ? (mode === 'resume' ? remaining : item.name) : [title.year, title.kind === 'movie' ? 'Movie' : title.kind === 'anime' ? 'Anime' : 'Series'].filter(Boolean).join(' · '))}</p>${item ? `<div class="resume-actions"><button class="card-action ${mode === 'resume' ? 'primary' : ''}" data-action="${item.available ? 'play' : 'release'}" data-item="${esc(item.id)}" data-title="${esc(title.id)}">${item.available ? (mode === 'resume' ? 'Resume' : 'Play next') : 'Not downloaded'}</button>${mode === 'resume' ? `<button class="menu-button" data-action="resume-menu" data-title="${esc(title.id)}" data-item="${esc(item.id)}" aria-label="More actions for ${esc(title.name)}">•••</button>` : ''}</div>` : ''}</article>`;
+  return `<article class="card"><a class="poster" href="#/title/${esc(title.id)}" aria-label="Open ${esc(title.name)}">${poster(title, mode !== 'library')}${item ? `<span class="badge">${esc(episodeLabel(item))}</span>` : title.readyCount ? '<span class="badge">Downloaded</span>' : ''}</a>${item ? progress(item.state) : ''}<a class="card-name" href="#/title/${esc(title.id)}">${esc(title.name)}</a><p class="meta">${esc(item ? (mode === 'resume' ? remaining : item.name) : [title.year, title.kind === 'movie' ? 'Movie' : title.kind === 'anime' ? 'Anime' : 'Series'].filter(Boolean).join(' · '))}</p>${item ? `<div class="resume-actions"><button class="card-action ${mode === 'resume' ? 'primary' : ''}" data-action="${item.available ? 'play' : 'release'}" data-item="${esc(item.id)}" data-title="${esc(title.id)}">${item.available ? icon('play') : ''}${item.available ? (mode === 'resume' ? 'Resume' : 'Play next') : 'Not downloaded'}</button>${mode === 'resume' ? `<button class="menu-button" data-action="resume-menu" data-title="${esc(title.id)}" data-item="${esc(item.id)}" aria-label="More actions for ${esc(title.name)}">•••</button>` : ''}</div>` : ''}</article>`;
 }
 export function heading(name, caption = '', action = '') {
   return `<header class="page-heading"><div><h1>${esc(name)}</h1>${caption ? `<p>${esc(caption)}</p>` : ''}</div>${action}</header>`;

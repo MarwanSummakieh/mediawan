@@ -1,5 +1,5 @@
 (() => {
-  // .runtime/subtitle-release/public/core.js
+  // public/core.js
   var $ = (selector) => document.querySelector(selector);
   var esc = (value) => String(value == null ? "" : value).replace(
     /[&<>"']/g,
@@ -42,21 +42,32 @@
   }
   var episodeLabel = (item) => (item == null ? void 0 : item.episode) ? item.season ? `S${item.season} \xB7 E${item.episode}` : `Episode ${item.episode}` : "Movie";
   var progress = (state) => (state == null ? void 0 : state.duration) ? `<progress class="progress" aria-label="Watch progress" value="${Math.min(state.position, state.duration)}" max="${state.duration}"></progress>` : "";
-  function poster(title) {
-    const url = String(title.poster || "");
+  function poster(title, landscape = false) {
+    const url = String(landscape && title.background || title.poster || "");
     return /^https?:\/\//.test(url) ? `<img src="${esc(url)}" alt="" loading="lazy">` : `<div class="poster-placeholder">${esc(title.name)}</div>`;
   }
+  var icon = (name) => {
+    const paths = {
+      play: '<path d="m8 5 11 7-11 7Z" fill="currentColor" stroke="none"/>',
+      plus: '<path d="M12 5v14M5 12h14"/>',
+      check: '<path d="m5 12 4 4L19 6"/>',
+      info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7v1"/>',
+      left: '<path d="m15 5-7 7 7 7"/>',
+      right: '<path d="m9 5 7 7-7 7"/>'
+    };
+    return `<svg viewBox="0 0 24 24" aria-hidden="true">${paths[name] || ""}</svg>`;
+  };
   function card(title, mode = "library") {
     const item = mode === "resume" ? title.resumable : mode === "next" ? title.next : null;
     const remaining = (item == null ? void 0 : item.state.duration) ? `${Math.ceil(Math.max(0, item.state.duration - item.state.position) / 60)} min left` : "";
-    return `<article class="card"><a class="poster" href="#/title/${esc(title.id)}" aria-label="Open ${esc(title.name)}">${poster(title)}${item ? `<span class="badge">${esc(episodeLabel(item))}</span>` : title.readyCount ? '<span class="badge">Downloaded</span>' : ""}</a>${item ? progress(item.state) : ""}<a class="card-name" href="#/title/${esc(title.id)}">${esc(title.name)}</a><p class="meta">${esc(item ? mode === "resume" ? remaining : item.name : [title.year, title.kind === "movie" ? "Movie" : title.kind === "anime" ? "Anime" : "Series"].filter(Boolean).join(" \xB7 "))}</p>${item ? `<div class="resume-actions"><button class="card-action ${mode === "resume" ? "primary" : ""}" data-action="${item.available ? "play" : "release"}" data-item="${esc(item.id)}" data-title="${esc(title.id)}">${item.available ? mode === "resume" ? "Resume" : "Play next" : "Not downloaded"}</button>${mode === "resume" ? `<button class="menu-button" data-action="resume-menu" data-title="${esc(title.id)}" data-item="${esc(item.id)}" aria-label="More actions for ${esc(title.name)}">\u2022\u2022\u2022</button>` : ""}</div>` : ""}</article>`;
+    return `<article class="card"><a class="poster" href="#/title/${esc(title.id)}" aria-label="Open ${esc(title.name)}">${poster(title, mode !== "library")}${item ? `<span class="badge">${esc(episodeLabel(item))}</span>` : title.readyCount ? '<span class="badge">Downloaded</span>' : ""}</a>${item ? progress(item.state) : ""}<a class="card-name" href="#/title/${esc(title.id)}">${esc(title.name)}</a><p class="meta">${esc(item ? mode === "resume" ? remaining : item.name : [title.year, title.kind === "movie" ? "Movie" : title.kind === "anime" ? "Anime" : "Series"].filter(Boolean).join(" \xB7 "))}</p>${item ? `<div class="resume-actions"><button class="card-action ${mode === "resume" ? "primary" : ""}" data-action="${item.available ? "play" : "release"}" data-item="${esc(item.id)}" data-title="${esc(title.id)}">${item.available ? icon("play") : ""}${item.available ? mode === "resume" ? "Resume" : "Play next" : "Not downloaded"}</button>${mode === "resume" ? `<button class="menu-button" data-action="resume-menu" data-title="${esc(title.id)}" data-item="${esc(item.id)}" aria-label="More actions for ${esc(title.name)}">\u2022\u2022\u2022</button>` : ""}</div>` : ""}</article>`;
   }
   function heading(name, caption = "", action2 = "") {
     return `<header class="page-heading"><div><h1>${esc(name)}</h1>${caption ? `<p>${esc(caption)}</p>` : ""}</div>${action2}</header>`;
   }
   var empty = (name, description, action2 = "") => `<div class="empty"><h2>${esc(name)}</h2><p>${esc(description)}</p>${action2}</div>`;
 
-  // .runtime/subtitle-release/public/metadata.js
+  // public/metadata.js
   function durationLabel(seconds) {
     if (!(seconds > 0)) return "Runtime unavailable";
     if (seconds < 60) return `${Math.round(seconds)} sec`;
@@ -116,7 +127,7 @@
     return `<p class="episode-runtime">${esc(itemRuntime(item))}</p>${item.description ? `<details class="episode-description"><summary>Synopsis</summary><p class="muted">${esc(item.description)}</p></details>` : ""}${technical ? `<details class="episode-description"><summary>File details</summary><p class="meta">${esc(technical)}</p></details>` : ""}`;
   }
 
-  // .runtime/subtitle-release/public/sports.js
+  // public/sports.js
   var schedule = null;
   var channels = [];
   var liveSession = null;
@@ -488,7 +499,7 @@
       });
   });
 
-  // .runtime/subtitle-release/public/torrents.js
+  // public/torrents.js
   async function downloadSeason(title, season) {
     modal("<h2>Checking season\u2026</h2>");
     $("#dialog-content").onclick = null;
@@ -668,7 +679,7 @@
     };
   }
 
-  // .runtime/subtitle-release/public/playback-time.js
+  // public/playback-time.js
   function clockTime(value) {
     const seconds = Math.max(0, Math.floor(Number(value) || 0));
     const minutes = Math.floor(seconds / 60);
@@ -687,7 +698,7 @@
     return duration > 0 && position >= duration - 2;
   }
 
-  // .runtime/subtitle-release/public/subtitles.js
+  // public/subtitles.js
   var subtitleSizes = [
     ["s", "Small", 0.03],
     ["m", "Medium", 0.038],
@@ -876,7 +887,7 @@
     return renderer;
   }
 
-  // .runtime/subtitle-release/public/player.js
+  // public/player.js
   var subtitleRenderer = null;
   var active = null;
   var queue = null;
@@ -905,11 +916,11 @@
     subtitles: '<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M10 9H7v6h3m7-6h-3v6h3"/>',
     close: '<path d="m6 6 12 12M6 18 18 6"/>'
   };
-  function iconButton(id, icon, label, shortcut = "") {
+  function iconButton(id, icon2, label, shortcut = "") {
     const button2 = $("#" + id);
-    if (button2.dataset.icon !== icon) {
-      button2.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">${icons[icon]}</svg>`;
-      button2.dataset.icon = icon;
+    if (button2.dataset.icon !== icon2) {
+      button2.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">${icons[icon2]}</svg>`;
+      button2.dataset.icon = icon2;
     }
     button2.setAttribute("aria-label", label);
     button2.title = shortcut ? `${label} (${shortcut})` : label;
@@ -1514,7 +1525,7 @@
     $("#subtitle-file-encoding").onchange = () => {
       if (active == null ? void 0 : active.subtitleUpload) void $("#subtitle-file").onchange();
     };
-    for (const [id, icon, label] of [
+    for (const [id, icon2, label] of [
       ["player-close", "back", "Back to library"],
       ["player-toggle", "play", "Play"],
       ["player-back", "rewind", "Rewind 10 seconds"],
@@ -1530,7 +1541,7 @@
       ["player-subtitles-toggle", "subtitles", "Subtitles"],
       ["player-subtitles-close", "close", "Close subtitles"]
     ])
-      iconButton(id, icon, label);
+      iconButton(id, icon2, label);
     $("#player-settings-toggle").onclick = () => {
       const open = $("#player-settings").hidden;
       closeSubtitles();
@@ -1712,7 +1723,7 @@
     window.addEventListener("pagehide", () => void report("stop", true));
   }
 
-  // .runtime/subtitle-release/public/app.js
+  // public/app.js
   var user = null;
   var generation = 0;
   var poll = null;
@@ -1720,12 +1731,22 @@
   var discoverResults = [];
   var locationKey = "";
   var returnPositions = {};
+  var featuredTitles = [];
+  var featuredIndex = 0;
   var main = () => $("#main");
   var button = (label, action2, attrs = "", style = "") => `<button class="${style}" data-action="${action2}" ${attrs}>${esc(label)}</button>`;
   var option2 = (value, label, current) => `<option value="${esc(value)}" ${value === current ? "selected" : ""}>${esc(label)}</option>`;
   var grid = (items) => `<div class="grid">${items.map((t) => card(t)).join("")}</div>`;
-  function shelf(label, items, mode) {
-    return items.length ? `<section class="section"><div class="section-heading"><h2>${esc(label)}</h2></div><div class="rail ${mode ? "resume-rail" : ""}">${items.map((t) => card(t, mode)).join("")}</div></section>` : "";
+  function shelf(label, items, mode = "landscape") {
+    return items.length ? `<section class="section media-shelf"><div class="section-heading"><h2>${esc(label)}</h2><div class="rail-controls"><button data-action="rail-back" aria-label="Scroll ${esc(label)} left">${icon("left")}</button><button data-action="rail-next" aria-label="Scroll ${esc(label)} right">${icon("right")}</button></div></div><div class="rail ${mode === "resume" || mode === "next" ? "resume-rail" : ""}" aria-label="${esc(label)}">${items.map((t) => card(t, mode)).join("")}</div></section>` : "";
+  }
+  function featureHtml() {
+    const title = featuredTitles[featuredIndex];
+    if (!title) return "";
+    const artwork = [title.background, title.poster].find((url) => /^https?:\/\//.test(url || ""));
+    const item = title.primary;
+    const saved = title.tags.includes("watchlist");
+    return `<div class="hero-art ${title.background ? "" : "hero-poster"}" aria-hidden="true">${artwork ? `<img src="${esc(artwork)}" alt="" fetchpriority="high">` : '<span class="hero-monogram">m.</span>'}</div><div class="hero-shade"></div><div class="hero-copy"><p class="hero-label">Featured in your library</p><h2>${esc(title.name)}</h2><p class="hero-facts">${esc([title.year, title.kind === "movie" ? "Movie" : title.kind === "anime" ? "Anime" : "Series", ...(title.genres || []).slice(0, 2)].filter(Boolean).join(" \xB7 "))}</p>${title.description ? `<p class="hero-description">${esc(title.description)}</p>` : ""}<div class="hero-actions">${(item == null ? void 0 : item.available) ? `<button class="hero-play" data-action="play" data-item="${esc(item.id)}" data-title="${esc(title.id)}">${icon("play")}${title.resumable ? "Resume watching" : "Watch now"}</button>` : `<a class="hero-play" href="#/title/${esc(title.id)}">View title</a>`}<a class="hero-round" href="#/title/${esc(title.id)}" aria-label="Details for ${esc(title.name)}" title="Title details">${icon("info")}</a><button class="hero-round" data-action="feature-save" data-title="${esc(title.id)}" aria-label="${saved ? "Remove from" : "Add to"} My List" aria-pressed="${saved}" title="${saved ? "Remove from" : "Add to"} My List">${icon(saved ? "check" : "plus")}</button></div>${title.readyCount ? `<p class="hero-availability">${icon("check")}Available in your library</p>` : ""}</div>${featuredTitles.length > 1 ? `<div class="feature-controls"><button class="feature-arrow" data-action="feature-prev" aria-label="Previous featured title">${icon("left")}</button><div class="feature-dots" role="group" aria-label="Featured titles">${featuredTitles.map((t, i) => `<button class="feature-dot" data-action="feature-select" data-index="${i}" aria-label="Feature ${esc(t.name)}" aria-pressed="${i === featuredIndex}"></button>`).join("")}</div><button class="feature-arrow" data-action="feature-next" aria-label="Next featured title">${icon("right")}</button></div>` : ""}`;
   }
   async function route({ quiet = false } = {}) {
     var _a;
@@ -1741,12 +1762,15 @@
       };
       locationKey = hash;
     }
-    document.querySelectorAll("[data-nav]").forEach(
-      (a) => a.classList.toggle(
-        "active",
-        a.dataset.nav === page || page === "title" && a.dataset.nav === "library"
-      )
-    );
+    document.querySelectorAll("[data-nav]").forEach((a) => {
+      const active2 = a.dataset.nav === page || page === "title" && a.dataset.nav === "library";
+      a.classList.toggle("active", active2);
+      if (active2) a.setAttribute("aria-current", "page");
+      else a.removeAttribute("aria-current");
+    });
+    document.querySelector(".account-menu").removeAttribute("open");
+    main().classList.toggle("home-page", page === "home");
+    main().classList.toggle("title-page", page === "title");
     const draw = (html) => {
       var _a2, _b;
       if (ticket !== generation) return;
@@ -1775,15 +1799,34 @@
         }, 6e4);
       } else if (page === "home") {
         const data = await api("/api/home"), queues = await api("/api/queues");
-        const count = data.continueWatching.length + data.nextUp.length + data.recentlyAdded.length;
+        const kind = ["movie", "tv", "anime"].includes(url.searchParams.get("kind")) ? url.searchParams.get("kind") : "";
+        const visible = (items) => items.filter((t) => !kind || t.kind === kind);
+        const count = Object.values(data).reduce((total, items) => total + visible(items).length, 0);
+        featuredTitles = [
+          ...new Map(
+            [
+              ...visible(data.recentlyAdded),
+              ...visible(data.continueWatching),
+              ...visible(data.watchlist)
+            ].map((t) => [t.id, t])
+          ).values()
+        ].slice(0, 5);
+        if (!quiet || featuredIndex >= featuredTitles.length) featuredIndex = 0;
         draw(
-          heading("Home", "", `<a class="quiet" href="#/settings">${esc(user.name)}</a>`) + shelf("Continue watching", data.continueWatching, "resume") + shelf("Next up", data.nextUp, "next") + shelf("Recently added", data.recentlyAdded) + shelf("My list", data.watchlist) + (!count ? empty(
-            "Make yourself at home",
-            "Find a movie or series, download it to your library, and watch it here.",
-            `<a class="primary card-action" href="#/discover">Discover something to watch</a>`
+          `<h1 class="sr-only">Home</h1><nav class="browse-tabs" aria-label="Browse library">${[
+            ["", "All"],
+            ["movie", "Movies"],
+            ["tv", "TV shows"],
+            ["anime", "Anime"]
+          ].map(
+            ([value, label]) => `<a href="#/${value ? "?kind=" + value : ""}" ${kind === value ? 'aria-current="page"' : ""}>${label}</a>`
+          ).join("")}</nav>` + (featuredTitles.length ? `<section class="feature" id="feature" aria-label="Featured title">${featureHtml()}</section>` : "") + '<div class="home-content">' + shelf("Continue watching", visible(data.continueWatching), "resume") + shelf("Next up", visible(data.nextUp), "next") + shelf("Recently added", visible(data.recentlyAdded)) + shelf("My List", visible(data.watchlist)) + (!count ? empty(
+            kind ? "No titles in this category yet" : "Your library starts here",
+            "Find a title in Discover to add it to your library.",
+            `<a class="primary empty-action" href="#/discover">Browse titles</a>`
           ) : "") + (queues.some((q) => q.items.length) ? `<section class="section"><h2>Saved queues</h2>${queues.filter((q) => q.items.length).slice(0, 3).map(
             (q) => `<div class="row"><div class="row-main"><h3>${esc(q.name)}</h3><p class="meta">${q.mode === "shuffle" ? "Shuffle" : "In order"} \xB7 ${q.items.length} items</p></div>${button("Open queue", "queue", `data-id="${q.id}"`)}</div>`
-          ).join("")}</section>` : "")
+          ).join("")}</section>` : "") + "</div>"
         );
       } else if (page === "library" || page === "list") {
         const params = new URLSearchParams(url.search);
@@ -1889,7 +1932,7 @@
   function detailHtml(title) {
     var _a;
     const primary = title.primary;
-    let html = `<div class="detail"><div class="detail-art poster">${poster(title)}</div><div class="detail-copy"><p class="eyebrow">${esc(title.kind === "movie" ? "Movie" : title.kind === "anime" ? "Anime" : "Series")} ${esc(title.year)}</p><h1>${esc(title.name)}</h1>${metadataHtml(title)}<p class="muted">${esc(title.description)}</p><div class="actions">${primary ? button(primary.available ? title.resumable ? "Resume " + episodeLabel(primary) : primary.state.completed ? "Replay" : "Play " + episodeLabel(primary) : "Find a release", primary.available ? "play" : "release", `data-item="${primary.id}" data-title="${title.id}"`, "primary") : ""}${title.kind !== "movie" && title.readyCount ? button("Shuffle episodes", "shuffle", `data-title="${title.id}"`) : ""}${button(title.tags.includes("watchlist") ? "In My List" : "Add to My List", "tag", `data-tag="watchlist" data-active="${!title.tags.includes("watchlist")}"`)}${button(title.tags.includes("favorite") ? "Favorited" : "Favorite", "tag", `data-tag="favorite" data-active="${!title.tags.includes("favorite")}"`)}${button("Collections", "add-collection")}</div><p class="meta">${title.readyCount} downloaded${((_a = title.genres) == null ? void 0 : _a.length) ? " \xB7 " + esc(title.genres.join(" / ")) : ""}</p></div></div>`;
+    let html = `<div class="detail">${/^https?:\/\//.test(title.background || "") ? `<div class="detail-backdrop" aria-hidden="true"><img src="${esc(title.background)}" alt=""></div>` : ""}<div class="detail-art poster">${poster(title)}</div><div class="detail-copy"><p class="eyebrow">${esc(title.kind === "movie" ? "Movie" : title.kind === "anime" ? "Anime" : "Series")} ${esc(title.year)}</p><h1>${esc(title.name)}</h1>${metadataHtml(title)}<p class="muted">${esc(title.description)}</p><div class="actions">${primary ? button(primary.available ? title.resumable ? "Resume " + episodeLabel(primary) : primary.state.completed ? "Replay" : "Play " + episodeLabel(primary) : "Find a release", primary.available ? "play" : "release", `data-item="${primary.id}" data-title="${title.id}"`, "primary") : ""}${title.kind !== "movie" && title.readyCount ? button("Shuffle episodes", "shuffle", `data-title="${title.id}"`) : ""}${button(title.tags.includes("watchlist") ? "In My List" : "Add to My List", "tag", `data-tag="watchlist" data-active="${!title.tags.includes("watchlist")}"`)}${button(title.tags.includes("favorite") ? "Favorited" : "Favorite", "tag", `data-tag="favorite" data-active="${!title.tags.includes("favorite")}"`)}${button("Collections", "add-collection")}</div><p class="meta">${title.readyCount} downloaded${((_a = title.genres) == null ? void 0 : _a.length) ? " \xB7 " + esc(title.genres.join(" / ")) : ""}</p></div></div>`;
     const seasons = [...new Set(title.items.map((i) => i.season))];
     for (const season of seasons) {
       const items = title.items.filter((i) => i.season === season);
@@ -1933,12 +1976,33 @@
     };
   }
   async function action(event) {
+    var _a, _b;
     const b = event.target.closest("[data-action]");
     if (!b) return;
     const actionName = b.dataset.action;
     b.disabled = true;
     try {
-      if (actionName.startsWith("sports-"))
+      if (actionName === "rail-back" || actionName === "rail-next") {
+        const rail = b.closest(".media-shelf").querySelector(".rail");
+        rail.scrollBy({
+          left: rail.clientWidth * (actionName === "rail-next" ? 0.85 : -0.85),
+          behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth"
+        });
+      } else if (actionName.startsWith("feature-")) {
+        if (actionName === "feature-save") {
+          const title = featuredTitles[featuredIndex];
+          const active2 = !title.tags.includes("watchlist");
+          await api(`/api/titles/${title.id}/tags`, { tag: "watchlist", active: active2 });
+          await route({ quiet: true });
+          toast(active2 ? "Added to My List" : "Removed from My List");
+          (_a = $('#feature [data-action="feature-save"]')) == null ? void 0 : _a.focus({ preventScroll: true });
+        } else {
+          featuredIndex = actionName === "feature-select" ? Number(b.dataset.index) : (featuredIndex + (actionName === "feature-next" ? 1 : -1) + featuredTitles.length) % featuredTitles.length;
+          $("#feature").innerHTML = featureHtml();
+          const selector = actionName === "feature-select" ? `[data-action="feature-select"][data-index="${featuredIndex}"]` : `[data-action="${actionName}"]`;
+          (_b = $("#feature").querySelector(selector)) == null ? void 0 : _b.focus({ preventScroll: true });
+        }
+      } else if (actionName.startsWith("sports-"))
         await sportsAction(b, {
           refresh: () => route({ quiet: true }),
           closeVod: async () => {
@@ -2139,9 +2203,8 @@
     user = auth.user;
     if (!user) {
       $("#sidebar").hidden = true;
-      main().style.marginLeft = "0";
-      main().style.width = "100%";
-      main().innerHTML = `<div class="login"><p class="eyebrow">Mediawan</p><h1>Your library awaits.</h1>${auth.setupRequired ? "<p>Set ADMIN_EMAIL and an ADMIN_PASSWORD of at least 10 characters on the server, then restart Mediawan.</p>" : '<form id="login" class="form"><label>Email<input name="email" type="email" autocomplete="username" required></label><label>Password<input name="password" type="password" autocomplete="current-password" required></label><button class="primary">Sign in</button><p id="login-error" class="error" role="alert"></p></form>'}</div>`;
+      main().classList.add("auth-page");
+      main().innerHTML = `<div class="login"><a class="brand" href="#/">mediawan</a><h1>Sign in</h1>${auth.setupRequired ? "<p>Set ADMIN_EMAIL and an ADMIN_PASSWORD of at least 10 characters on the server, then restart Mediawan.</p>" : '<form id="login" class="form"><label>Email<input name="email" type="email" autocomplete="username" required></label><label>Password<input name="password" type="password" autocomplete="current-password" required></label><button class="primary">Sign in</button><p id="login-error" class="error" role="alert"></p></form>'}</div>`;
       if ($("#login"))
         $("#login").onsubmit = async (e) => {
           e.preventDefault();
@@ -2156,6 +2219,11 @@
       return;
     }
     $("#account").textContent = user.name;
+    $("#avatar").textContent = user.name.slice(0, 1).toUpperCase();
+    document.addEventListener("click", (event) => {
+      if (!event.target.closest(".account-menu"))
+        document.querySelector(".account-menu").removeAttribute("open");
+    });
     $("#signout").onclick = logout;
     $("#dialog-close").onclick = closeModal;
     main().onclick = action;
@@ -2170,7 +2238,10 @@
     });
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape" || e.keyCode === 10009) {
-        if ($("#dialog").open) {
+        if (document.querySelector(".account-menu").open) {
+          document.querySelector(".account-menu").removeAttribute("open");
+          document.querySelector(".account-menu summary").focus();
+        } else if ($("#dialog").open) {
           e.preventDefault();
           closeModal();
         } else if (livePlaying()) {
