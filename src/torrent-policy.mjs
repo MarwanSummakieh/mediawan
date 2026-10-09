@@ -4,7 +4,7 @@ export const defaultRules = Object.freeze({
   minSeeders: 5,
   movieMaxGB: 100,
   episodeMaxGB: 15,
-  resolutions: [720, 1080, 2160],
+  resolutions: [1080, 2160],
   rejectUnknown: true,
   metadataMinutes: 3,
   stallMinutes: 10,
@@ -16,22 +16,56 @@ export const defaultRules = Object.freeze({
 
 export function releaseFacts(stream) {
   const label = String(stream.title || stream.label || stream.name || '').slice(0, 600);
+  const name = String(stream.name || '').slice(0, 200);
   const seed = /(?:👤\s*|seeders?\s*[:=]?\s*)(\d+)/i.exec(label);
   const size = /(?:💾\s*)?(\d+(?:\.\d+)?)\s*(GB|GiB|MB|MiB)\b/i.exec(label);
-  const resolution = /\b(480|720|1080|2160)p\b/i.exec(`${stream.name || ''} ${label}`);
+  const resolution = /(?:^|[^a-z0-9])(480|720|1080|2160)p(?:$|[^a-z0-9])/i.exec(`${label} ${name}`);
   return {
     label,
+    name,
     seeders: seed ? Number(seed[1]) : null,
     sizeBytes: Number.isFinite(stream.behaviorHints?.videoSize)
       ? stream.behaviorHints.videoSize
       : size
         ? Math.round(Number(size[1]) * (/^g/i.test(size[2]) ? 1073741824 : 1048576))
         : null,
-    resolution: resolution ? Number(resolution[1]) : /\b4k\b/i.test(label) ? 2160 : null,
+    resolution: resolution
+      ? Number(resolution[1])
+      : /\b4k\b/i.test(`${label} ${name}`)
+        ? 2160
+        : null,
   };
 }
-export function assessRelease(release, kind, rules) {
+export const requiredResolution = (kind) => (kind === 'movie' ? 2160 : 1080);
+export const qualityRule = (kind) =>
+  kind === 'movie' ? 'YTS only · 2160p WEB-DL movies' : 'YTS only · 1080p WEB-DL episodes';
+
+export function assessQuality(release, kind) {
+  const label = `${release.label || ''} ${release.name || ''}`;
   const reasons = [];
+  if (!/(?:^|[^a-z0-9])YTS(?:$|[^a-z0-9])/i.test(label)) reasons.push('YTS releases only');
+  if (release.resolution !== requiredResolution(kind))
+    reasons.push(
+      `${requiredResolution(kind)}p required for ${kind === 'movie' ? 'movies' : 'anime and TV shows'}`,
+    );
+  const labelResolution = releaseFacts(release).resolution;
+  if (labelResolution != null && labelResolution !== requiredResolution(kind))
+    reasons.push('Release label does not match the required resolution');
+  const filenameResolution = releaseFacts({ label: release.filename }).resolution;
+  if (filenameResolution != null && filenameResolution !== requiredResolution(kind))
+    reasons.push('Actual filename does not match the required resolution');
+  if (!/(?:^|[^a-z0-9])WEB[ ._-]*DL(?:$|[^a-z0-9])/i.test(label))
+    reasons.push('WEB-DL required for movies, anime and TV shows');
+  if (
+    /(?:^|[^a-z0-9])(?:WEB[ ._-]*RIP|BLU[ ._-]*RAY|BD[ ._-]*RIP|BR[ ._-]*RIP|HDTV|DVD[ ._-]*RIP)(?:$|[^a-z0-9])/i.test(
+      `${label} ${release.filename || ''}`,
+    )
+  )
+    reasons.push('Release source conflicts with the required WEB-DL source');
+  return { accepted: !reasons.length, reasons };
+}
+export function assessRelease(release, kind, rules) {
+  const reasons = [...assessQuality(release, kind).reasons];
   if (
     /(?:^|[\s._\[\]()-])(cam|hdcam|camrip|hdts|hdtc|ts|tsrip|telesync|telecine|tc|dvdscr|screener|predvd|hdcamrip)(?:$|[\s._\[\]()-])/i.test(
       release.label,
@@ -63,6 +97,7 @@ export function createTorrentPolicy(store) {
   const get = () => ({
     ...defaultRules,
     ...JSON.parse(store.one("SELECT json FROM settings WHERE key='torrentRules'")?.json || '{}'),
+    resolutions: [...defaultRules.resolutions],
   });
   return {
     get,
@@ -103,7 +138,8 @@ export function createTorrentPolicy(store) {
         typeof rules.rejectUnknown !== 'boolean' ||
         !Array.isArray(rules.resolutions) ||
         !rules.resolutions.length ||
-        rules.resolutions.some((n) => ![480, 720, 1080, 2160].includes(n))
+        rules.resolutions.length !== 2 ||
+        ![1080, 2160].every((n) => rules.resolutions.includes(n))
       )
         fail(400, 'Invalid quality rules');
       store.run(

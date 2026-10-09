@@ -11,7 +11,7 @@ test('torrent enqueue rechecks catalog facts and administrator rules instead of 
   const release = {
     hash: 'a'.repeat(40),
     fileIndex: 0,
-    label: 'Fixture 2160p',
+    label: 'Fixture 2160p WEB-DL [YTS.MX]',
     seeders: 1,
     resolution: 2160,
     sizeBytes: 100,
@@ -120,4 +120,95 @@ test('authentication, CSRF, preferences, role checks and anonymous API denial', 
   );
   await fetch(base + '/api/logout', { method: 'POST', headers, body: '{}' });
   assert.equal((await fetch(base + '/api/home', { headers })).status, 401);
+});
+
+test('both download providers enforce server-reported YTS quality despite forged browser metadata', async (t) => {
+  const store = createStore(':memory:');
+  let release;
+  const calls = [];
+  const engine = {
+    enqueue: async (...args) => {
+      calls.push(args);
+      return { id: 'job' };
+    },
+    close: async () => {},
+  };
+  const application = createApplication(
+    { ...configuration({}), adminEmail: 'admin@example.test', adminPassword: 'fixture-password' },
+    { store, catalog: { releases: async () => [release] }, downloads: engine, torrents: engine },
+  );
+  const server = application.app.listen(0, '127.0.0.1');
+  await new Promise((resolve) => server.once('listening', resolve));
+  t.after(async () => {
+    await new Promise((resolve) => server.close(resolve));
+    await application.close();
+  });
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const login = await fetch(base + '/api/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: 'admin@example.test', password: 'fixture-password' }),
+  });
+  const headers = {
+    'Content-Type': 'application/json',
+    Cookie: login.headers.get('set-cookie').split(';')[0],
+  };
+  for (const kind of ['movie', 'anime', 'tv']) {
+    const title = store.saveTitle({ kind, external_id: 'tt' + kind, name: kind });
+    const item = store.saveItem({ title_id: title.id });
+    const expected = kind === 'movie' ? 2160 : 1080;
+    for (const provider of ['torrent', 'realdebrid']) {
+      for (const patch of [
+        { label: `Fixture ${expected}p WEB-DL OTHER` },
+        { label: `Fixture ${expected}p [YTS]` },
+        { label: `Fixture ${expected}p WEBRip [YTS]` },
+        { label: `Fixture ${expected}p BluRay [YTS]` },
+        { resolution: 720, label: 'Fixture 720p WEB-DL [YTS]' },
+        ...(kind === 'movie'
+          ? []
+          : [
+              { label: 'Fixture 1080p WEBRip [YTS]' },
+              { resolution: 2160, label: 'Fixture 2160p WEB-DL [YTS]' },
+            ]),
+      ]) {
+        release = {
+          hash: 'a'.repeat(40),
+          fileIndex: 0,
+          resolution: expected,
+          label: `Fixture ${expected}p WEB-DL [YTS]`,
+          ...patch,
+        };
+        const list = await (
+          await fetch(base + `/api/items/${item.id}/releases`, { headers })
+        ).json();
+        assert.equal(list.items[0].qualityAccepted, false);
+        const response = await fetch(base + `/api/items/${item.id}/download`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            ...release,
+            provider,
+            label: `Fixture ${expected}p WEB-DL [YTS]`,
+            resolution: expected,
+            qualityAccepted: true,
+          }),
+        });
+        assert.equal(response.status, 400);
+      }
+      release = {
+        hash: 'a'.repeat(40),
+        fileIndex: 0,
+        resolution: expected,
+        label: `Fixture ${expected}p WEB-DL [YTS]`,
+      };
+      const response = await fetch(base + `/api/items/${item.id}/download`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ ...release, provider }),
+      });
+      assert.equal(response.status, 202);
+      assert.deepEqual(calls.at(-1)[2], release);
+    }
+  }
+  assert.equal(calls.length, 6);
 });

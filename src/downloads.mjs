@@ -6,6 +6,7 @@ import { pipeline } from 'node:stream/promises';
 import { id, fail } from './store.mjs';
 import { probe } from './media.mjs';
 import { getStorage } from './storage.mjs';
+import { assessQuality } from './torrent-policy.mjs';
 
 function providerError(status, data) {
   const code = Number.isInteger(data.error_code) ? data.error_code : null;
@@ -83,6 +84,13 @@ export function createDownloads(
     nextCall = 0;
   const userFor = (job) => store.one('SELECT * FROM users WHERE id=? AND active=1', job.user_id);
   const allowed = (user) => user && (user.role === 'admin' || user.can_download);
+  function requireQuality(itemId, release, filename) {
+    const quality = assessQuality(
+      { ...release, filename },
+      store.title(store.item(itemId).title_id).kind,
+    );
+    if (!quality.accepted) fail(400, quality.reasons.join('; '));
+  }
   async function rd(endpoint, form, signal) {
     if (!config.debridToken) fail(503, 'Configure REAL_DEBRID_TOKEN on the server');
     const wait = Math.max(0, nextCall - Date.now());
@@ -123,6 +131,7 @@ export function createDownloads(
       fail(502, 'Real-Debrid could not acquire this release. Choose another.');
     if (info.status === 'waiting_files_selection') {
       const file = selectFile(info.files, store.item(job.item_id), job.fileIndex);
+      requireQuality(job.item_id, job.release, file.path);
       await rd(
         `/torrents/selectFiles/${encodeURIComponent(job.torrentId)}`,
         { files: String(file.id) },
@@ -143,6 +152,7 @@ export function createDownloads(
     const file = job.fileId
       ? info.files.find((f) => f.id === job.fileId)
       : selectFile(info.files, store.item(job.item_id), job.fileIndex);
+    requireQuality(job.item_id, job.release, file?.path);
     const selected = info.files.filter((f) => f.selected),
       linkIndex = selected.findIndex((f) => f.id === file?.id);
     if (linkIndex < 0 || !info.links[linkIndex])
@@ -250,6 +260,7 @@ export function createDownloads(
       if (!allowed(user)) fail(403, 'An administrator must enable your downloads');
       if (!store.canReadItem(user, itemId)) fail(404, 'Media not found');
       if (!/^[a-f0-9]{40}$/i.test(release.hash || '')) fail(400, 'Select a valid release');
+      requireQuality(itemId, release);
       if (
         release.fileIndex != null &&
         (!Number.isSafeInteger(release.fileIndex) || release.fileIndex < 0)
@@ -271,6 +282,7 @@ export function createDownloads(
         created: Date.now(),
         hash: release.hash.toLowerCase(),
         fileIndex: release.fileIndex ?? null,
+        release,
         bytes: 0,
         total: 0,
       });
@@ -313,6 +325,7 @@ export function createDownloads(
       if (action === 'retry' && !active.has(key)) {
         if (!allowed(user)) fail(403, 'Download permission required');
         if (job.retryable === false) fail(409, job.error || 'This release cannot be retried');
+        requireQuality(job.item_id, job.release, job.filename);
         const result = store.saveJob({
           ...job,
           state: 'queued',

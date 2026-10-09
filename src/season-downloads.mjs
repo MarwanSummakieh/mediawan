@@ -1,5 +1,5 @@
 import { id, fail } from './store.mjs';
-import { assessRelease } from './torrent-policy.mjs';
+import { assessRelease, requiredResolution } from './torrent-policy.mjs';
 
 const pendingStates = ['queued', 'finding'];
 const unfinished = "state NOT IN ('failed','cancelled','ready','evicted')";
@@ -51,7 +51,7 @@ export function createSeasonDownloads(store, config, catalog, downloads, torrent
       items,
       torrentConfigured: !!config.qbitUrl,
       debridConfigured: !!config.debridToken,
-      resolutions: policy.get().resolutions,
+      resolutions: [requiredResolution(store.title(titleId).kind)],
       active:
         store.unpack(
           store.one(

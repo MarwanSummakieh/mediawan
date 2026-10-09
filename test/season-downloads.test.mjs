@@ -45,7 +45,7 @@ function fixture(t, count = 3) {
   };
   const release = (hash = 'a', extra = {}) => ({
     hash: hash.repeat(40),
-    label: 'Fixture 1080p',
+    label: 'Fixture 1080p WEB-DL [YTS.MX]',
     resolution: 1080,
     sizeBytes: 100,
     seeders: 10,
@@ -133,6 +133,29 @@ test('season resolution is durable across worker recreation and selects the chos
   } finally {
     await next.close();
     reloaded.close();
+  }
+});
+
+test('season quality is locked and never falls back to a popular release from another source', async (t) => {
+  for (const provider of ['torrent', 'realdebrid']) {
+    const f = fixture(t, 2);
+    assert.deepEqual(f.service.options(f.user, f.title.id, 1).resolutions, [1080]);
+    assert.throws(
+      () => f.service.create(f.user, f.title.id, 1, { provider, resolution: 2160 }),
+      /allowed quality/,
+    );
+    f.catalog.releases = async (itemId) => [
+      f.release('b', { label: 'Show 1080p WEB-DL OTHER', seeders: 9999 }),
+      f.release('c', { label: 'Show 1080p WEBRip [YTS]', seeders: 9999 }),
+      f.release('d', { resolution: 720, seeders: 9999 }),
+      ...(itemId === f.items[0].id ? [f.release()] : []),
+    ];
+    f.service.create(f.user, f.title.id, 1, { provider, resolution: 1080 });
+    await f.service.tick();
+    await f.service.tick();
+    assert.equal(f.calls.length, 1);
+    assert.equal(f.calls[0].release.hash, 'a'.repeat(40));
+    assert.equal(f.service.list(f.user)[0].items[1].state, 'unavailable');
   }
 });
 

@@ -9,7 +9,7 @@ import { createNavigation } from './navigation.mjs';
 import { createQueues } from './queues.mjs';
 import { createCatalog } from './catalog.mjs';
 import { createDownloads } from './downloads.mjs';
-import { createTorrentPolicy, assessRelease } from './torrent-policy.mjs';
+import { createTorrentPolicy, assessRelease, assessQuality, qualityRule } from './torrent-policy.mjs';
 import { createTorrentDownloads } from './torrent-downloads.mjs';
 import { createMedia, probe } from './media.mjs';
 import { createSeasonDownloads } from './season-downloads.mjs';
@@ -389,7 +389,9 @@ export function createApplication(config, dependencies = {}) {
         items: (await catalog.releases(req.params.id)).map((r) => ({
           ...r,
           ...assessRelease(r, kind, rules),
+          qualityAccepted: assessQuality(r, kind).accepted,
         })),
+        qualityRule: qualityRule(kind),
         rules,
         torrentConfigured: !!config.qbitUrl,
         debridConfigured: !!config.debridToken,
@@ -400,16 +402,16 @@ export function createApplication(config, dependencies = {}) {
     '/api/items/:id/download',
     wrap(async (req, res) => {
       if (!store.canReadItem(req.user, req.params.id)) fail(404, 'Media not found');
-      if (req.body.provider === 'torrent') {
+      if (!req.body.provider || ['torrent', 'realdebrid'].includes(req.body.provider)) {
         // Re-resolve source facts on the server. Client-supplied seeder/size claims cannot bypass rules.
         const release = (await catalog.releases(req.params.id)).find(
           (r) => r.hash === req.body.hash && r.fileIndex === req.body.fileIndex,
         );
         if (!release) fail(400, 'Release is no longer in the search results. Refresh the list.');
-        const job = await torrents.enqueue(req.user, req.params.id, release);
+        const quality = assessQuality(release, store.title(store.item(req.params.id).title_id).kind);
+        if (!quality.accepted) fail(400, quality.reasons.join('; '));
+        const job = await (req.body.provider === 'torrent' ? torrents : downloads).enqueue(req.user, req.params.id, release);
         res.status(202).json({ id: job.id });
-      } else if (!req.body.provider || req.body.provider === 'realdebrid') {
-        res.status(202).json({ id: downloads.enqueue(req.user, req.params.id, req.body).id });
       } else fail(400, 'Unknown download provider');
     }),
   );

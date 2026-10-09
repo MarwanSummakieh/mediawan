@@ -22,7 +22,7 @@ execFileSync(
     '-f',
     'lavfi',
     '-i',
-    'testsrc2=size=1280x720:rate=24',
+    'testsrc2=size=3840x2160:rate=24',
     '-t',
     '5',
     '-c:v',
@@ -110,8 +110,9 @@ try {
   job = await worker.enqueue(user, item.id, {
     hash,
     fileIndex: 0,
-    label: 'Generated fixture 720p',
-    resolution: 720,
+    // Synthetic search metadata exercises the same mandatory selector rules.
+    label: 'Generated fixture 2160p WEB-DL [YTS]',
+    resolution: 2160,
     seeders: 5,
     sizeBytes: data.length,
   });

@@ -8,6 +8,8 @@ import { createStore } from '../src/store.mjs';
 import { createDownloads } from '../src/downloads.mjs';
 import { createStorage } from '../src/storage.mjs';
 
+const release = { hash: 'a'.repeat(40), label: 'Fixture 2160p WEB-DL [YTS.MX]', resolution: 2160 };
+
 test('provider legal blocks explain the failure and cannot be retried automatically or manually', async (t) => {
   const store = createStore(':memory:');
   store.run(
@@ -31,7 +33,7 @@ test('provider legal blocks explain the failure and cannot be retried automatica
     await downloads.close();
     store.close();
   });
-  const job = downloads.enqueue(user, item.id, { hash: 'a'.repeat(40) });
+  const job = downloads.enqueue(user, item.id, release);
   for (let n = 0; n < 30 && store.job(job.id).state !== 'failed'; n++)
     await new Promise((resolve) => setTimeout(resolve, 10));
   assert.equal(store.job(job.id).state, 'failed');
@@ -109,8 +111,13 @@ test('Real-Debrid reclaims old media, persists provider state and publishes only
     store.close();
     rmSync(root, { recursive: true, force: true });
   });
-  const job = downloads.enqueue(user, item.id, { hash: 'a'.repeat(40) });
-  assert.equal(downloads.enqueue(user, item.id, { hash: 'b'.repeat(40) }).id, job.id);
+  assert.throws(
+    () => downloads.enqueue(user, item.id, { ...release, label: 'Fixture 2160p' }),
+    /YTS/,
+  );
+  assert.throws(() => downloads.enqueue(user, item.id, { ...release, resolution: 1080 }), /2160p/);
+  const job = downloads.enqueue(user, item.id, release);
+  assert.equal(downloads.enqueue(user, item.id, { ...release, hash: 'b'.repeat(40) }).id, job.id);
   for (let n = 0; n < 100; n++) {
     downloads.tick();
     if (store.job(job.id).state === 'ready') break;

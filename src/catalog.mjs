@@ -232,7 +232,6 @@ export function createCatalog(store, config, dependencies = {}) {
       );
       return (response.streams || [])
         .filter((s) => /^[a-f0-9]{40}$/i.test(s.infoHash || ''))
-        .slice(0, 80)
         .map((s) => ({
           hash: s.infoHash.toLowerCase(),
           fileIndex: Number.isInteger(s.fileIdx) ? s.fileIdx : null,

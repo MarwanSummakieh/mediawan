@@ -10,6 +10,7 @@ import {
   assessRelease,
   releaseFacts,
   defaultRules,
+  assessQuality,
 } from '../src/torrent-policy.mjs';
 import { createTorrentDownloads } from '../src/torrent-downloads.mjs';
 import { createQbitClient } from '../src/qbittorrent.mjs';
@@ -17,7 +18,7 @@ import { createQbitClient } from '../src/qbittorrent.mjs';
 const candidate = {
   hash: 'a'.repeat(40),
   fileIndex: 0,
-  label: 'Fixture.2160p.WEB-DL',
+  label: 'Fixture.2160p.WEB-DL [YTS.MX]',
   seeders: 12,
   resolution: 2160,
   sizeBytes: 100,
@@ -111,7 +112,7 @@ function fixture(t) {
 test('torrent search rules accept healthy 4K and reject low seeds, unknown facts, oversized and camera releases', () => {
   const facts = releaseFacts({
     name: 'Torrentio 4k',
-    title: 'Film.2160p.WEB-DL\n👤 18 💾 55.6 GB',
+    title: 'Film.2160p.WEB-DL [YTS.MX]\n👤 18 💾 55.6 GB',
   });
   assert.equal(facts.seeders, 18);
   assert.equal(facts.resolution, 2160);
@@ -136,6 +137,75 @@ test('torrent settings are durable and validate bounded values', (t) => {
   assert.throws(() => f.policy.set({ minSeeders: -1 }), /Invalid/);
   assert.throws(() => f.policy.set({ maxConcurrent: 1.5 }), /whole/);
   assert.throws(() => f.policy.set({ resolutions: [] }), /Invalid/);
+  assert.throws(() => f.policy.set({ resolutions: [720, 1080, 2160] }), /Invalid/);
+  f.store.run(
+    "UPDATE settings SET json=? WHERE key='torrentRules'",
+    JSON.stringify({ resolutions: [720] }),
+  );
+  assert.deepEqual(f.policy.get().resolutions, [1080, 2160]);
+});
+
+test('mandatory YTS quality is exact for every media kind and cannot be relaxed by torrent settings', () => {
+  const episode = { ...candidate, label: 'Show.1080p.WEB-DL [YTS.MX]', resolution: 1080 };
+  const relaxed = {
+    ...defaultRules,
+    rejectUnknown: false,
+    minSeeders: 0,
+    resolutions: [480, 720, 1080, 2160],
+  };
+  assert(assessQuality(candidate, 'movie').accepted);
+  for (const source of ['WEB-DL', 'WEB DL', 'WEB.DL', 'WEB_DL', 'WEBDL'])
+    assert(assessQuality({ ...candidate, label: `Film 2160p ${source} [YTS]` }, 'movie').accepted);
+  for (const kind of ['tv', 'anime']) {
+    for (const source of ['WEB-DL', 'WEB DL', 'WEB.DL', 'WEB_DL', 'WEBDL'])
+      assert(assessQuality({ ...episode, label: `Show 1080p ${source} [yts.mx]` }, kind).accepted);
+    for (const patch of [
+      { label: 'Show 1080p WEB-DL [OTHER]' },
+      { label: 'Show 1080p WEB-DL [YTSFake]' },
+      { label: 'Show 1080p BluRay [YTS]' },
+      { label: 'Show 1080p WEBRip [YTS]' },
+      { label: 'Show 1080p WEB-DL BluRay [YTS]' },
+      { resolution: 2160 },
+      { resolution: 720 },
+      { resolution: null },
+      { filename: 'Show.720p.WEB-DL.mp4' },
+      { filename: 'Show.1080p.WEBRip.mp4' },
+    ])
+      assert(
+        !assessRelease({ ...episode, ...patch }, kind, relaxed).accepted,
+        JSON.stringify(patch),
+      );
+  }
+  for (const patch of [
+    { resolution: 1080 },
+    { resolution: null },
+    { label: 'Film 2160p OTHER' },
+    { label: 'Film 2160p [YTS]' },
+    { label: 'Film 2160p WEBRip [YTS]' },
+    { label: 'Film 2160p BluRay [YTS]' },
+    { label: 'Film 2160p WEB-DL BluRay [YTS]' },
+    { filename: 'Film.1080p.mp4' },
+    { filename: 'Film.2160p.WEBRip.mp4' },
+    { filename: 'Film.2160p.BluRay.mp4' },
+  ])
+    assert(!assessRelease({ ...candidate, ...patch }, 'movie', relaxed).accepted);
+  const providerName = releaseFacts({
+    name: 'Torrentio 4K (YTS)',
+    title: 'Film WEB-DL\n👤 20 💾 2 GB',
+  });
+  assert(assessQuality(providerName, 'movie').accepted);
+  assert.equal(releaseFacts({ name: 'Torrentio 4K', title: 'Film 1080p [YTS]' }).resolution, 1080);
+});
+
+test('torrent metadata cannot downgrade the selected movie quality', async (t) => {
+  const f = fixture(t);
+  const job = await f.worker.enqueue(f.user, f.item.id, candidate);
+  await f.worker.tick();
+  f.client.files = async () => [{ index: 0, name: 'Film.1080p.mp4', size: 100, progress: 0 }];
+  await f.worker.tick();
+  assert.equal(f.store.job(job.id).state, 'failed');
+  assert.match(f.store.job(job.id).error, /2160p|resolution/);
+  assert(!f.calls.includes('start'));
 });
 test('torrent worker selects only the requested file, pauses, resumes and publishes verified local media', async (t) => {
   const f = fixture(t),

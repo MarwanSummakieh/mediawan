@@ -290,8 +290,8 @@ test('completed torrents are detached without recursive deletion and evicted job
   );
   const next = await worker.enqueue(f.user, entry.item.id, {
     hash: entry.job.hash,
-    label: 'Film 1080p',
-    resolution: 1080,
+    label: 'Film 2160p WEB-DL [YTS.MX]',
+    resolution: 2160,
     seeders: 10,
     sizeBytes: 100,
   });

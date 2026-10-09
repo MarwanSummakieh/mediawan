@@ -119,7 +119,8 @@ export function createTorrentDownloads(
       const actual = assessRelease(
         {
           ...job.release,
-          label: file.path,
+          label: `${job.release.label}\n${file.path}`,
+          filename: file.path,
           sizeBytes: file.bytes,
           resolution: releaseFacts({ label: file.path }).resolution ?? job.release.resolution,
         },

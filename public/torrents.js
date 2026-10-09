@@ -18,7 +18,7 @@ export async function downloadSeason(title, season) {
           ? '<p>This season is already being queued.</p><button id="season-view" class="primary">View downloads</button>'
           : `<form id="season-download-form" class="form">
       <label>Download with<select name="provider"><option value="realdebrid" ${!data.debridConfigured ? 'disabled' : ''} ${data.debridConfigured ? 'selected' : ''}>Real-Debrid</option><option value="torrent" ${!data.torrentConfigured ? 'disabled' : ''} ${!data.debridConfigured && data.torrentConfigured ? 'selected' : ''}>Direct torrent · qBittorrent</option></select></label>
-      <label>Quality<select name="resolution">${data.resolutions.map((resolution) => `<option value="${resolution}" ${resolution === (data.resolutions.includes(1080) ? 1080 : data.resolutions[0]) ? 'selected' : ''}>${resolution === 2160 ? '4K' : resolution + 'p'}</option>`).join('')}</select></label>
+      <label>Quality<select name="resolution">${data.resolutions.map((resolution) => `<option value="${resolution}">${resolution}p WEB-DL · YTS only</option>`).join('')}</select></label>
       <p class="meta">Chooses a matching release for each episode. Downloaded and queued episodes are skipped. Unavailable episodes appear in Downloads.</p>
       <p id="season-provider-note" class="meta"></p>
       ${!enabled ? '<p class="error">No download provider is configured.</p>' : ''}
@@ -92,17 +92,18 @@ export async function releases(itemId) {
       const direct = provider === 'torrent';
       const items = data.items
         .map((r, index) => ({ ...r, index }))
-        .filter((r) => !direct || r.accepted || rejected);
+        .filter((r) => r.qualityAccepted && (!direct || r.accepted || rejected));
       if (direct)
         items.sort(
           (a, b) => Number(b.accepted) - Number(a.accepted) || (b.seeders || 0) - (a.seeders || 0),
         );
       $('#dialog-content').innerHTML =
         `<h2>Choose a release</h2><label>Download with<select id="release-provider"><option value="torrent" ${direct ? 'selected' : ''} ${!data.torrentConfigured ? 'disabled' : ''}>Direct torrent · qBittorrent</option><option value="realdebrid" ${!direct ? 'selected' : ''} ${!data.debridConfigured ? 'disabled' : ''}>Real-Debrid</option></select></label>
-        <p class="meta">${direct ? `At least ${data.rules.minSeeders} reported seeders · ${data.rules.resolutions.map((n) => n + 'p').join(' / ')} · ${data.rules.movieMaxGB} GB movies / ${data.rules.episodeMaxGB} GB episodes. Counts may be stale; live progress is checked after selection. Direct torrents connect this PC to peers.` : 'Download the original file through Real-Debrid.'}</p>
-        ${direct ? `<label class="check"><input id="show-rejected" type="checkbox" ${rejected ? 'checked' : ''}>Show filtered releases (${data.items.filter((r) => !r.accepted).length})</label>` : ''}
+        <p class="meta">${esc(data.qualityRule)}. Required for both providers. No quality fallback.</p>
+        <p class="meta">${direct ? `At least ${data.rules.minSeeders} reported seeders · ${data.rules.movieMaxGB} GB movies / ${data.rules.episodeMaxGB} GB episodes. Counts may be stale; live progress is checked after selection. Direct torrents connect this PC to peers.` : 'Download the original file through Real-Debrid.'}</p>
+        ${direct ? `<label class="check"><input id="show-rejected" type="checkbox" ${rejected ? 'checked' : ''}>Show filtered releases (${data.items.filter((r) => r.qualityAccepted && !r.accepted).length})</label>` : ''}
         ${items.map((r) => `<button class="release" data-release="${r.index}" ${direct && !r.accepted ? 'disabled' : ''}>${esc(r.label)}${direct ? `<span class="meta">${r.accepted ? 'Meets search rules' : esc(r.reasons.join(' · '))}</span>` : ''}</button>`).join('')}
-        ${!items.length ? '<p>No releases meet these rules. Review the filtered results or adjust Torrent rules in Settings.</p>' : ''}`;
+        ${!items.length ? `<p>No releases meet these rules. ${esc(data.qualityRule)} is required; other qualities and sources cannot be selected.</p>` : ''}`;
       $('#release-provider').onchange = (e) => {
         provider = e.target.value;
         render();
@@ -174,9 +175,8 @@ export function torrentRulesForm(admin) {
     ['seedRatio', 'Stop seeding at ratio', 0, 10, 0.1],
     ['seedMinutes', 'Or after seeding (minutes)', 0, 1440, 1],
   ];
-  return `<section class="section"><form id="torrent-rules" class="form"><h2>Torrent rules</h2><p class="meta">qBittorrent: ${admin.torrentConfigured ? 'Configured' : 'Not configured'}. Rules apply to new jobs and retries. Existing jobs keep their saved rules. CAM / TS / screeners are always excluded.</p>${fields.map(([key, label, min, max, step]) => `<label>${label}<input type="number" name="${key}" min="${min}" max="${max}" step="${step}" required value="${r[key]}"></label>`).join('')}
-    <fieldset><legend>Accepted resolutions</legend>${[480, 720, 1080, 2160].map((n) => `<label class="check"><input type="checkbox" name="resolutions" value="${n}" ${r.resolutions.includes(n) ? 'checked' : ''}>${n === 2160 ? '2160p / 4K' : n + 'p'}</label>`).join('')}</fieldset>
-    <label class="check"><input type="checkbox" name="rejectUnknown" ${r.rejectUnknown ? 'checked' : ''}>Reject unknown seed count, size or resolution</label><p class="meta">Timeouts stop the selected torrent and retain partial data. They never choose another release automatically. Uploads can continue until the ratio or time limit is reached.</p><button class="primary">Save torrent rules</button><button type="button" id="torrent-health">Test connection</button><p id="torrent-status" role="status"></p></form></section>`;
+  return `<section class="section"><form id="torrent-rules" class="form"><h2>Torrent rules</h2><p class="meta">qBittorrent: ${admin.torrentConfigured ? 'Configured' : 'Not configured'}. Rules apply to new jobs and retries. Existing jobs keep their saved rules. CAM / TS / screeners are always excluded.</p><p class="meta">Required quality for both providers: YTS only · 1080p WEB-DL for anime and TV shows · 2160p WEB-DL for movies. This rule cannot be changed.</p>${fields.map(([key, label, min, max, step]) => `<label>${label}<input type="number" name="${key}" min="${min}" max="${max}" step="${step}" required value="${r[key]}"></label>`).join('')}
+    <label class="check"><input type="checkbox" name="rejectUnknown" ${r.rejectUnknown ? 'checked' : ''}>Reject unknown seed count or size</label><p class="meta">Timeouts stop the selected torrent and retain partial data. They never choose another release automatically. Uploads can continue until the ratio or time limit is reached.</p><button class="primary">Save torrent rules</button><button type="button" id="torrent-health">Test connection</button><p id="torrent-status" role="status"></p></form></section>`;
 }
 export function bindTorrentRules() {
   const form = $('#torrent-rules');
@@ -187,7 +187,6 @@ export function bindTorrentRules() {
       payload = {};
     for (const [key, value] of data)
       if (!['resolutions', 'rejectUnknown'].includes(key)) payload[key] = Number(value);
-    payload.resolutions = data.getAll('resolutions').map(Number);
     payload.rejectUnknown = data.has('rejectUnknown');
     try {
       await api('/api/admin/torrent-rules', payload, 'PUT');
