@@ -374,10 +374,10 @@ export async function closeLive() {
   }
   const player = $('#live-player'),
     restore = player?.restoreFocus;
+  if (document.fullscreenElement && player?.contains(document.fullscreenElement))
+    await document.exitFullscreen().catch(() => {});
   player?.remove();
   restore?.focus();
-  if (document.fullscreenElement?.id === 'live-video')
-    await document.exitFullscreen().catch(() => {});
   if (session)
     await api(`/api/live/sessions/${session.id}`, { lease: session.lease }, 'DELETE').catch(
       () => {},
@@ -392,10 +392,26 @@ async function playLive(channelId) {
   player.tabIndex = -1;
   player.restoreFocus = document.activeElement;
   player.innerHTML =
-    '<header><button id="live-close">Back to sports</button><strong id="live-channel-name">Opening channel…</strong><span class="sports-status live">Live TV</span><button id="live-cast" disabled>Cast to TV</button><button id="live-cast-pause" hidden>Pause TV</button><button id="live-cast-stop" hidden>Stop casting</button></header><video id="live-video" controls playsinline></video><p id="live-player-status" role="status">Starting live playback…</p>';
+    '<header><button id="live-close">Back to sports</button><strong id="live-channel-name">Opening channel…</strong><span class="sports-status live">Live TV</span></header><div id="live-screen"><video id="live-video" controls controlslist="nofullscreen" playsinline></video><div class="live-player-controls" role="toolbar" aria-label="Live playback controls"><button id="live-cast" disabled>Cast to TV</button><button id="live-cast-pause" hidden>Pause TV</button><button id="live-cast-stop" hidden>Stop casting</button><button id="live-fullscreen" aria-label="Enter fullscreen" title="Enter fullscreen"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/></svg></button></div></div><p id="live-player-status" role="status">Starting live playback…</p>';
   document.body.appendChild(player);
   $('#live-close').onclick = closeLive;
   $('#live-close').focus();
+  const screen = $('#live-screen'),
+    fullscreen = $('#live-fullscreen');
+  fullscreen.hidden = !screen.requestFullscreen;
+  screen.onfullscreenchange = () => {
+    const label = document.fullscreenElement === screen ? 'Exit fullscreen' : 'Enter fullscreen';
+    fullscreen.setAttribute('aria-label', label);
+    fullscreen.title = label;
+  };
+  fullscreen.onclick = async () => {
+    try {
+      if (document.fullscreenElement === screen) await document.exitFullscreen();
+      else await screen.requestFullscreen();
+    } catch {
+      toast('Fullscreen could not open.');
+    }
+  };
   try {
     const session = await api(`/api/live/channels/${channelId}/play`, {});
     if (ticket !== playbackGeneration) {
