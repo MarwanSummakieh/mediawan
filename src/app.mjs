@@ -38,6 +38,7 @@ export function createApplication(config, dependencies = {}) {
   const live = createLiveStore(store, config, dependencies.live);
   const livePlayback = createLivePlayback(config, live, {
     activeConversions: () => media.active(),
+    userActive: (userId) => !!store.one('SELECT id FROM users WHERE id=? AND active=1', userId),
     ...dependencies.livePlayback,
   });
   media.externalSessions = () => livePlayback.active();
@@ -49,7 +50,7 @@ export function createApplication(config, dependencies = {}) {
       'Referrer-Policy': 'same-origin',
       'X-Frame-Options': 'DENY',
       'Content-Security-Policy':
-        "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' https: data:; media-src 'self' blob:; connect-src 'self'; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
+        "default-src 'self'; script-src 'self' https://www.gstatic.com; style-src 'self'; img-src 'self' https: data:; media-src 'self' blob:; connect-src 'self'; frame-src https://www.gstatic.com; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
     });
     if (req.path.startsWith('/api')) res.set('Cache-Control', 'no-store');
     if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
@@ -79,6 +80,24 @@ export function createApplication(config, dependencies = {}) {
   app.get('/healthz', (req, res) =>
     res.json({ ok: true, version: '2.0.0', revision: process.env.APP_REVISION || 'local' }),
   );
+  // Cast receivers cannot send the browser's login cookie. These read-only
+  // URLs require a scoped, expiring receiver token issued by an authenticated viewer.
+  app.use('/cast/live', (req, res, next) => {
+    res.set({
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+      'Access-Control-Allow-Headers': 'Range',
+      'Access-Control-Expose-Headers': 'Content-Length, Content-Range, Accept-Ranges',
+      'Cache-Control': 'no-store',
+      'Referrer-Policy': 'no-referrer',
+    });
+    if (req.method === 'OPTIONS') return res.status(204).end();
+    next();
+  });
+  app.get(
+    '/cast/live/:id/:file',
+    wrap((req, res) => livePlayback.media(req, res, true)),
+  );
   setupAuth(app, store, config);
   const admin = (req) => {
     if (req.user.role !== 'admin') fail(403, 'Administrator access required');
@@ -105,6 +124,10 @@ export function createApplication(config, dependencies = {}) {
     wrap(async (req, res) =>
       res.json(await livePlayback.start(req.user, req.params.id, req.socket.localPort)),
     ),
+  );
+  app.post(
+    '/api/live/sessions/:id/cast',
+    wrap((req, res) => res.json(livePlayback.cast(req.user, req.params.id, req.body.lease))),
   );
   app.post(
     '/api/live/sessions/:id/heartbeat',

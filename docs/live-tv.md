@@ -16,8 +16,16 @@ Playlist stream URLs, guide URLs and provider credentials stay on the server. Vi
 
 ## Playback
 
-Watch opens the chosen channel through a bounded FFmpeg HLS buffer. Viewers of the same channel share one upstream session. Different channels are limited by provider settings, and live playback shares a two-conversion budget with local playback. Video uses software H.264 conversion up to 1080p and AAC audio; FFmpeg must be installed. Output retains eight segments and a small deletion margin rather than recording indefinitely. Closing playback releases the viewer; disconnected viewers expire after 45 seconds. Source URLs never reach the browser or logs.
+Watch opens the chosen channel through a bounded FFmpeg HLS buffer. Viewers of the same channel share one upstream session. Different channels are limited by provider settings, and live playback shares a two-conversion budget with local playback. Video uses software H.264 High Profile, level 4.1, up to 1080p at 30 fps, with a 6 Mbps bitrate limit and stereo AAC audio. This also fits first- and second-generation Chromecast video limits. FFmpeg must be installed. Output retains eight segments and a small deletion margin rather than recording indefinitely. Closing playback releases the viewer; disconnected viewers expire after 45 seconds. Source URLs never reach the browser or logs. The upstream proxy retains media file extensions so FFmpeg can validate HLS transport-stream and fragmented-MP4 segments.
 
-No Google service or external calendar is involved. A guide containing only channel-name placeholders cannot populate match details; use a richer XMLTV source or add events directly.
+## Chromecast
+
+In Chrome, open a channel and choose **Cast to TV**, then select your Chromecast. Use HTTPS (or localhost for development), and keep the sender and TV on the same Wi-Fi. The TV must be able to reach the Mediawan address used by the browser; localhost is not reachable from a separate TV. Casting uses Google's sender SDK and Default Media Receiver, including older Chromecast dongles. There is no custom receiver registration or additional provider connection.
+
+Local playback pauses after the TV accepts the stream. **Pause TV** / **Play on TV** controls the receiver; **Stop casting** returns playback to the browser. Back to sports stops the cast. Closing the browser tab leaves the TV playing; the receiver's media requests keep its stream alive until playback stops or its six-hour access grant expires.
+
+Receiver URLs use a random, session-scoped token instead of a login cookie, with CORS limited to the read-only cast media route. Issuing another grant for that viewer revokes the previous one. Stopping casting revokes its token. Invalid, expired and disabled-user grants cannot fetch media. Browser playback URLs still require login. Provider credentials remain on the server.
+
+No external calendar is involved. A guide containing only channel-name placeholders cannot populate match details; use a richer XMLTV source or add events directly.
 
 Run `npm test` and `npm run build:tv`. Automated checks use synthetic playlists, guides and generated video. Physical Tizen operation and private provider availability still require deployment acceptance checks.

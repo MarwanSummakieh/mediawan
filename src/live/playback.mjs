@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { Readable } from 'node:stream';
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { openLiveStream } from './fetch.mjs';
 import { fail, id } from '../store.mjs';
 
@@ -61,6 +61,16 @@ export function liveArgs(input) {
     "scale=w='min(1920,iw)':h='min(1080,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2,format=yuv420p",
     '-crf',
     '22',
+    '-profile:v',
+    'high',
+    '-level:v',
+    '4.1',
+    '-r',
+    '30',
+    '-maxrate',
+    '6M',
+    '-bufsize',
+    '12M',
     '-force_key_frames',
     'expr:gte(t,n_forced*2)',
     '-c:a',
@@ -87,7 +97,7 @@ export function liveArgs(input) {
 export function createLivePlayback(
   config,
   live,
-  { openStream = openLiveStream, activeConversions = () => 0 } = {},
+  { openStream = openLiveStream, activeConversions = () => 0, userActive = () => true } = {},
 ) {
   const sessions = new Map();
   let operations = Promise.resolve(),
@@ -115,7 +125,13 @@ export function createLivePlayback(
     await fs.rm(session.directory, { recursive: true, force: true }).catch(() => {});
   }
   function resource(session, url) {
-    const key = createHash('sha256').update(url).digest('hex').slice(0, 32);
+    // HLS demuxers validate segment extensions even when the media is proxied.
+    // Retain only the media suffix; the provider path and credentials stay private.
+    const extension =
+      /\.(m3u8|ts|mpegts|aac|ac3|eac3|mp3|mp4|m4a|m4s|m4v|mov|cmfv|cmfa|fmp4|vtt|webvtt)$/i
+        .exec(new URL(url).pathname)?.[0]
+        .toLowerCase() || '';
+    const key = createHash('sha256').update(url).digest('hex').slice(0, 32) + extension;
     session.resources.delete(key);
     session.resources.set(key, url);
     if (!session.rootResource) session.rootResource = key;
@@ -130,7 +146,7 @@ export function createLivePlayback(
   function viewer(user, key, lease) {
     const session = sessions.get(key),
       v = session?.viewers.get(lease);
-    if (!session || !v || v.userId !== user.id || session.failed)
+    if (!session || !v || v.userId !== user.id || session.failed || v.expires <= Date.now())
       fail(404, 'Live session ended. Open the channel again.');
     v.touched = Date.now();
     return session;
@@ -138,7 +154,8 @@ export function createLivePlayback(
   const timer = setInterval(() => {
     void serial(async () => {
       for (const s of sessions.values()) {
-        for (const [key, v] of s.viewers) if (Date.now() - v.touched > 45000) s.viewers.delete(key);
+        for (const [key, v] of s.viewers)
+          if (Date.now() - v.touched > 45000 || v.expires <= Date.now()) s.viewers.delete(key);
         if (s.ready) {
           try {
             if (Date.now() - (await fs.stat(path.join(s.directory, 'index.m3u8'))).mtimeMs > 45000)
@@ -238,6 +255,19 @@ export function createLivePlayback(
       viewer(user, key, lease);
       return { ok: true };
     },
+    cast(user, key, lease) {
+      const s = viewer(user, key, lease);
+      // One receiver grant per browser viewer; rotating it revokes an older URL.
+      for (const [token, v] of s.viewers) if (v.ownerLease === lease) s.viewers.delete(token);
+      const token = randomBytes(32).toString('hex');
+      s.viewers.set(token, {
+        userId: user.id,
+        ownerLease: lease,
+        touched: Date.now(),
+        expires: Date.now() + 6 * 60 * 60 * 1000,
+      });
+      return { lease: token, url: `/cast/live/${s.id}/index.m3u8?token=${token}` };
+    },
     release(user, key, lease) {
       return serial(async () => {
         const s = sessions.get(key);
@@ -246,15 +276,27 @@ export function createLivePlayback(
         if (!s.viewers.size) await stop(s);
       });
     },
-    async media(req, res) {
-      const s = viewer(req.user, req.params.id, req.query.lease),
-        file = req.params.file;
+    async media(req, res, casting = false) {
+      let s;
+      const grant = casting ? req.query.token : req.query.lease;
+      if (casting) {
+        s = sessions.get(req.params.id);
+        const v = s?.viewers.get(grant);
+        if (!v?.ownerLease || v.expires <= Date.now() || !userActive(v.userId))
+          fail(404, 'Live cast ended. Cast the channel again.');
+        s = viewer({ id: v.userId }, req.params.id, grant);
+        const sender = s.viewers.get(v.ownerLease);
+        if (sender) sender.touched = Date.now();
+      } else s = viewer(req.user, req.params.id, grant);
+      const file = req.params.file;
       if (!/^(index\.m3u8|segment-\d{9}\.ts)$/.test(file)) fail(404, 'Playback resource not found');
       if (file === 'index.m3u8') {
         const text = await fs.readFile(path.join(s.directory, file), 'utf8');
         res
           .type('application/vnd.apple.mpegurl')
-          .send(text.replace(/^(segment-\d{9}\.ts)$/gm, `$1?lease=${req.query.lease}`));
+          .send(
+            text.replace(/^(segment-\d{9}\.ts)$/gm, `$1?${casting ? 'token' : 'lease'}=${grant}`),
+          );
       } else res.type('video/mp2t').sendFile(path.join(s.directory, file));
     },
     async source(req, res) {

@@ -1,10 +1,12 @@
 import { $, esc, api, toast, modal, closeModal, heading, empty } from './core.js';
+import { prepareLiveCast, bindLiveCast } from './live-cast.js';
 
 let schedule = null,
   channels = [],
   liveSession = null,
   hls = null,
   heartbeat = null,
+  casting = null,
   playbackGeneration = 0;
 const timezone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 function dateKey(time = new Date()) {
@@ -38,6 +40,7 @@ function eventRow(event, admin) {
   return `<article class="sports-event"><div class="sports-event-time"><time datetime="${new Date(event.start).toISOString()}">${esc(time(event.start))}</time><span class="sports-status ${event.status}">${statusLabel[event.status]}</span></div><div class="sports-event-main"><p class="sports-competition">${esc([event.sport, event.competition].filter(Boolean).join(' · '))}</p><h3>${esc(event.title)}</h3>${event.subtitle ? `<p class="meta">${esc(event.subtitle)}</p>` : ''}<p class="meta">${event.channels.length ? `${event.channels.length} channel${event.channels.length === 1 ? '' : 's'}${languages.length ? ' · ' + esc(languages.join(' / ')) : ''}` : 'No channel linked'} · Until ${esc(time(event.end))}</p></div><div class="sports-event-actions">${event.status !== 'finished' && event.channels.length ? `<button class="${event.status === 'live' ? 'primary' : ''}" data-action="sports-watch" data-id="${esc(event.id)}">${event.status === 'live' ? 'Watch' : 'View channels'}</button>` : ''}${admin && event.source === 'manual' ? `<button class="quiet" data-action="sports-edit" data-id="${esc(event.id)}">Edit</button>` : ''}</div></article>`;
 }
 export async function sportsPage(url, user) {
+  void prepareLiveCast().catch(() => {});
   const date = url.searchParams.get('date') || dateKey();
   schedule = await api(`/api/sports?${new URLSearchParams({ date, timezone: timezone() })}`);
   const sport = url.searchParams.get('sport') || '',
@@ -325,6 +328,9 @@ export async function sportsAction(button, context) {
 export const livePlaying = () => !!$('#live-player');
 export async function closeLive() {
   ++playbackGeneration;
+  const cast = casting;
+  casting = null;
+  await cast?.close();
   clearInterval(heartbeat);
   heartbeat = null;
   const session = liveSession;
@@ -359,7 +365,7 @@ async function playLive(channelId) {
   player.tabIndex = -1;
   player.restoreFocus = document.activeElement;
   player.innerHTML =
-    '<header><button id="live-close">Back to sports</button><strong id="live-channel-name">Opening channel…</strong><span class="sports-status live">Live TV</span></header><video id="live-video" controls playsinline></video><p id="live-player-status" role="status">Starting live playback…</p>';
+    '<header><button id="live-close">Back to sports</button><strong id="live-channel-name">Opening channel…</strong><span class="sports-status live">Live TV</span><button id="live-cast" disabled>Cast to TV</button><button id="live-cast-pause" hidden>Pause TV</button><button id="live-cast-stop" hidden>Stop casting</button></header><video id="live-video" controls playsinline></video><p id="live-player-status" role="status">Starting live playback…</p>';
   document.body.appendChild(player);
   $('#live-close').onclick = closeLive;
   $('#live-close').focus();
@@ -387,10 +393,10 @@ async function playLive(channelId) {
         $('#live-player-status').textContent = 'Press play to watch this channel.';
       });
     video.onplaying = () => {
-      $('#live-player-status').textContent = '';
+      if (!casting?.active) $('#live-player-status').textContent = '';
     };
     video.onwaiting = () => {
-      $('#live-player-status').textContent = 'Buffering…';
+      if (!casting?.active) $('#live-player-status').textContent = 'Buffering…';
     };
     video.onerror = () => {
       $('#live-player-status').textContent =
@@ -413,6 +419,22 @@ async function playLive(channelId) {
       await closeLive();
       toast('This browser cannot play live HLS video.');
     }
+    if (ticket === playbackGeneration && liveSession)
+      casting = bindLiveCast({
+        session,
+        button: $('#live-cast'),
+        stopButton: $('#live-cast-stop'),
+        pauseButton: $('#live-cast-pause'),
+        status: $('#live-player-status'),
+        onStart: () => {
+          video.pause();
+          hls?.stopLoad();
+        },
+        onStop: () => {
+          hls?.startLoad(-1);
+          void play();
+        },
+      });
   } catch (error) {
     if (ticket === playbackGeneration) {
       await closeLive();

@@ -341,122 +341,273 @@ test('sports API requires login, restricts management, validates events and neve
   );
 });
 
-test(
-  'real live FFmpeg playback shares one stream, enforces limits and authenticates media and cleanup',
-  { timeout: 45000 },
-  async (t) => {
-    const { root, config, cleanup } = fixture(),
-      video = path.join(root, 'fixture.ts');
-    execFileSync(
-      config.ffmpeg,
-      [
-        '-v',
-        'error',
-        '-f',
-        'lavfi',
-        '-i',
-        'color=c=0x354638:s=320x180:r=24',
-        '-f',
-        'lavfi',
-        '-i',
-        'sine=frequency=220:sample_rate=44100',
-        '-t',
-        '60',
-        '-c:v',
-        'libx264',
-        '-preset',
-        'ultrafast',
-        '-g',
-        '48',
-        '-pix_fmt',
-        'yuv420p',
-        '-c:a',
-        'aac',
-        '-f',
-        'mpegts',
-        video,
-      ],
-      { windowsHide: true },
-    );
-    const bytes = readFileSync(video);
-    const provider = await listening(
-      http.createServer((_req, res) => {
-        res.writeHead(200, { 'Content-Type': 'video/mp2t' });
-        let offset = 0;
-        const timer = setInterval(() => {
-          const chunk = bytes.subarray(offset, offset + 188 * 35);
-          offset += chunk.length;
-          if (chunk.length) res.write(chunk);
-          else {
-            clearInterval(timer);
-            res.end();
+for (const sourceType of ['mpegts', 'hls-ts', 'hls-mp4'])
+  test(
+    `real live FFmpeg ${sourceType} playback shares one stream, enforces limits and authenticates media and cleanup`,
+    { timeout: 45000 },
+    async (t) => {
+      const { root, config, cleanup } = fixture(),
+        video = path.join(root, sourceType === 'mpegts' ? 'fixture.ts' : 'fixture.m3u8');
+      execFileSync(
+        config.ffmpeg,
+        [
+          '-v',
+          'error',
+          '-f',
+          'lavfi',
+          '-i',
+          'color=c=0x354638:s=320x180:r=24',
+          '-f',
+          'lavfi',
+          '-i',
+          'sine=frequency=220:sample_rate=44100',
+          '-t',
+          '60',
+          '-c:v',
+          'libx264',
+          '-preset',
+          'ultrafast',
+          '-g',
+          '48',
+          '-pix_fmt',
+          'yuv420p',
+          '-c:a',
+          'aac',
+          ...(sourceType === 'mpegts'
+            ? ['-f', 'mpegts']
+            : [
+                '-f',
+                'hls',
+                '-hls_time',
+                '2',
+                '-hls_list_size',
+                '0',
+                ...(sourceType === 'hls-mp4' ? ['-hls_segment_type', 'fmp4'] : []),
+              ]),
+          video,
+        ],
+        { windowsHide: true, cwd: root },
+      );
+      const bytes = readFileSync(video);
+      const requested = [];
+      const providerStarted = Date.now();
+      const provider = await listening(
+        http.createServer((req, res) => {
+          requested.push(req.url);
+          if (sourceType !== 'mpegts') {
+            const file = new URL(req.url, 'http://fixture').pathname.slice(1);
+            // A plain-text PHP endpoint and nested variant exercise manifest sniffing.
+            if (file === 'stream.php') {
+              res.writeHead(200, { 'Content-Type': 'text/plain' });
+              res.end('#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=500000\nfixture.m3u8?secret=hidden\n');
+            } else if (file === 'fixture.m3u8') {
+              res.writeHead(200, { 'Content-Type': 'application/vnd.apple.mpegurl' });
+              const available = 8 + Math.floor((Date.now() - providerStarted) / 500);
+              res.end(
+                bytes
+                  .toString()
+                  .replace('#EXT-X-ENDLIST', '')
+                  .replace(/#EXTINF:[^\n]+\nfixture(\d+)\.(?:ts|m4s)\r?\n/g, (entry, index) =>
+                    Number(index) < available ? entry : '',
+                  ),
+              );
+            } else if (/^(fixture\d+\.(ts|m4s)|init\.mp4)$/.test(file)) {
+              const content = readFileSync(path.join(root, file));
+              res.setHeader('Content-Type', file.endsWith('.ts') ? 'video/mp2t' : 'video/mp4');
+              res.setHeader('Content-Length', content.length);
+              res.end(content);
+            } else res.writeHead(404).end();
+            return;
           }
-        }, 40);
-        res.on('close', () => clearInterval(timer));
-      }),
-    );
-    const application = createApplication(config, {
-      livePlayback: {
-        openStream: async (_url, { signal }) => {
-          const response = await new Promise((resolve, reject) => {
-            const req = http.get(
-              `http://127.0.0.1:${provider.address().port}/fixture`,
-              { signal },
-              resolve,
-            );
-            req.on('error', reject);
-          });
-          return { response, url: 'https://provider.example/fixture.ts' };
+          res.writeHead(200, { 'Content-Type': 'video/mp2t' });
+          let offset = 0;
+          const timer = setInterval(() => {
+            const chunk = bytes.subarray(offset, offset + 188 * 35);
+            offset += chunk.length;
+            if (chunk.length) res.write(chunk);
+            else {
+              clearInterval(timer);
+              res.end();
+            }
+          }, 40);
+          res.on('close', () => clearInterval(timer));
+        }),
+      );
+      const application = createApplication(config, {
+        livePlayback: {
+          openStream: async (url, { signal }) => {
+            const resource =
+              sourceType === 'mpegts'
+                ? '/fixture'
+                : url.includes('/live/')
+                  ? '/stream.php'
+                  : new URL(url).pathname + new URL(url).search;
+            const response = await new Promise((resolve, reject) => {
+              const req = http.get(
+                `http://127.0.0.1:${provider.address().port}${resource}`,
+                { signal },
+                resolve,
+              );
+              req.on('error', reject);
+            });
+            return { response, url: `https://provider.example${resource}` };
+          },
         },
-      },
-    });
-    const server = await listening(application.app),
-      base = `http://127.0.0.1:${server.address().port}`;
-    t.after(async () => {
-      await application.close();
-      await new Promise((r) => server.close(r));
-      await new Promise((r) => provider.close(r));
-      cleanup();
-    });
-    await application.live.importPlaylist(playlist);
-    const headers = await login(base),
-      channels = await application.live.channels();
-    const start = async (channel) =>
-      fetch(base + `/api/live/channels/${channel}/play`, { method: 'POST', headers, body: '{}' });
-    const firstResponse = await start(channels[0].id);
-    assert.equal(firstResponse.status, 200);
-    const first = await firstResponse.json(),
-      second = await (await start(channels[0].id)).json();
-    assert.equal(second.id, first.id);
-    assert.notEqual(first.lease, second.lease);
-    assert.equal(application.livePlayback.active(), 1);
-    assert.equal((await start(channels[1].id)).status, 409);
-    assert.equal((await fetch(base + first.url)).status, 401);
-    const manifest = await (await fetch(base + first.url, { headers })).text();
-    assert.match(manifest, /#EXTINF:/);
-    assert(!manifest.includes('private-secret'));
-    assert.match(manifest, /lease=/);
-    const segment = manifest.split('\n').find((line) => /^segment-/.test(line));
-    assert.equal(
-      (await fetch(base + `/api/live/sessions/${first.id}/${segment}`, { headers })).status,
-      200,
-    );
-    assert.equal(
-      (await fetch(base + `/api/live/sessions/${first.id}/index.m3u8?lease=wrong`, { headers }))
-        .status,
-      404,
-    );
-    await fetch(base + `/api/live/sessions/${first.id}`, {
-      method: 'DELETE',
-      headers,
-      body: JSON.stringify({ lease: first.lease }),
-    });
-    assert.equal(application.livePlayback.active(), 1);
-    await fetch(base + `/api/live/sessions/${second.id}`, {
-      method: 'DELETE',
-      headers,
-      body: JSON.stringify({ lease: second.lease }),
-    });
-    assert.equal(application.livePlayback.active(), 0);
-  },
-);
+      });
+      const server = await listening(application.app),
+        base = `http://127.0.0.1:${server.address().port}`;
+      t.after(async () => {
+        await application.close();
+        await new Promise((r) => server.close(r));
+        await new Promise((r) => provider.close(r));
+        cleanup();
+      });
+      await application.live.importPlaylist(playlist);
+      const headers = await login(base),
+        channels = await application.live.channels();
+      const start = async (channel) =>
+        fetch(base + `/api/live/channels/${channel}/play`, { method: 'POST', headers, body: '{}' });
+      const firstResponse = await start(channels[0].id);
+      assert.equal(firstResponse.status, 200);
+      const first = await firstResponse.json(),
+        second = await (await start(channels[0].id)).json();
+      if (sourceType !== 'mpegts') {
+        assert(requested.includes('/stream.php'));
+        assert(requested.includes('/fixture.m3u8?secret=hidden'));
+        assert(requested.some((url) => /fixture\d+\.(ts|m4s)$/.test(url)));
+        if (sourceType === 'hls-mp4') assert(requested.includes('/init.mp4'));
+      }
+      assert.equal(second.id, first.id);
+      assert.notEqual(first.lease, second.lease);
+      assert.equal(application.livePlayback.active(), 1);
+      assert.equal((await start(channels[1].id)).status, 409);
+      assert.equal((await fetch(base + first.url)).status, 401);
+      const manifest = await (await fetch(base + first.url, { headers })).text();
+      assert.match(manifest, /#EXTINF:/);
+      assert(!manifest.includes('private-secret'));
+      assert.match(manifest, /lease=/);
+      const segment = manifest.split('\n').find((line) => /^segment-/.test(line));
+      assert.equal(
+        (await fetch(base + `/api/live/sessions/${first.id}/${segment}`, { headers })).status,
+        200,
+      );
+      assert.equal(
+        (await fetch(base + `/api/live/sessions/${first.id}/index.m3u8?lease=wrong`, { headers }))
+          .status,
+        404,
+      );
+      const castPath = `/api/live/sessions/${first.id}/cast`;
+      assert.equal(
+        (
+          await fetch(base + castPath, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ lease: first.lease }),
+          })
+        ).status,
+        401,
+      );
+      assert.equal(
+        (
+          await fetch(base + castPath, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ lease: 'wrong' }),
+          })
+        ).status,
+        404,
+      );
+      const cast = await (
+        await fetch(base + castPath, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ lease: first.lease }),
+        })
+      ).json();
+      assert.match(cast.lease, /^[a-f0-9]{64}$/);
+      const castResponse = await fetch(base + cast.url, {
+        headers: { Origin: 'https://www.gstatic.com' },
+      });
+      assert.equal(castResponse.status, 200);
+      assert.equal(castResponse.headers.get('access-control-allow-origin'), '*');
+      assert.equal(castResponse.headers.get('cache-control'), 'no-store');
+      const castManifest = await castResponse.text();
+      assert.match(castManifest, /token=/);
+      assert(!castManifest.includes('private-secret'));
+      const castSegment = castManifest.split('\n').find((line) => /^segment-/.test(line));
+      const segmentResponse = await fetch(base + `/cast/live/${first.id}/${castSegment}`, {
+        headers: { Range: 'bytes=0-187' },
+      });
+      assert.equal(segmentResponse.status, 206);
+      assert.equal((await segmentResponse.arrayBuffer()).byteLength, 188);
+      assert.equal(
+        (await fetch(base + `/cast/live/${first.id}/index.m3u8?token=${first.lease}`)).status,
+        404,
+      );
+      assert.equal(
+        (await fetch(base + `/cast/live/${first.id}/index.m3u8?token=wrong`)).status,
+        404,
+      );
+      assert.equal(
+        (await fetch(base + `/cast/live/${first.id}/catalog.json?token=${cast.lease}`)).status,
+        404,
+      );
+      assert.equal(
+        (
+          await fetch(base + cast.url, {
+            method: 'OPTIONS',
+            headers: {
+              Origin: 'https://www.gstatic.com',
+              'Access-Control-Request-Headers': 'Range',
+            },
+          })
+        ).status,
+        204,
+      );
+      const rotated = await (
+        await fetch(base + castPath, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ lease: first.lease }),
+        })
+      ).json();
+      assert.equal((await fetch(base + cast.url)).status, 404);
+      const originalNow = Date.now;
+      let expired;
+      try {
+        Date.now = () => originalNow() + 6 * 60 * 60 * 1000 + 1;
+        expired = application.livePlayback.media(
+          { params: { id: first.id, file: 'index.m3u8' }, query: { token: rotated.lease } },
+          {},
+          true,
+        );
+      } finally {
+        Date.now = originalNow;
+      }
+      await assert.rejects(expired, /Live cast ended/);
+      application.store.run('UPDATE users SET active=0 WHERE email=?', 'admin@example.test');
+      assert.equal((await fetch(base + rotated.url)).status, 404);
+      application.store.run('UPDATE users SET active=1 WHERE email=?', 'admin@example.test');
+      await fetch(base + `/api/live/sessions/${first.id}`, {
+        method: 'DELETE',
+        headers,
+        body: JSON.stringify({ lease: first.lease }),
+      });
+      assert.equal(application.livePlayback.active(), 1);
+      await fetch(base + `/api/live/sessions/${second.id}`, {
+        method: 'DELETE',
+        headers,
+        body: JSON.stringify({ lease: second.lease }),
+      });
+      // The TV fetches independently after the sender tab closes.
+      assert.equal(application.livePlayback.active(), 1);
+      assert.equal((await fetch(base + rotated.url)).status, 200);
+      await fetch(base + `/api/live/sessions/${first.id}`, {
+        method: 'DELETE',
+        headers,
+        body: JSON.stringify({ lease: rotated.lease }),
+      });
+      assert.equal(application.livePlayback.active(), 0);
+      assert.equal((await fetch(base + rotated.url)).status, 404);
+    },
+  );
