@@ -2,7 +2,7 @@
 
 Open **Live sports** (`#/sports`) for the daily schedule. Choose a date, filter by sport or search by team/event/competition. Events are grouped into On now, Upcoming and Finished in the browser's local time zone, including broadcasts that cross midnight. On now follows the scheduled broadcast time; it does not assert a live score or provider availability.
 
-Events come from the configured XMLTV programme guide. Identical titles at the same start time are grouped with their channel choices. Channel-name placeholders, repeated placeholders, news, highlights and replays are excluded. No fixtures or broadcaster rights are invented. Browse channels remains available when guide details are missing.
+Events come from the configured XMLTV programme guide. Identical titles at the same start time are grouped with their channel choices. Channel-name placeholders, repeated placeholders, news, highlights and replays are excluded. No fixtures or broadcaster rights are invented. When no events are listed or match the selected filters, all imported channels can be searched directly on the page by name, language or quality. Search covers the entire channel list; Show more channels reveals additional results. Browse channels remains available alongside scheduled events.
 
 Administrators can **Add event**, enter a match or event, sport, competition and start/end time, and link imported channels. These events persist in the v2 database and can be edited or deleted. Events without linked channels remain visible without a Watch button. Upcoming events offer channel details; opening a channel plays its current broadcast. Finished events have no replay action.
 

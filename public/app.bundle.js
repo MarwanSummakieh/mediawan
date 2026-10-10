@@ -354,6 +354,8 @@
       (e) => (!sport || e.sport === sport) && `${e.title} ${e.competition}`.toLowerCase().includes(query.toLowerCase())
     );
     const filtered = matching.filter((e) => !status || e.status === status);
+    const browseInline = !filtered.length && schedule.channels > 0;
+    if (browseInline) await loadChannels();
     const count = (value) => matching.filter((e) => !value || e.status === value).length;
     let html = heading(
       "Live sports",
@@ -361,20 +363,23 @@
       admin ? '<div class="actions"><button data-action="sports-add">Add event</button><button class="quiet" data-action="sports-manage">Manage live TV</button></div>' : ""
     ).replace("page-heading", "page-heading sports-heading");
     html += `<div class="sports-datebar"><div class="actions"><a class="sports-day" href="${esc(sportsUrl({ date: dateOffset(date, -1) }))}" aria-label="Previous day">\u2190</a><h2>${esc(dateLabel(date))}</h2><a class="sports-day" href="${esc(sportsUrl({ date: dateOffset(date, 1) }))}" aria-label="Next day">\u2192</a></div><div class="actions"><a class="sports-day ${date === dateKey() ? "selected" : ""}" href="${esc(sportsUrl({ date: "" }))}">Today</a><label class="sports-date-label">Date<input id="sports-date" type="date" value="${esc(date)}" required></label></div></div>`;
-    html += `<div class="sports-filters"><nav class="sports-tabs" aria-label="Event status">${[
-      ["", "All events"],
-      ["live", "On now"],
-      ["upcoming", "Upcoming"]
-    ].map(
-      ([value, label]) => `<a href="${esc(sportsUrl({ status: value }))}" ${status === value ? 'aria-current="page"' : ""}>${label}<span>${count(value)}</span></a>`
-    ).join(
-      ""
-    )}</nav><form id="sports-filter" class="sports-filter-form"><label>Sport<select name="sport">${option("", "All sports", sport)}${schedule.sports.map((s) => option(s, s, sport)).join("")}</select></label><label>Find an event<input name="q" type="search" value="${esc(query)}" placeholder="Team, event or competition"></label><button>Search</button></form></div>`;
+    if (schedule.events.length)
+      html += `<div class="sports-filters"><nav class="sports-tabs" aria-label="Event status">${[
+        ["", "All events"],
+        ["live", "On now"],
+        ["upcoming", "Upcoming"]
+      ].map(
+        ([value, label]) => `<a href="${esc(sportsUrl({ status: value }))}" ${status === value ? 'aria-current="page"' : ""}>${label}<span>${count(value)}</span></a>`
+      ).join(
+        ""
+      )}</nav><form id="sports-filter" class="sports-filter-form"><label>Sport<select name="sport">${option("", "All sports", sport)}${schedule.sports.map((s) => option(s, s, sport)).join("")}</select></label><label>Find an event<input name="q" type="search" value="${esc(query)}" placeholder="Team, event or competition"></label><button>Search</button></form></div>`;
     if (["missing", "unavailable", "stale", "refreshing"].includes(schedule.guideStatus)) {
       const message = schedule.guideStatus === "refreshing" ? "The programme guide is updating." : schedule.guideStatus === "stale" ? "The guide could not be updated. Showing the saved schedule." : schedule.guideStatus === "unavailable" ? "The programme guide is unavailable. Check the guide source or add events." : schedule.guideConfigured ? "The programme guide has not been refreshed." : "Connect a programme guide to fill the daily schedule. Events can also be added manually.";
       html += `<p class="sports-notice" role="status">${esc(message)}${admin ? ' <button class="text-button" data-action="sports-manage">Manage live TV</button>' : ""}</p>`;
     }
-    if (!filtered.length)
+    if (browseInline)
+      html += `<p class="meta">${schedule.events.length ? "No matching events." : "No events listed for this day."}</p>`;
+    else if (!filtered.length)
       html += empty(
         schedule.events.length ? "No matching events" : "No events listed for this day",
         schedule.events.length ? "Try another sport or search." : schedule.channels ? "Check another day, open a channel below, or add a scheduled event." : "Import your live TV playlist to connect channels to matches and events.",
@@ -389,7 +394,7 @@
       if (items.length)
         html += `<section class="sports-section"><div class="section-heading"><h2>${title}</h2><span class="meta">${items.length} event${items.length === 1 ? "" : "s"}</span></div>${items.map((e) => eventRow(e, admin)).join("")}</section>`;
     }
-    html += `<section class="sports-channels section"><button data-action="sports-channels">Browse channels (${schedule.channels})</button><p class="meta">Times shown in ${esc(schedule.timezone)}. \u201COn now\u201D follows the scheduled broadcast time.</p></section>`;
+    html += browseInline ? `<section class="sports-channels section" aria-label="Live channels"><h2>Live channels</h2>${channelBrowser()}</section>` : `<section class="sports-channels section"><button data-action="sports-channels">Browse channels (${schedule.channels})</button><p class="meta">Times shown in ${esc(schedule.timezone)}. \u201COn now\u201D follows the scheduled broadcast time.</p></section>`;
     return html;
   }
   function dateLabel(date) {
@@ -399,12 +404,16 @@
     $("#sports-date").onchange = (e) => {
       if (e.target.value) location.hash = sportsUrl({ date: e.target.value });
     };
-    $("#sports-filter").onsubmit = (e) => {
-      e.preventDefault();
-      const data = new FormData(e.target);
-      location.hash = sportsUrl({ sport: data.get("sport"), q: data.get("q") });
-    };
-    $("#sports-filter select").onchange = () => $("#sports-filter").requestSubmit ? $("#sports-filter").requestSubmit() : $("#sports-filter").dispatchEvent(new Event("submit", { cancelable: true }));
+    const filter = $("#sports-filter");
+    if (filter) {
+      filter.onsubmit = (e) => {
+        e.preventDefault();
+        const data = new FormData(e.target);
+        location.hash = sportsUrl({ sport: data.get("sport"), q: data.get("q") });
+      };
+      $("#sports-filter select").onchange = () => $("#sports-filter").requestSubmit ? $("#sports-filter").requestSubmit() : $("#sports-filter").dispatchEvent(new Event("submit", { cancelable: true }));
+    }
+    if ($("#channel-search")) bindChannelBrowser();
   }
   async function loadChannels() {
     channels = (await api("/api/live/channels")).items;
@@ -414,6 +423,31 @@
     return items.map(
       (c) => `<button class="sports-channel" data-action="sports-play" data-id="${esc(c.id)}"><strong>${esc(c.name)}</strong><span class="meta">${esc([c.language, c.quality].filter(Boolean).join(" \xB7 "))}</span></button>`
     ).join("");
+  }
+  function channelBrowser() {
+    return '<label class="section">Find a channel<input id="channel-search" type="search" placeholder="Name, language or quality" autocomplete="off" aria-controls="channel-results"></label><p id="channel-count" class="meta" role="status"></p><div id="channel-results" class="sports-channel-list"></div><button id="channel-more" class="quiet" hidden>Show more channels</button>';
+  }
+  function bindChannelBrowser() {
+    let visible = 100;
+    const render = () => {
+      const words = $("#channel-search").value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+      const found = channels.filter((c) => {
+        const text = [c.name, c.language, c.quality].filter(Boolean).join(" ").toLowerCase();
+        return words.every((word) => text.includes(word));
+      });
+      $("#channel-results").innerHTML = channelButtons(found.slice(0, visible)) || '<p class="meta">No channels match your search.</p>';
+      $("#channel-count").textContent = found.length > visible ? `${visible.toLocaleString()} of ${found.length.toLocaleString()} channels` : `${found.length.toLocaleString()} channel${found.length === 1 ? "" : "s"}`;
+      $("#channel-more").hidden = found.length <= visible;
+    };
+    $("#channel-search").oninput = () => {
+      visible = 100;
+      render();
+    };
+    $("#channel-more").onclick = () => {
+      visible += 100;
+      render();
+    };
+    render();
   }
   function bindDialog(context) {
     $("#dialog-content").onclick = (e) => {
@@ -435,16 +469,8 @@
       bindDialog(context);
     } else if (action2 === "sports-channels") {
       await loadChannels();
-      modal(
-        '<h2>Live channels</h2><label class="section">Find a channel<input id="channel-search" type="search"></label><div id="channel-results" class="sports-channel-list"></div>'
-      );
-      const render = () => {
-        const q = $("#channel-search").value.toLowerCase();
-        const found = channels.filter((c) => `${c.name} ${c.language}`.toLowerCase().includes(q));
-        $("#channel-results").innerHTML = channelButtons(found.slice(0, 100)) + (found.length > 100 ? '<p class="meta">Search to narrow the channel list.</p>' : !found.length ? '<p class="meta">No channels found.</p>' : "");
-      };
-      $("#channel-search").oninput = render;
-      render();
+      modal(`<h2>Live channels</h2>${channelBrowser()}`);
+      bindChannelBrowser();
       bindDialog(context);
     } else if (action2 === "sports-play") {
       closeModal();
