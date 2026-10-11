@@ -5,6 +5,7 @@ import { Readable } from 'node:stream';
 import { createHash, randomBytes } from 'node:crypto';
 import { openLiveStream } from './fetch.mjs';
 import { fail, id } from '../store.mjs';
+import { probe } from '../media.mjs';
 
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 export function rewriteManifest(text, base, resolve) {
@@ -234,7 +235,9 @@ export function createLivePlayback(
             if (!session.ready)
               fail(
                 503,
-                'This channel could not start. Try another channel or check the provider and FFmpeg.',
+                session.providerUnavailable
+                  ? 'The TV provider could not serve this channel. Try another channel.'
+                  : 'This channel could not start. Try another channel or check the provider and FFmpeg.',
               );
           } catch (e) {
             await stop(session);
@@ -255,8 +258,31 @@ export function createLivePlayback(
       viewer(user, key, lease);
       return { ok: true };
     },
-    cast(user, key, lease) {
+    async cast(user, key, lease) {
       const s = viewer(user, key, lease);
+      // A receiver needs a codec-declared variant and a few complete segments
+      // before loading a live stream. Browser HLS players can start earlier.
+      const deadline = Date.now() + 10000;
+      let segments;
+      do {
+        viewer(user, key, lease);
+        const manifest = await fs.readFile(path.join(s.directory, 'index.m3u8'), 'utf8');
+        segments = manifest.match(/^segment-\d{9}\.ts$/gm) || [];
+        if (segments.length >= 3) break;
+        await pause(150);
+      } while (Date.now() < deadline);
+      if (segments.length < 3) fail(503, 'The TV stream is still buffering. Try casting again.');
+      if (!s.castInfo) {
+        s.castInfo = probe(path.join(s.directory, segments.at(-1)), config).catch(() => {
+          s.castInfo = null;
+          fail(503, 'The TV stream could not be prepared. Try casting again.');
+        });
+      }
+      const info = await s.castInfo;
+      viewer(user, key, lease);
+      s.castVariant =
+        `#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-INDEPENDENT-SEGMENTS\n` +
+        `#EXT-X-STREAM-INF:BANDWIDTH=6500000,CODECS="avc1.640029${info.audio.length ? ',mp4a.40.2' : ''}",RESOLUTION=${info.width}x${info.height},FRAME-RATE=30\n`;
       // One receiver grant per browser viewer; rotating it revokes an older URL.
       for (const [token, v] of s.viewers) if (v.ownerLease === lease) s.viewers.delete(token);
       const token = randomBytes(32).toString('hex');
@@ -266,7 +292,7 @@ export function createLivePlayback(
         touched: Date.now(),
         expires: Date.now() + 6 * 60 * 60 * 1000,
       });
-      return { lease: token, url: `/cast/live/${s.id}/index.m3u8?token=${token}` };
+      return { lease: token, url: `/cast/live/${s.id}/master.m3u8?token=${token}` };
     },
     release(user, key, lease) {
       return serial(async () => {
@@ -289,6 +315,10 @@ export function createLivePlayback(
         if (sender) sender.touched = Date.now();
       } else s = viewer(req.user, req.params.id, grant);
       const file = req.params.file;
+      if (casting && file === 'master.m3u8' && s.castVariant)
+        return res
+          .type('application/vnd.apple.mpegurl')
+          .send(s.castVariant + `index.m3u8?token=${grant}\n`);
       if (!/^(index\.m3u8|segment-\d{9}\.ts)$/.test(file)) fail(404, 'Playback resource not found');
       if (file === 'index.m3u8') {
         const text = await fs.readFile(path.join(s.directory, file), 'utf8');
@@ -321,10 +351,14 @@ export function createLivePlayback(
       timeout.unref();
       try {
         const headers = req.headers.range ? { Range: req.headers.range } : {};
-        const { response, url: finalUrl } = await openStream(url, {
-          signal: abort.signal,
-          headers,
-        });
+        let opened;
+        try {
+          opened = await openStream(url, { signal: abort.signal, headers });
+        } catch (error) {
+          if (!s.ready) s.providerUnavailable = true;
+          throw error;
+        }
+        const { response, url: finalUrl } = opened;
         const contentType = response.headers['content-type'] || '';
         const iterator = response[Symbol.asyncIterator](),
           prefix = [];

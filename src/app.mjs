@@ -127,7 +127,9 @@ export function createApplication(config, dependencies = {}) {
   );
   app.post(
     '/api/live/sessions/:id/cast',
-    wrap((req, res) => res.json(livePlayback.cast(req.user, req.params.id, req.body.lease))),
+    wrap(async (req, res) =>
+      res.json(await livePlayback.cast(req.user, req.params.id, req.body.lease)),
+    ),
   );
   app.post(
     '/api/live/sessions/:id/heartbeat',

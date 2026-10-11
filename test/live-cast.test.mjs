@@ -17,7 +17,14 @@ async function fixture(t, overrides = {}) {
     controller;
   const receiver = {
     getCastDevice: () => ({ friendlyName: 'Living room Chromecast' }),
-    getMediaSession: () => (mediaInfo ? { media: mediaInfo } : null),
+    getMediaSession: () =>
+      mediaInfo
+        ? {
+            media: mediaInfo,
+            playerState: receiver.playerState || 'PLAYING',
+            idleReason: receiver.idleReason,
+          }
+        : null,
     loadMedia: async ({ media }) => {
       mediaInfo = media;
     },
@@ -26,15 +33,24 @@ async function fixture(t, overrides = {}) {
     },
   };
   const context = {
-    requestSession: async () => {},
-    getCurrentSession: () => receiver,
+    sessionState: 'ended',
+    requestSession: async () => {
+      context.sessionState = 'started';
+    },
+    getSessionState: () => context.sessionState,
+    getCurrentSession: () => (context.sessionState === 'started' ? receiver : null),
     addEventListener: (name, callback) => events.set(name, callback),
     removeEventListener: (name) => events.delete(name),
   };
   globalThis.window = {
     cast: {
       framework: {
-        SessionState: { SESSION_ENDED: 'ended' },
+        SessionState: {
+          SESSION_ENDED: 'ended',
+          SESSION_STARTED: 'started',
+          SESSION_RESUMED: 'resumed',
+          SESSION_START_FAILED: 'failed',
+        },
         CastContextEventType: { SESSION_STATE_CHANGED: 'session' },
         RemotePlayerEventType: { ANY_CHANGE: 'change' },
         RemotePlayer: class {
@@ -93,7 +109,7 @@ async function fixture(t, overrides = {}) {
     prepare: async () => context,
     request: async (...args) => {
       requests.push(args);
-      return { lease: 'receiver-token', url: '/cast/live/stream/index.m3u8?token=receiver-token' };
+      return { lease: 'receiver-token', url: '/cast/live/stream/master.m3u8?token=receiver-token' };
     },
     onStart: () => {
       started++;
@@ -126,7 +142,7 @@ test('sports casting loads live TS HLS, transfers playback, controls the TV and 
   const { mediaInfo } = f.state();
   assert.equal(
     mediaInfo.contentId,
-    'https://media.example/cast/live/stream/index.m3u8?token=receiver-token',
+    'https://media.example/cast/live/stream/master.m3u8?token=receiver-token',
   );
   assert.equal(mediaInfo.streamType, 'LIVE');
   assert.equal(mediaInfo.hlsVideoSegmentFormat, 'MPEG2_TS');
@@ -200,4 +216,60 @@ test('closing the player during device discovery never starts a cast', async (t)
   await loading;
   assert.equal(f.requests.length, 0);
   assert.equal(f.state().started, 0);
+});
+
+test('device selection resolving before SESSION_STARTED waits for the receiver before loading', async (t) => {
+  const f = await fixture(t);
+  f.context.requestSession = async () => {};
+  const loading = f.button.onclick();
+  await tick();
+  assert.equal(f.casting.connecting, true);
+  assert.equal(f.requests.length, 0);
+  assert.match(f.status.textContent, /Select your TV/);
+  f.context.sessionState = 'started';
+  f.events.get('session')({ sessionState: 'started' });
+  await loading;
+  assert.equal(f.state().started, 1);
+  assert.equal(f.casting.active, true);
+  await f.casting.close();
+});
+
+test('an already connected receiver loads the selected channel without opening a stop-casting dialog', async (t) => {
+  const f = await fixture(t);
+  f.context.sessionState = 'started';
+  f.context.requestSession = () => {
+    throw Error('Unexpected discovery');
+  };
+  await f.button.onclick();
+  assert.equal(f.casting.active, true);
+  await f.casting.close();
+});
+
+test('temporary missing media information does not revoke a live stream, and buffering is reported honestly', async (t) => {
+  const f = await fixture(t);
+  await f.button.onclick();
+  const original = f.receiver.getMediaSession;
+  f.receiver.getMediaSession = () => null;
+  f.state().controller.callback();
+  assert.equal(f.casting.active, true);
+  assert.match(f.status.textContent, /Buffering on/);
+  f.receiver.getMediaSession = original;
+  f.receiver.playerState = 'BUFFERING';
+  f.state().controller.callback();
+  assert.match(f.status.textContent, /Buffering on/);
+  await f.casting.close();
+});
+
+test('a receiver playback error revokes access and resumes browser playback', async (t) => {
+  const f = await fixture(t);
+  await f.button.onclick();
+  f.receiver.playerState = 'IDLE';
+  f.receiver.idleReason = 'ERROR';
+  f.state().controller.callback();
+  await tick();
+  assert.equal(f.casting.active, false);
+  assert.equal(f.state().resumed, 1);
+  assert.match(f.status.textContent, /TV could not play/);
+  assert.equal(f.requests.at(-1)[2], 'DELETE');
+  await f.casting.close();
 });

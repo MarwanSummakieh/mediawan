@@ -341,6 +341,37 @@ test('sports API requires login, restricts management, validates events and neve
   );
 });
 
+test('an unavailable provider gives a channel-specific recovery message without exposing its URL', async (t) => {
+  const { config, cleanup } = fixture();
+  const application = createApplication(config, {
+    livePlayback: {
+      openStream: async () => {
+        throw Error('Provider HTTP 503: private-secret');
+      },
+    },
+  });
+  const server = await listening(application.app);
+  const base = `http://127.0.0.1:${server.address().port}`;
+  t.after(async () => {
+    await application.close();
+    await new Promise((resolve) => server.close(resolve));
+    cleanup();
+  });
+  await application.live.importPlaylist(playlist);
+  const headers = await login(base);
+  const [channel] = await application.live.channels();
+  const response = await fetch(base + `/api/live/channels/${channel.id}/play`, {
+    method: 'POST',
+    headers,
+    body: '{}',
+  });
+  assert.equal(response.status, 503);
+  const body = await response.text();
+  assert.match(body, /TV provider could not serve this channel/);
+  assert(!body.includes('private-secret'));
+  assert.equal(application.livePlayback.active(), 0);
+});
+
 for (const sourceType of ['mpegts', 'hls-ts', 'hls-mp4'])
   test(
     `real live FFmpeg ${sourceType} playback shares one stream, enforces limits and authenticates media and cleanup`,
@@ -531,8 +562,23 @@ for (const sourceType of ['mpegts', 'hls-ts', 'hls-mp4'])
       assert.equal(castResponse.status, 200);
       assert.equal(castResponse.headers.get('access-control-allow-origin'), '*');
       assert.equal(castResponse.headers.get('cache-control'), 'no-store');
-      const castManifest = await castResponse.text();
+      const master = await castResponse.text();
+      assert.match(
+        master,
+        /#EXT-X-STREAM-INF:BANDWIDTH=6500000,CODECS="avc1\.640029,mp4a\.40\.2",RESOLUTION=320x180,FRAME-RATE=30/,
+      );
+      const variant = new URL(
+        master.split('\n').find((line) => /^index\.m3u8/.test(line)),
+        base + cast.url,
+      );
+      const variantResponse = await fetch(variant, {
+        headers: { Origin: 'https://www.gstatic.com' },
+      });
+      assert.equal(variantResponse.status, 200);
+      assert.equal(variantResponse.headers.get('access-control-allow-origin'), '*');
+      const castManifest = await variantResponse.text();
       assert.match(castManifest, /token=/);
+      assert((castManifest.match(/#EXTINF:/g) || []).length >= 3);
       assert(!castManifest.includes('private-secret'));
       const castSegment = castManifest.split('\n').find((line) => /^segment-/.test(line));
       const segmentResponse = await fetch(base + `/cast/live/${first.id}/${castSegment}`, {
@@ -540,6 +586,20 @@ for (const sourceType of ['mpegts', 'hls-ts', 'hls-mp4'])
       });
       assert.equal(segmentResponse.status, 206);
       assert.equal((await segmentResponse.arrayBuffer()).byteLength, 188);
+      const completeSegment = await fetch(base + `/cast/live/${first.id}/${castSegment}`);
+      const castFile = path.join(root, 'cast-segment.ts');
+      writeFileSync(castFile, Buffer.from(await completeSegment.arrayBuffer()));
+      const streams = JSON.parse(
+        execFileSync(config.ffprobe, ['-v', 'error', '-show_streams', '-of', 'json', castFile], {
+          windowsHide: true,
+        }),
+      ).streams;
+      const castVideo = streams.find((stream) => stream.codec_type === 'video');
+      assert.equal(castVideo.codec_name, 'h264');
+      assert.equal(castVideo.profile, 'High');
+      assert.equal(castVideo.level, 41);
+      assert.equal(castVideo.r_frame_rate, '30/1');
+      assert.equal(streams.find((stream) => stream.codec_type === 'audio').channels, 2);
       assert.equal(
         (await fetch(base + `/cast/live/${first.id}/index.m3u8?token=${first.lease}`)).status,
         404,

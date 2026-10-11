@@ -48,6 +48,7 @@ export function bindLiveCast({
     grant,
     controller,
     remote,
+    selection,
     disposed = false,
     busy = false;
   const framework = () => window.cast.framework;
@@ -65,19 +66,75 @@ export function bindLiveCast({
   };
   const render = () => {
     if (disposed || !grant) return;
-    if (!ownsReceiver()) {
+    const current = receiver?.getMediaSession();
+    // CAF can briefly clear media information while synchronizing a load.
+    // Revoke access only when another item actually replaces our stream.
+    if (current?.media?.contentId && !ownsReceiver()) {
       void stop(false);
       return;
     }
+    if (current?.playerState === 'IDLE' && current.idleReason) {
+      void stop(
+        false,
+        current.idleReason === 'ERROR'
+          ? 'The TV could not play this stream. Try casting again or choose another channel.'
+          : 'TV playback ended.',
+      );
+      return;
+    }
     pauseButton.textContent = remote.isPaused ? 'Play on TV' : 'Pause TV';
-    message(
-      `${remote.isPaused ? 'Paused' : 'Playing'} on ${receiver.getCastDevice().friendlyName}`,
-    );
+    const state = current?.playerState;
+    const action = remote.isPaused ? 'Paused' : state === 'PLAYING' ? 'Playing' : 'Buffering';
+    message(`${action} on ${receiver.getCastDevice().friendlyName}`);
   };
   const disconnected = (event) => {
+    const states = framework().SessionState;
+    if ([states.SESSION_STARTED, states.SESSION_RESUMED].includes(event.sessionState))
+      selection?.ready();
+    if ([states.SESSION_START_FAILED, states.SESSION_ENDED].includes(event.sessionState))
+      selection?.fail({ code: 'session_error' });
     if (event.sessionState === framework().SessionState.SESSION_ENDED && grant) void stop(false);
   };
-  async function stop(endReceiver = true) {
+  function selectReceiver() {
+    const ready = () => {
+      const states = framework().SessionState;
+      return [states.SESSION_STARTED, states.SESSION_RESUMED].includes(context.getSessionState())
+        ? context.getCurrentSession()
+        : null;
+    };
+    if (ready()) return Promise.resolve(ready());
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const finish = (value, error) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        if (selection === attempt) selection = null;
+        if (error) reject(error);
+        else resolve(value);
+      };
+      const timer = setTimeout(() => finish(null, { code: 'timeout' }), 120000);
+      const attempt = {
+        ready: () => {
+          const value = ready();
+          if (value) finish(value);
+        },
+        fail: (error) => finish(null, error),
+      };
+      selection = attempt;
+      // Keep this call in the click gesture. Its promise can resolve before
+      // SESSION_STARTED; load only after CAF confirms the receiver is ready.
+      try {
+        context.requestSession().then(
+          () => attempt.ready(),
+          (error) => attempt.fail(error),
+        );
+      } catch (error) {
+        attempt.fail(error);
+      }
+    });
+  }
+  async function stop(endReceiver = true, reason = '') {
     const previous = grant;
     grant = null;
     if (controller)
@@ -94,8 +151,8 @@ export function bindLiveCast({
     button.hidden = false;
     await revoke(previous);
     if (!disposed && previous) {
-      message('');
       onStop();
+      message(reason);
     }
   }
   prepare()
@@ -124,13 +181,14 @@ export function bindLiveCast({
     }
     busy = true;
     button.disabled = true;
+    message('Select your TV in Chrome’s Cast panel.');
     let pending;
+    let stage = 'connect';
     try {
-      // Device discovery must start directly inside the user's click handler.
-      await context.requestSession();
+      receiver = await selectReceiver();
       if (disposed) return;
-      receiver = context.getCurrentSession();
-      if (!receiver) throw Error('No TV connected. Try casting again.');
+      stage = 'prepare';
+      message(`Preparing the stream for ${receiver.getCastDevice().friendlyName}…`);
       pending = await request(`/api/live/sessions/${session.id}/cast`, { lease: session.lease });
       if (disposed) {
         await revoke(pending);
@@ -146,7 +204,11 @@ export function bindLiveCast({
       info.hlsVideoSegmentFormat = media.HlsVideoSegmentFormat.MPEG2_TS;
       info.metadata = new media.GenericMediaMetadata();
       info.metadata.title = session.channel.name;
-      await receiver.loadMedia(new media.LoadRequest(info));
+      stage = 'load';
+      message(`Loading on ${receiver.getCastDevice().friendlyName}…`);
+      const load = new media.LoadRequest(info);
+      load.autoplay = true;
+      await receiver.loadMedia(load);
       if (disposed) {
         receiver.endSession(true);
         await revoke(pending);
@@ -162,10 +224,15 @@ export function bindLiveCast({
       render();
     } catch (error) {
       await revoke(pending);
+      const code = typeof error === 'string' ? error : error?.code;
       message(
-        error === 'cancel' || error?.code === 'cancel'
+        code === 'cancel'
           ? 'Casting cancelled.'
-          : 'Could not cast. Check that Chrome and your TV are on the same Wi-Fi, then try again.',
+          : stage === 'prepare'
+            ? error.message || 'The TV stream could not be prepared. Try again.'
+            : stage === 'load'
+              ? 'Could not cast: the TV could not load the stream. Check that it can reach this site, then try again.'
+              : 'Could not cast: no TV connected. Check Chrome’s local network permission and use the same Wi-Fi as your TV.',
       );
     } finally {
       busy = false;
@@ -180,8 +247,12 @@ export function bindLiveCast({
     get active() {
       return !!grant;
     },
+    get connecting() {
+      return busy;
+    },
     async close() {
       disposed = true;
+      selection?.fail({ code: 'cancel' });
       if (context)
         context.removeEventListener(
           framework().CastContextEventType.SESSION_STATE_CHANGED,

@@ -20,7 +20,9 @@ Watch opens the chosen channel through a bounded FFmpeg HLS buffer. Viewers of t
 
 ## Chromecast
 
-In Chrome, open a channel and choose **Cast to TV**, then select your Chromecast. Use HTTPS (or localhost for development), and keep the sender and TV on the same Wi-Fi. The TV must be able to reach the Mediawan address used by the browser; localhost is not reachable from a separate TV. Casting uses Google's sender SDK and Default Media Receiver, including older Chromecast dongles. There is no custom receiver registration or additional provider connection.
+In Chrome on a computer or Android, open a channel and choose **Cast to TV** inside the player, then select your Chromecast in Chrome's Cast panel. Chrome may open its media panel first; choose the TV there. Allow Chrome's local network permission, use HTTPS (or localhost for development), and keep the sender and TV on the same Wi-Fi. The TV must be able to reach the Mediawan address used by the browser; localhost is not reachable from a separate TV. Chrome on iOS does not support Google's web sender SDK. Casting uses Google's sender SDK and Default Media Receiver, including older Chromecast dongles. There is no custom receiver registration or additional provider connection.
+
+The sender waits for the receiver's started session before loading media. The receiver receives an HLS master playlist declaring H.264 High Profile level 4.1, the output resolution and AAC audio when present, followed by the token-bearing live playlist and segments. At least three complete segments are buffered before issuing the receiver URL. Native browser video casting is disabled because its authenticated HLS URL or Media Source blob cannot be played independently by the TV. Receiver buffering and playback errors are shown in the player.
 
 Local playback pauses after the TV accepts the stream. **Pause TV** / **Play on TV** controls the receiver; **Stop casting** returns playback to the browser. Back to sports stops the cast. Closing the browser tab leaves the TV playing; the receiver's media requests keep its stream alive until playback stops or its six-hour access grant expires.
 

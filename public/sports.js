@@ -392,7 +392,7 @@ async function playLive(channelId) {
   player.tabIndex = -1;
   player.restoreFocus = document.activeElement;
   player.innerHTML =
-    '<header><button id="live-close">Back to sports</button><strong id="live-channel-name">Opening channel…</strong><span class="sports-status live">Live TV</span></header><div id="live-screen"><video id="live-video" controls controlslist="nofullscreen" playsinline></video><div class="live-player-controls" role="toolbar" aria-label="Live playback controls"><button id="live-cast" disabled>Cast to TV</button><button id="live-cast-pause" hidden>Pause TV</button><button id="live-cast-stop" hidden>Stop casting</button><button id="live-fullscreen" aria-label="Enter fullscreen" title="Enter fullscreen"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/></svg></button></div></div><p id="live-player-status" role="status">Starting live playback…</p>';
+    '<header><button id="live-close">Back to sports</button><strong id="live-channel-name">Opening channel…</strong><span class="sports-status live">Live TV</span></header><div id="live-screen"><video id="live-video" controls controlslist="nofullscreen noremoteplayback" disableremoteplayback playsinline></video><div class="live-player-controls" role="toolbar" aria-label="Live playback controls"><button id="live-cast" disabled>Cast to TV</button><button id="live-cast-pause" hidden>Pause TV</button><button id="live-cast-stop" hidden>Stop casting</button><button id="live-fullscreen" aria-label="Enter fullscreen" title="Enter fullscreen"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/></svg></button></div></div><p id="live-player-status" role="status">Starting live playback…</p>';
   document.body.appendChild(player);
   $('#live-close').onclick = closeLive;
   $('#live-close').focus();
@@ -436,10 +436,11 @@ async function playLive(channelId) {
         $('#live-player-status').textContent = 'Press play to watch this channel.';
       });
     video.onplaying = () => {
-      if (!casting?.active) $('#live-player-status').textContent = '';
+      if (!casting?.active && !casting?.connecting) $('#live-player-status').textContent = '';
     };
     video.onwaiting = () => {
-      if (!casting?.active) $('#live-player-status').textContent = 'Buffering…';
+      if (!casting?.active && !casting?.connecting)
+        $('#live-player-status').textContent = 'Buffering…';
     };
     video.onerror = () => {
       $('#live-player-status').textContent =

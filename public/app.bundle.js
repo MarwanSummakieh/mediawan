@@ -170,7 +170,7 @@
     request = api,
     origin = location.origin
   }) {
-    let context, receiver, grant, controller, remote, disposed = false, busy = false;
+    let context, receiver, grant, controller, remote, selection, disposed = false, busy = false;
     const framework = () => window.cast.framework;
     const ownsReceiver = () => {
       var _a, _b;
@@ -187,20 +187,69 @@
         );
     };
     const render = () => {
+      var _a;
       if (disposed || !grant) return;
-      if (!ownsReceiver()) {
+      const current = receiver == null ? void 0 : receiver.getMediaSession();
+      if (((_a = current == null ? void 0 : current.media) == null ? void 0 : _a.contentId) && !ownsReceiver()) {
         void stop(false);
         return;
       }
+      if ((current == null ? void 0 : current.playerState) === "IDLE" && current.idleReason) {
+        void stop(
+          false,
+          current.idleReason === "ERROR" ? "The TV could not play this stream. Try casting again or choose another channel." : "TV playback ended."
+        );
+        return;
+      }
       pauseButton.textContent = remote.isPaused ? "Play on TV" : "Pause TV";
-      message(
-        `${remote.isPaused ? "Paused" : "Playing"} on ${receiver.getCastDevice().friendlyName}`
-      );
+      const state = current == null ? void 0 : current.playerState;
+      const action2 = remote.isPaused ? "Paused" : state === "PLAYING" ? "Playing" : "Buffering";
+      message(`${action2} on ${receiver.getCastDevice().friendlyName}`);
     };
     const disconnected = (event) => {
+      const states = framework().SessionState;
+      if ([states.SESSION_STARTED, states.SESSION_RESUMED].includes(event.sessionState))
+        selection == null ? void 0 : selection.ready();
+      if ([states.SESSION_START_FAILED, states.SESSION_ENDED].includes(event.sessionState))
+        selection == null ? void 0 : selection.fail({ code: "session_error" });
       if (event.sessionState === framework().SessionState.SESSION_ENDED && grant) void stop(false);
     };
-    async function stop(endReceiver = true) {
+    function selectReceiver() {
+      const ready = () => {
+        const states = framework().SessionState;
+        return [states.SESSION_STARTED, states.SESSION_RESUMED].includes(context.getSessionState()) ? context.getCurrentSession() : null;
+      };
+      if (ready()) return Promise.resolve(ready());
+      return new Promise((resolve, reject) => {
+        let settled = false;
+        const finish = (value, error) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer2);
+          if (selection === attempt) selection = null;
+          if (error) reject(error);
+          else resolve(value);
+        };
+        const timer2 = setTimeout(() => finish(null, { code: "timeout" }), 12e4);
+        const attempt = {
+          ready: () => {
+            const value = ready();
+            if (value) finish(value);
+          },
+          fail: (error) => finish(null, error)
+        };
+        selection = attempt;
+        try {
+          context.requestSession().then(
+            () => attempt.ready(),
+            (error) => attempt.fail(error)
+          );
+        } catch (error) {
+          attempt.fail(error);
+        }
+      });
+    }
+    async function stop(endReceiver = true, reason = "") {
       var _a, _b;
       const previous = grant;
       grant = null;
@@ -214,8 +263,8 @@
       button2.hidden = false;
       await revoke(previous);
       if (!disposed && previous) {
-        message("");
         onStop();
+        message(reason);
       }
     }
     prepare().then((value) => {
@@ -242,12 +291,14 @@
       }
       busy = true;
       button2.disabled = true;
+      message("Select your TV in Chrome\u2019s Cast panel.");
       let pending;
+      let stage = "connect";
       try {
-        await context.requestSession();
+        receiver = await selectReceiver();
         if (disposed) return;
-        receiver = context.getCurrentSession();
-        if (!receiver) throw Error("No TV connected. Try casting again.");
+        stage = "prepare";
+        message(`Preparing the stream for ${receiver.getCastDevice().friendlyName}\u2026`);
         pending = await request(`/api/live/sessions/${session.id}/cast`, { lease: session.lease });
         if (disposed) {
           await revoke(pending);
@@ -263,7 +314,11 @@
         info.hlsVideoSegmentFormat = media.HlsVideoSegmentFormat.MPEG2_TS;
         info.metadata = new media.GenericMediaMetadata();
         info.metadata.title = session.channel.name;
-        await receiver.loadMedia(new media.LoadRequest(info));
+        stage = "load";
+        message(`Loading on ${receiver.getCastDevice().friendlyName}\u2026`);
+        const load = new media.LoadRequest(info);
+        load.autoplay = true;
+        await receiver.loadMedia(load);
         if (disposed) {
           receiver.endSession(true);
           await revoke(pending);
@@ -279,8 +334,9 @@
         render();
       } catch (error) {
         await revoke(pending);
+        const code = typeof error === "string" ? error : error == null ? void 0 : error.code;
         message(
-          error === "cancel" || (error == null ? void 0 : error.code) === "cancel" ? "Casting cancelled." : "Could not cast. Check that Chrome and your TV are on the same Wi-Fi, then try again."
+          code === "cancel" ? "Casting cancelled." : stage === "prepare" ? error.message || "The TV stream could not be prepared. Try again." : stage === "load" ? "Could not cast: the TV could not load the stream. Check that it can reach this site, then try again." : "Could not cast: no TV connected. Check Chrome\u2019s local network permission and use the same Wi-Fi as your TV."
         );
       } finally {
         busy = false;
@@ -295,8 +351,12 @@
       get active() {
         return !!grant;
       },
+      get connecting() {
+        return busy;
+      },
       async close() {
         disposed = true;
+        selection == null ? void 0 : selection.fail({ code: "cancel" });
         if (context)
           context.removeEventListener(
             framework().CastContextEventType.SESSION_STATE_CHANGED,
@@ -640,7 +700,7 @@
     player.setAttribute("aria-label", "Live TV player");
     player.tabIndex = -1;
     player.restoreFocus = document.activeElement;
-    player.innerHTML = '<header><button id="live-close">Back to sports</button><strong id="live-channel-name">Opening channel\u2026</strong><span class="sports-status live">Live TV</span></header><div id="live-screen"><video id="live-video" controls controlslist="nofullscreen" playsinline></video><div class="live-player-controls" role="toolbar" aria-label="Live playback controls"><button id="live-cast" disabled>Cast to TV</button><button id="live-cast-pause" hidden>Pause TV</button><button id="live-cast-stop" hidden>Stop casting</button><button id="live-fullscreen" aria-label="Enter fullscreen" title="Enter fullscreen"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/></svg></button></div></div><p id="live-player-status" role="status">Starting live playback\u2026</p>';
+    player.innerHTML = '<header><button id="live-close">Back to sports</button><strong id="live-channel-name">Opening channel\u2026</strong><span class="sports-status live">Live TV</span></header><div id="live-screen"><video id="live-video" controls controlslist="nofullscreen noremoteplayback" disableremoteplayback playsinline></video><div class="live-player-controls" role="toolbar" aria-label="Live playback controls"><button id="live-cast" disabled>Cast to TV</button><button id="live-cast-pause" hidden>Pause TV</button><button id="live-cast-stop" hidden>Stop casting</button><button id="live-fullscreen" aria-label="Enter fullscreen" title="Enter fullscreen"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/></svg></button></div></div><p id="live-player-status" role="status">Starting live playback\u2026</p>';
     document.body.appendChild(player);
     $("#live-close").onclick = closeLive;
     $("#live-close").focus();
@@ -683,10 +743,11 @@
         $("#live-player-status").textContent = "Press play to watch this channel.";
       });
       video2.onplaying = () => {
-        if (!(casting == null ? void 0 : casting.active)) $("#live-player-status").textContent = "";
+        if (!(casting == null ? void 0 : casting.active) && !(casting == null ? void 0 : casting.connecting)) $("#live-player-status").textContent = "";
       };
       video2.onwaiting = () => {
-        if (!(casting == null ? void 0 : casting.active)) $("#live-player-status").textContent = "Buffering\u2026";
+        if (!(casting == null ? void 0 : casting.active) && !(casting == null ? void 0 : casting.connecting))
+          $("#live-player-status").textContent = "Buffering\u2026";
       };
       video2.onerror = () => {
         $("#live-player-status").textContent = "Playback stopped. Return to sports and try this channel again.";
