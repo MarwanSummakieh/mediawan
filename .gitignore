@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# Secrets and local config
+.env
+.env.*
+!.env.example
+.claude/
+.idea/
+
+# Runtime data. Anchored so same-named source folders are never swallowed.
+/data/
+/media/
+/cache/
+/transcode/
+/.runtime/
+/.recovery/
+data.sqlite*
+*.log
+
+# Left over from v2
+node_modules/
+
+# Personal local notes
+*.local.md
+
+# Editor and agent tooling
+.serena/

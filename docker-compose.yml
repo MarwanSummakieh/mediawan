@@ -1,0 +1,68 @@
+services:
+  mediawan:
+    build: .
+    image: mediawan:3-local
+    restart: unless-stopped
+    # Root by default so the bind mounts are always writable. Set PUID/PGID to drop privileges
+    # to a user that owns DATA_DIR and TRANSCODE_DIR.
+    user: "${PUID:-0}:${PGID:-0}"
+    environment:
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      # Folders inside the container, separated by ":". Name them like Movies / TV / Anime
+      # and the scanner uses that as a hint.
+      LIBRARY_ROOTS: ${LIBRARY_ROOTS:-/media}
+      HWACCEL: ${HWACCEL:-qsv}
+      MAX_TRANSCODES: ${MAX_TRANSCODES:-2}
+      SCAN_INTERVAL_SECONDS: ${SCAN_INTERVAL_SECONDS:-21600}
+      METADATA_ONLINE: ${METADATA_ONLINE:-true}
+      NEWZNAB_INDEXERS: ${NEWZNAB_INDEXERS:-}
+      USENET_DAV_URL: ${USENET_DAV_URL:-}
+      USENET_DAV_API_KEY: ${USENET_DAV_API_KEY:-}
+      USENET_DAV_USER: ${USENET_DAV_USER:-}
+      USENET_DAV_PASSWORD: ${USENET_DAV_PASSWORD:-}
+      USENET_DAV_CATEGORY: ${USENET_DAV_CATEGORY:-movies}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-127.0.0.1}
+      # Offered on every title; missing ones are translated by the libretranslate service.
+      SUBTITLE_LANGUAGES: ${SUBTITLE_LANGUAGES:-ar,da,pt}
+      TRANSLATE_URL: ${TRANSLATE_URL:-http://libretranslate:5000}
+    volumes:
+      - ${DATA_DIR:-./data}:/data
+      - ${MEDIA_DIR:-./media}:/media:ro # Mediawan never writes to your media
+      - ${TRANSCODE_DIR:-./transcode}:/transcode
+    # QuickSync: pass the GPU through, and join the groups that own it. Read the real GIDs on
+    # the NAS with `stat -c '%g %G %n' /dev/dri/*` — a wrong render GID leaves the device
+    # unopenable and every transcode falls back to software.
+    devices:
+      - /dev/dri:/dev/dri
+    group_add:
+      - "${VIDEO_GID:-44}"
+      - "${RENDER_GID:-105}"
+    ports:
+      - "${PORT:-8787}:8787"
+
+  # Machine translation for subtitles, on the NAS: nothing leaves your network. The first start
+  # downloads the language models (a few hundred MB) into the named volume.
+  libretranslate:
+    image: libretranslate/libretranslate:v1.9.6
+    restart: unless-stopped
+    environment:
+      # English is what most subtitles are translated from; keep it, and add a code here for
+      # every language in SUBTITLE_LANGUAGES.
+      LT_LOAD_ONLY: ${LT_LOAD_ONLY:-en,ar,da,pt}
+      LT_THREADS: ${LT_THREADS:-2}
+    volumes:
+      - libretranslate-models:/home/libretranslate/.local
+
+  cloudflared:
+    profiles: [tunnel]
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN}
+    depends_on: [mediawan]
+
+volumes:
+  libretranslate-models:
