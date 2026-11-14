@@ -2,6 +2,9 @@ import path from 'node:path';
 
 const number = (value, fallback, min = 0) =>
   Number.isFinite(Number(value)) && value !== '' && Number(value) >= min ? Number(value) : fallback;
+// NordLynx (NordVPN), WireGuard, OpenVPN, ProtonVPN, Mullvad and the tun/wg devices a
+// Gluetun-style VPN container creates. `*` matches any characters.
+const defaultVpnInterfaces = 'nordlynx,nordvpn*,wireguard*,openvpn*,proton*,mullvad*,wg*,tun*,tap*';
 export function configuration(env = process.env) {
   return {
     port: number(env.PORT, 8787, 1),
@@ -37,5 +40,20 @@ export function configuration(env = process.env) {
       .split(path.delimiter)
       .filter(Boolean)
       .map((p) => path.resolve(p)),
+    // Stream now: watch a torrent while it downloads. See docs/streaming.md.
+    streamVpn: env.STREAM_VPN === 'off' ? 'off' : 'required',
+    streamVpnInterfaces: (env.STREAM_VPN_INTERFACES || defaultVpnInterfaces)
+      .split(',')
+      .map((name) => name.trim())
+      .filter(Boolean),
+    streamMaxSessions: Math.max(1, Math.min(10, number(env.STREAM_MAX_SESSIONS, 6, 1))),
+    streamCacheBytes: number(env.STREAM_CACHE_BYTES, 107374182400, 1073741824),
+    streamUploadKBps: number(env.STREAM_UPLOAD_KBPS, 1024),
+    streamFallbackSeconds: Math.max(2, Math.min(60, number(env.STREAM_FALLBACK_SECONDS, 6, 1))),
+    streamDht: env.STREAM_DHT !== 'false',
+    streamTrackers: (env.STREAM_TRACKERS || '')
+      .split(',')
+      .map((url) => url.trim())
+      .filter((url) => /^(?:udp|https?|wss?):\/\/\S{3,300}$/i.test(url)),
   };
 }

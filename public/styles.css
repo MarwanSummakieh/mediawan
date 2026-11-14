@@ -2038,3 +2038,432 @@ button.poster {
     font-size: 0.9rem;
   }
 }
+
+/* Stream now ------------------------------------------------------------------------ */
+/* Chromium 69 (Tizen) has no `inset` or flex `gap`: positions and margins are explicit. */
+.stream-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-gap: 12px;
+}
+.stream-option {
+  display: block;
+  width: 100%;
+  min-height: 104px;
+  padding: 14px 16px;
+  text-align: left;
+  background: #0c1522;
+  border-color: var(--line);
+  border-radius: 8px;
+}
+.stream-option > span {
+  display: block;
+}
+.stream-option > .stream-option-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 1.05rem;
+}
+.stream-option-check {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  color: var(--accent);
+  visibility: hidden;
+}
+.stream-option-facts {
+  margin-top: 8px;
+  font-size: 0.85rem;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.stream-option-detail {
+  margin-top: 4px;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: var(--muted);
+}
+.stream-option.warns .stream-option-detail {
+  color: #edafa0;
+}
+.stream-option[aria-pressed='true'] {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+  background: #66c8ff14;
+}
+.stream-option[aria-pressed='true'] .stream-option-check {
+  visibility: visible;
+}
+.stream-option:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--muted);
+}
+.stream-option[aria-pressed='true']:hover {
+  border-color: var(--accent);
+}
+.stream-option:disabled {
+  opacity: 1;
+  background: transparent;
+  border-style: dashed;
+}
+.stream-option:disabled .stream-option-head,
+.stream-option:disabled .stream-option-facts {
+  color: var(--muted);
+}
+.stream-option.loading {
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+/* Tizen's Chromium has no :focus-visible; the second rule refines it where supported. */
+.stream-option:focus,
+#stream-start-actions button:focus,
+.stream-sheet-actions button:focus {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
+.stream-option:focus:not(:focus-visible),
+#stream-start-actions button:focus:not(:focus-visible),
+.stream-sheet-actions button:focus:not(:focus-visible) {
+  outline: none;
+}
+.stream-readiness {
+  min-height: 1.6em;
+  margin: 12px 0 0;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.stream-readiness.ready {
+  color: var(--accent);
+}
+.stream-readiness .text-button {
+  min-height: 0;
+  padding: 0;
+  color: var(--accent);
+  text-decoration: underline;
+}
+.stream-panel {
+  max-width: 560px;
+  margin: 8px 0 20px;
+}
+.detail-copy .stream-panel-label {
+  margin: 0 0 10px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.stream-sheet-head {
+  display: flex;
+  align-items: center;
+  margin-bottom: 22px;
+}
+.stream-sheet-art {
+  flex-shrink: 0;
+  width: 168px;
+  height: 94px;
+  margin-right: 20px;
+  object-fit: cover;
+  border-radius: 6px;
+  background: var(--bg);
+}
+.stream-sheet-title {
+  min-width: 0;
+}
+.stream-sheet-title .eyebrow {
+  margin-bottom: 6px;
+}
+dialog .stream-sheet-title h2 {
+  margin: 0;
+}
+.stream-sheet-title .meta {
+  margin-top: 4px;
+}
+.stream-sheet-actions {
+  display: flex;
+  flex-wrap: wrap;
+  margin-top: 18px;
+}
+.stream-play {
+  display: inline-flex;
+  align-items: center;
+}
+.stream-play svg {
+  width: 18px;
+  height: 18px;
+  margin-right: 8px;
+}
+/* Start-up and failure panel over the player. */
+#stream-start {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 120px var(--player-inset) 150px;
+  background: #000;
+  overflow: hidden;
+}
+#stream-start-art {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.32;
+}
+#stream-start::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background: radial-gradient(ellipse at center, #0008 0%, #000c 75%);
+}
+.stream-start-panel {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 520px;
+  text-align: center;
+}
+.stream-start-quality {
+  min-height: 1.4em;
+  margin: 0 0 10px;
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+  color: #ffffffb3;
+  font-variant-numeric: tabular-nums;
+}
+#stream-start-title {
+  font-size: 1.6rem;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
+.stream-steps {
+  display: flex;
+  justify-content: center;
+  margin: 18px 0 16px;
+  padding: 0;
+  list-style: none;
+  font-size: 0.75rem;
+  color: #ffffff66;
+}
+.stream-steps li {
+  display: flex;
+  align-items: center;
+  margin: 0 10px;
+}
+.stream-steps li::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  margin-right: 8px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+}
+.stream-steps li.current,
+.stream-steps li.done {
+  color: #fff;
+}
+.stream-steps li.done::before {
+  background: currentColor;
+}
+.stream-steps li.current::before {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+.stream-meter {
+  position: relative;
+  display: block;
+  width: 100%;
+  max-width: 360px;
+  height: 3px;
+  margin: 0 auto;
+  border-radius: 2px;
+  background: #ffffff26;
+  overflow: hidden;
+}
+.stream-meter > span {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 0;
+  border-radius: 2px;
+  background: #fff;
+  transition: width 0.4s ease-out;
+}
+.stream-meter.indeterminate > span {
+  width: 30%;
+  animation: stream-sweep 1.6s ease-in-out infinite;
+}
+@keyframes stream-sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(340%);
+  }
+}
+.stream-start-detail {
+  min-height: 1.5em;
+  margin: 14px 0 0;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: #ffffffcc;
+  font-variant-numeric: tabular-nums;
+}
+.stream-start-note {
+  margin: 8px 0 0;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: #ffffff99;
+}
+.stream-start-note:empty,
+.stream-start-actions:empty {
+  display: none;
+}
+.stream-start-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 22px;
+}
+.stream-start-actions button {
+  margin: 0 6px 10px;
+}
+#stream-start.failed .stream-steps,
+#stream-start.failed .stream-meter {
+  display: none;
+}
+#stream-start.failed #stream-start-title {
+  margin-top: 6px;
+}
+#player-buffer-detail {
+  font-size: 0.8rem;
+  color: #ffffffb3;
+  font-variant-numeric: tabular-nums;
+}
+#player-buffer-detail:empty {
+  display: none;
+}
+#player-loading .stream-meter {
+  width: 200px;
+}
+/* Quality inside the player's settings: the player's white-on-dark treatment. */
+#stream-quality {
+  margin-bottom: 20px;
+}
+.stream-quality-label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 0.8rem;
+  color: #ffffffb3;
+}
+#stream-quality .stream-options {
+  grid-gap: 8px;
+}
+#stream-quality .stream-option {
+  min-height: 0;
+  padding: 10px 12px;
+  color: #fff;
+  background: #242725;
+  border-color: #ffffff26;
+}
+#stream-quality .stream-option[aria-pressed='true'] {
+  border-color: #fff;
+  box-shadow: inset 0 0 0 1px #fff;
+}
+#stream-quality .stream-option-check {
+  color: #fff;
+}
+#stream-quality .stream-option:disabled {
+  background: transparent;
+}
+#stream-quality .stream-option-head {
+  font-size: 0.9rem;
+}
+#stream-quality .stream-option-facts {
+  margin-top: 4px;
+  font-size: 0.75rem;
+  color: #ffffffe0;
+}
+#stream-quality .stream-option-detail {
+  font-size: 0.7rem;
+  color: #ffffff99;
+}
+#stream-quality .stream-readiness {
+  min-height: 0;
+  margin-top: 8px;
+  font-size: 0.75rem;
+  color: #ffffffb3;
+}
+#stream-quality .stream-readiness:empty {
+  display: none;
+}
+#player .stream-option:focus,
+#player #stream-start-actions button:focus {
+  outline-color: #fff;
+}
+@media (prefers-reduced-motion: reduce) {
+  .stream-meter > span {
+    transition: none;
+  }
+  .stream-meter.indeterminate > span {
+    left: 35%;
+    animation: none;
+    opacity: 0.6;
+  }
+}
+@media (max-width: 600px) {
+  .stream-sheet-art {
+    width: 112px;
+    height: 63px;
+    margin-right: 14px;
+  }
+  .stream-option {
+    min-height: 96px;
+    padding: 12px;
+  }
+  #stream-start {
+    padding-top: 96px;
+    padding-bottom: 140px;
+  }
+  #stream-start-title {
+    font-size: 1.3rem;
+  }
+  .stream-steps li {
+    margin: 0 6px;
+  }
+}
+@media (max-width: 420px) {
+  .stream-options {
+    grid-template-columns: 1fr;
+  }
+  .stream-option {
+    min-height: 0;
+  }
+}
+@media (min-width: 2400px) {
+  .stream-sheet-art {
+    width: 252px;
+    height: 141px;
+  }
+  .stream-meter {
+    max-width: 540px;
+    height: 4px;
+  }
+}
+.detail-copy .stream-readiness {
+  margin: 12px 0 0;
+}

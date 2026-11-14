@@ -1,6 +1,6 @@
 # Mediawan 2
 
-A fresh, local-first media application. Find a title, choose a release, download its original file through qBittorrent or Real-Debrid, and watch it from your own storage.
+A fresh, local-first media application. Find a title, choose a release, download its original file through qBittorrent or Real-Debrid, and watch it from your own storage — or press **Stream now** to watch at 1080p or 2160p while it downloads.
 
 ## Run
 
@@ -34,11 +34,12 @@ Ensure the configured PUID/PGID owns the data, media and runtime bind folders. O
 - Favorites, watchlist, collections, account playback preferences and administrator-managed accounts.
 - Local file import from administrator-approved roots. Files remain in place.
 - Direct local playback, compatibility HLS conversion, audio/text-subtitle selection and chapter navigation.
+- Stream now: watch an episode or movie while its torrent downloads, at 1080p or 2160p, with automatic release choice, fallback to the next release when peers are slow, a VPN guard, and the same history, resume and subtitles as local files. See [Streaming](docs/streaming.md).
 - A CC menu with online subtitle languages and release variants, local SRT/VTT files, timing adjustment, and saved size, colour, background, position and alignment settings with a live preview.
 - Arabic subtitles support right-to-left and mixed-language text, UTF-8/UTF-16, and older Windows-1256 files. Choose Arabic in the online tracks, or select Arabic file encoding for a legacy local file. A preferred subtitle language of `ara` or `ar` selects Arabic automatically when available.
 - Responsive layout, keyboard/remote directional navigation and a Chromium-69 JavaScript bundle.
 
-Only completed local media is offered for playback. Playback never silently acquires media or streams it from a provider. Download completion preserves the original file and tracks. Missing sequential episodes stop automatic advancement; shuffle only includes available files. Provider polling continues after restart; interrupted local downloads restart from byte zero with a fresh URL.
+Local playback offers only completed local media and never silently acquires it. Streaming (**Stream now**) is available to users allowed to download. To start instantly, the app prepares a stream ahead of the click: when an episode's title page or stream sheet opens, or a Stream button is focused or hovered, the server joins that release's torrent swarm and fetches the start and end of the file, without the viewer pressing play. A prepared stream that is not played is dropped after about a minute and its data deleted. Streaming uses an in-process torrent engine, refuses to run without a VPN by default (see the guard's limits in [Streaming](docs/streaming.md)), keeps its temporary data in `TRANSCODE_DIR/streams` and deletes it when the stream stops. Download completion preserves the original file and tracks. Missing sequential episodes stop automatic advancement; shuffle only includes available files. Provider polling continues after restart; interrupted local downloads restart from byte zero with a fresh URL.
 
 ## Architecture
 
@@ -90,7 +91,7 @@ node scripts/preview.mjs
 
 The preview is an isolated synthetic library on http://127.0.0.1:8799, using generated media and its own database. Its fixture account is `preview@mediawan.test` / `mediawan-preview-only`. It never reads `.env` and should stay bound to loopback. Tests include migration, permissions, progress, queues, a mocked Real-Debrid pipeline and real FFmpeg HLS generation. FFmpeg is required for the media test.
 
-For real downloads on this PC, run `npm run local` and open http://127.0.0.1:8800. This uses the administrator credentials and Real-Debrid token from `.env`, a separate `.runtime/local/mediawan.sqlite` database and the `media/local-test` download folder. It binds only to loopback and preserves the default 20 GiB free-space reserve. Sign in, use Discover to choose a title and release, wait for Downloads to show Ready, then play it. Playback during download is not supported. The synthetic preview credentials do not apply to this instance.
+For real downloads on this PC, run `npm run local` and open http://127.0.0.1:8800. This uses the administrator credentials and Real-Debrid token from `.env`, a separate `.runtime/local/mediawan.sqlite` database and the `media/local-test` download folder. It binds only to loopback and preserves the default 20 GiB free-space reserve. Sign in, use Discover to choose a title and release, wait for Downloads to show Ready, then play it. Watching while downloading is available through Stream now (VPN required by default), not through the download queue. The synthetic preview credentials do not apply to this instance.
 
 ## Rewrite boundaries
 

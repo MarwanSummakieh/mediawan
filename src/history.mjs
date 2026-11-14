@@ -1,8 +1,12 @@
 import { id, fail, finite } from './store.mjs';
-export function createHistory(store) {
+// `streaming(user, itemId)` is true while the user has a stream session for the item, so
+// a streamed episode records progress and resumes exactly like a downloaded one.
+export function createHistory(store, { streaming = () => false } = {}) {
   return {
     start(user, itemId, { replay = false, mode = 'sequential' } = {}) {
-      if (!store.available(user, itemId)) fail(404, 'Media is not downloaded or accessible');
+      const local = !!store.available(user, itemId);
+      if (!local && !(store.canReadItem(user, itemId) && streaming(user, itemId)))
+        fail(404, 'Media is not downloaded or accessible');
       const item = store.item(itemId),
         prior = store.state(user.id, itemId),
         sessionId = id();
@@ -18,8 +22,8 @@ export function createHistory(store) {
           Date.now(),
         );
         store.run(
-          `INSERT INTO history(user_id,item_id,session_id,position,duration,completed,ever_watched,played_at) VALUES(?,?,?,?,?,0,?,?)
-          ON CONFLICT(user_id,item_id) DO UPDATE SET session_id=excluded.session_id,position=excluded.position,completed=0,played_at=excluded.played_at`,
+          `INSERT INTO history(user_id,item_id,session_id,position,duration,completed,ever_watched,played_at,streamed) VALUES(?,?,?,?,?,0,?,?,?)
+          ON CONFLICT(user_id,item_id) DO UPDATE SET session_id=excluded.session_id,position=excluded.position,completed=0,played_at=excluded.played_at,streamed=excluded.streamed`,
           user.id,
           itemId,
           sessionId,
@@ -27,6 +31,7 @@ export function createHistory(store) {
           prior.duration,
           prior.ever_watched,
           Date.now(),
+          local ? 0 : 1,
         );
         store.run(
           'INSERT INTO series_state(user_id,title_id,hidden) VALUES(?,?,0) ON CONFLICT(user_id,title_id) DO UPDATE SET hidden=0',
@@ -41,7 +46,7 @@ export function createHistory(store) {
             item.title_id,
           );
       });
-      return { id: sessionId, position, itemId };
+      return { id: sessionId, position, itemId, source: local ? 'local' : 'stream' };
     },
     event(user, sessionId, event) {
       const session = store.one(

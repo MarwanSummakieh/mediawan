@@ -18,7 +18,8 @@
   },
   "dependencies": {
     "express": "^4.21.2",
-    "sax": "^1.6.1"
+    "sax": "^1.6.1",
+    "webtorrent": "^3.0.21"
   },
   "engines": {
     "node": ">=22.5.0"

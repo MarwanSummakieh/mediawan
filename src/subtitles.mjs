@@ -45,7 +45,9 @@ function subtitleUrl(value) {
   } catch {}
   fail(502, 'The subtitle provider returned an unsupported download address');
 }
-export function createSubtitles(store, { fetch: request = fetch } = {}) {
+// `streaming(user, itemId)` allows online subtitles for an item being streamed, which has
+// no local file yet.
+export function createSubtitles(store, { fetch: request = fetch, streaming = () => false } = {}) {
   const cache = new Map();
   async function read(url, download = false, limit = LIMIT) {
     for (let redirects = 0; redirects < 4; redirects++) {
@@ -77,7 +79,11 @@ export function createSubtitles(store, { fetch: request = fetch } = {}) {
   }
   const json = async (url) => JSON.parse((await read(url)).toString('utf8'));
   function context(user, itemId) {
-    if (!store.available(user, itemId)) fail(404, 'Local file is unavailable');
+    if (
+      !store.available(user, itemId) &&
+      !(store.canReadItem(user, itemId) && streaming(user, itemId))
+    )
+      fail(404, 'Local file is unavailable');
     const item = store.item(itemId);
     return { item, title: store.title(item.title_id) };
   }

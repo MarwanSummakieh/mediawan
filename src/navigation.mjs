@@ -90,6 +90,7 @@ export function createNavigation(store) {
             completed: 0,
             ever_watched: 0,
             played_at: 0,
+            streamed: 0,
           },
           available: (cache.assets.get(i.id) || []).some((a) => a.readable && a.exists),
         };
@@ -100,7 +101,9 @@ export function createNavigation(store) {
     const resumable =
       !series?.hidden &&
       items
-        .filter((i) => i.available && i.state.position >= 10 && !i.state.completed)
+        .filter(
+          (i) => (i.available || i.state.streamed) && i.state.position >= 10 && !i.state.completed,
+        )
         .sort((a, b) => b.state.played_at - a.state.played_at)[0];
     const ordered = items.filter(
       (i) => title.kind === 'movie' || i.season > 0 || title.kind === 'anime',

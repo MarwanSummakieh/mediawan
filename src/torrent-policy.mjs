@@ -40,18 +40,22 @@ export const requiredResolution = (kind) => (kind === 'movie' ? 2160 : 1080);
 export const qualityRule = (kind) =>
   kind === 'movie' ? '2160p WEB-DL movies' : '1080p WEB-DL episodes';
 
-export function assessQuality(release, kind) {
+// Downloads always use the required resolution for the kind. Streaming passes the
+// resolution the viewer chose; every other rule stays the same.
+export function assessQuality(release, kind, resolution = requiredResolution(kind)) {
   const label = `${release.label || ''} ${release.name || ''}`;
   const reasons = [];
-  if (release.resolution !== requiredResolution(kind))
+  if (release.resolution !== resolution)
     reasons.push(
-      `${requiredResolution(kind)}p required for ${kind === 'movie' ? 'movies' : 'anime and TV shows'}`,
+      resolution === requiredResolution(kind)
+        ? `${resolution}p required for ${kind === 'movie' ? 'movies' : 'anime and TV shows'}`
+        : `Not a ${resolution}p release`,
     );
   const labelResolution = releaseFacts(release).resolution;
-  if (labelResolution != null && labelResolution !== requiredResolution(kind))
+  if (labelResolution != null && labelResolution !== resolution)
     reasons.push('Release label does not match the required resolution');
   const filenameResolution = releaseFacts({ label: release.filename }).resolution;
-  if (filenameResolution != null && filenameResolution !== requiredResolution(kind))
+  if (filenameResolution != null && filenameResolution !== resolution)
     reasons.push('Actual filename does not match the required resolution');
   if (!/(?:^|[^a-z0-9])WEB[ ._-]*DL(?:$|[^a-z0-9])/i.test(label))
     reasons.push('WEB-DL required for movies, anime and TV shows');
@@ -63,8 +67,8 @@ export function assessQuality(release, kind) {
     reasons.push('Release source conflicts with the required WEB-DL source');
   return { accepted: !reasons.length, reasons };
 }
-export function assessRelease(release, kind, rules) {
-  const reasons = [...assessQuality(release, kind).reasons];
+export function assessRelease(release, kind, rules, resolution) {
+  const reasons = [...assessQuality(release, kind, resolution).reasons];
   if (
     /(?:^|[\s._\[\]()-])(cam|hdcam|camrip|hdts|hdtc|ts|tsrip|telesync|telecine|tc|dvdscr|screener|predvd|hdcamrip)(?:$|[\s._\[\]()-])/i.test(
       release.label,

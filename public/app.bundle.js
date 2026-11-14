@@ -12,7 +12,11 @@
       body: body ? JSON.stringify(body) : void 0
     });
     const data = await response.json();
-    if (!response.ok) throw new Error(data.error || "Request failed");
+    if (!response.ok)
+      throw Object.assign(new Error(data.error || "Request failed"), {
+        status: response.status,
+        reason: data.reason || null
+      });
     return data;
   }
   var toastTimer;
@@ -57,10 +61,13 @@
     };
     return `<svg viewBox="0 0 24 24" aria-hidden="true">${paths[name] || ""}</svg>`;
   };
-  function card(title, mode = "library") {
+  function card(title, mode = "library", { canStream: canStream2 = false } = {}) {
     const item = mode === "resume" ? title.resumable : mode === "next" ? title.next : null;
+    const streams = !!item && !item.available && canStream2;
+    const actionName = (item == null ? void 0 : item.available) ? "play" : streams ? "stream-play" : "release";
+    const actionLabel = mode === "resume" && ((item == null ? void 0 : item.available) || streams) ? "Resume" : (item == null ? void 0 : item.available) ? "Play next" : streams ? "Stream next" : "Not downloaded";
     const remaining = (item == null ? void 0 : item.state.duration) ? `${Math.ceil(Math.max(0, item.state.duration - item.state.position) / 60)} min left` : "";
-    return `<article class="card"><a class="poster" href="#/title/${esc(title.id)}" aria-label="Open ${esc(title.name)}">${poster(title, mode !== "library")}${item ? `<span class="badge">${esc(episodeLabel(item))}</span>` : title.readyCount ? '<span class="badge">Downloaded</span>' : ""}</a>${item ? progress(item.state) : ""}<a class="card-name" href="#/title/${esc(title.id)}">${esc(title.name)}</a><p class="meta">${esc(item ? mode === "resume" ? remaining : item.name : [title.year, title.kind === "movie" ? "Movie" : title.kind === "anime" ? "Anime" : "Series"].filter(Boolean).join(" \xB7 "))}</p>${item ? `<div class="resume-actions"><button class="card-action ${mode === "resume" ? "primary" : ""}" data-action="${item.available ? "play" : "release"}" data-item="${esc(item.id)}" data-title="${esc(title.id)}">${item.available ? icon("play") : ""}${item.available ? mode === "resume" ? "Resume" : "Play next" : "Not downloaded"}</button>${mode === "resume" ? `<button class="menu-button" data-action="resume-menu" data-title="${esc(title.id)}" data-item="${esc(item.id)}" aria-label="More actions for ${esc(title.name)}">\u2022\u2022\u2022</button>` : ""}</div>` : ""}</article>`;
+    return `<article class="card"><a class="poster" href="#/title/${esc(title.id)}" aria-label="Open ${esc(title.name)}">${poster(title, mode !== "library")}${item ? `<span class="badge">${esc(episodeLabel(item))}</span>` : title.readyCount ? '<span class="badge">Downloaded</span>' : ""}</a>${item ? progress(item.state) : ""}<a class="card-name" href="#/title/${esc(title.id)}">${esc(title.name)}</a><p class="meta">${esc(item ? mode === "resume" ? remaining : item.name : [title.year, title.kind === "movie" ? "Movie" : title.kind === "anime" ? "Anime" : "Series"].filter(Boolean).join(" \xB7 "))}</p>${item ? `<div class="resume-actions"><button class="card-action ${mode === "resume" ? "primary" : ""}" data-action="${actionName}" data-item="${esc(item.id)}" data-title="${esc(title.id)}"${streams ? ` data-warm="${esc(item.id)}"` : ""}>${item.available || streams ? icon("play") : ""}${actionLabel}</button>${mode === "resume" ? `<button class="menu-button" data-action="resume-menu" data-title="${esc(title.id)}" data-item="${esc(item.id)}" aria-label="More actions for ${esc(title.name)}">\u2022\u2022\u2022</button>` : ""}</div>` : ""}</article>`;
   }
   function heading(name, caption = "", action2 = "") {
     return `<header class="page-heading"><div><h1>${esc(name)}</h1>${caption ? `<p>${esc(caption)}</p>` : ""}</div>${action2}</header>`;
@@ -403,13 +410,13 @@
     const languages = [...new Set(event.channels.map((c) => c.language).filter(Boolean))];
     return `<article class="sports-event"><div class="sports-event-time"><time datetime="${new Date(event.start).toISOString()}">${esc(time(event.start))}</time><span class="sports-status ${event.status}">${statusLabel[event.status]}</span></div><div class="sports-event-main"><p class="sports-competition">${esc([event.sport, event.competition].filter(Boolean).join(" \xB7 "))}</p><h3>${esc(event.title)}</h3>${event.subtitle ? `<p class="meta">${esc(event.subtitle)}</p>` : ""}<p class="meta">${event.channels.length ? `${event.channels.length} channel${event.channels.length === 1 ? "" : "s"}${languages.length ? " \xB7 " + esc(languages.join(" / ")) : ""}` : "No channel linked"} \xB7 Until ${esc(time(event.end))}</p></div><div class="sports-event-actions">${event.status !== "finished" && event.channels.length ? `<button class="${event.status === "live" ? "primary" : ""}" data-action="sports-watch" data-id="${esc(event.id)}">${event.status === "live" ? "Watch" : "View channels"}</button>` : ""}${admin && event.source === "manual" ? `<button class="quiet" data-action="sports-edit" data-id="${esc(event.id)}">Edit</button>` : ""}</div></article>`;
   }
-  async function sportsPage(url, user2) {
+  async function sportsPage(url, user3) {
     void prepareLiveCast().catch(() => {
     });
     const date = url.searchParams.get("date") || dateKey();
     schedule = await api(`/api/sports?${new URLSearchParams({ date, timezone: timezone() })}`);
     const sport = url.searchParams.get("sport") || "", status = url.searchParams.get("status") || "", query = url.searchParams.get("q") || "";
-    const admin = user2.role === "admin";
+    const admin = user3.role === "admin";
     const matching = schedule.events.filter(
       (e) => (!sport || e.sport === sport) && `${e.title} ${e.competition}`.toLowerCase().includes(query.toLowerCase())
     );
@@ -1190,6 +1197,714 @@
     return renderer;
   }
 
+  // public/streaming.js
+  var RESOLUTIONS = [1080, 2160];
+  var KNOWN_RESOLUTIONS = [480, 720, 1080, 2160];
+  var HEAD_TAIL_BYTES = 10 * 1024 * 1024;
+  var resolutionLabel = (resolution) => {
+    const value = Number(resolution);
+    return value >= 2160 ? "4K" : value >= 1080 ? "1080p" : value >= 720 ? "720p" : "SD";
+  };
+  function formatBytes(bytes) {
+    const value = Number(bytes) || 0;
+    if (value >= 1e9) return `${(value / 1e9).toFixed(value >= 1e10 ? 0 : 1)} GB`;
+    if (value >= 1e6) return `${Math.round(value / 1e6)} MB`;
+    return `${Math.max(0, Math.round(value / 1e3))} KB`;
+  }
+  function formatSpeed(bytesPerSecond) {
+    const value = Number(bytesPerSecond) || 0;
+    if (value >= 1e6) return `${(value / 1e6).toFixed(1)} MB/s`;
+    return `${Math.round(value / 1e3)} KB/s`;
+  }
+  var plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
+  var FAILED_CODECS = "mediawan.stream.failedCodecs.2";
+  function failedCodecs(env) {
+    try {
+      const list = JSON.parse(env && env.localStorage.getItem(FAILED_CODECS) || "[]");
+      return Array.isArray(list) ? list.filter((c) => c === "hevc" || c === "hevc10") : [];
+    } catch {
+      return [];
+    }
+  }
+  function codecKey(info) {
+    if (!info || info.video !== "hevc") return null;
+    return /10/.test(String(info.pixelFormat || "")) || info.hdr ? "hevc10" : "hevc";
+  }
+  function rememberDecodeFailure(env, info) {
+    const codec = codecKey(info);
+    if (!codec) return false;
+    try {
+      const list = /* @__PURE__ */ new Set([...failedCodecs(env), codec, ...codec === "hevc" ? ["hevc10"] : []]);
+      env.localStorage.setItem(FAILED_CODECS, JSON.stringify([...list]));
+    } catch {
+    }
+    return true;
+  }
+  function detectCapabilities(env) {
+    const source2 = env && env.MediaSource;
+    const mse = (type) => {
+      try {
+        return !!source2 && !!source2.isTypeSupported && source2.isTypeSupported(type);
+      } catch {
+        return false;
+      }
+    };
+    const video2 = [
+      mse('video/mp4; codecs="avc1.640028"') && "h264",
+      mse('video/mp4; codecs="hvc1.1.6.L150.B0"') && "hevc",
+      mse('video/mp4; codecs="hvc1.2.4.L153.B0"') && "hevc10"
+    ].filter(Boolean);
+    for (const failed of failedCodecs(env)) {
+      const at = video2.indexOf(failed);
+      if (at >= 0) video2.splice(at, 1);
+    }
+    if (!video2.includes("h264")) video2.unshift("h264");
+    let uhd = null;
+    try {
+      const info = env && env.webapis && env.webapis.productinfo;
+      if (info && typeof info.isUdPanelSupported === "function") uhd = !!info.isUdPanelSupported();
+    } catch {
+    }
+    if (uhd == null) {
+      const screen = env && env.screen || {};
+      const ratio = Number(env && env.devicePixelRatio) || 1;
+      uhd = Math.max(Number(screen.width) || 0, Number(screen.height) || 0) * ratio >= 3e3;
+    }
+    return {
+      video: video2,
+      maxHeight: uhd ? 2160 : 1080,
+      audioChannels: surroundOutput(env) ? 6 : 2,
+      dolbyVision: false
+    };
+  }
+  function surroundOutput(env) {
+    const Context = env && (env.AudioContext || env.webkitAudioContext);
+    if (!Context) return false;
+    let context = null;
+    try {
+      context = new Context();
+      return Number(context.destination && context.destination.maxChannelCount) >= 6;
+    } catch {
+      return false;
+    } finally {
+      try {
+        if (context && context.close) context.close().catch(() => {
+        });
+      } catch {
+      }
+    }
+  }
+  function requiredCodec(release) {
+    if (!release || !release.hevc) return "h264";
+    return release.hdr || release.dolbyVision ? "hevc10" : "hevc";
+  }
+  function streamPlan(option3, capabilities2) {
+    const caps = capabilities2 || { video: ["h264"], maxHeight: 1080 };
+    const label = resolutionLabel(option3 && option3.resolution);
+    if (!option3 || !option3.available)
+      return {
+        selectable: false,
+        note: unavailableNote(option3 && option3.reason, label),
+        warning: ""
+      };
+    const release = option3.release || {};
+    const uhd = option3.resolution >= 2160;
+    if (uhd && caps.maxHeight < 2160)
+      return {
+        selectable: false,
+        note: "This screen shows up to 1080p, so 4K would only take longer to load.",
+        warning: ""
+      };
+    const codec = requiredCodec(release);
+    const decodes = (caps.video || ["h264"]).includes(codec);
+    const dolbyOnly = release.dolbyVisionOnly && !caps.dolbyVision;
+    if (uhd && (!decodes || dolbyOnly))
+      return {
+        selectable: false,
+        note: dolbyOnly ? "This 4K copy is Dolby Vision only, which this device cannot show correctly." : `This device cannot decode this 4K video (${codec === "hevc10" ? "HEVC 10-bit" : "HEVC"}).`,
+        warning: ""
+      };
+    if (!decodes || dolbyOnly)
+      return {
+        selectable: true,
+        note: "",
+        warning: `The server converts this for your device: it starts a little slower${release.hdr ? " and HDR shows as SDR" : ""}.`
+      };
+    return { selectable: true, note: "", warning: "" };
+  }
+  function unavailableNote(reason, label) {
+    const text = String(reason || "");
+    const best = text.match(/Best:\s*(.+)$/);
+    if (best)
+      return `No ${label} release meets your rules right now (closest: ${lowerFirst(best[1])}).`;
+    return text.replace(/\b2160p\b/g, "4K") || `No ${label} release is available.`;
+  }
+  var lowerFirst = (text) => text.charAt(0).toLowerCase() + text.slice(1);
+  function releaseFacts(release) {
+    if (!release) return [];
+    const facts = [formatBytes(release.sizeBytes)];
+    if (release.service) facts.push(release.service);
+    if (release.source === "disc") facts.push("Blu-ray");
+    if (release.source === "remux") facts.push("Blu-ray remux");
+    if (release.dolbyVision) facts.push(release.hdr ? "Dolby Vision \xB7 HDR" : "Dolby Vision");
+    else if (release.hdr) facts.push("HDR");
+    return facts;
+  }
+  function releaseDetail(release) {
+    if (!release) return "";
+    const parts = [release.hevc ? "HEVC" : "H.264"];
+    if (release.group) parts.push(release.group);
+    if (release.seeders != null) parts.push(plural(release.seeders, "seeder"));
+    if (release.seasonPack) parts.push("season pack");
+    return parts.join(" \xB7 ");
+  }
+  function chooseResolution(options, remembered, capabilities2) {
+    const list = options && options.resolutions || [];
+    const works = (resolution) => {
+      const option3 = list.find((o) => o.resolution === resolution);
+      return !!option3 && streamPlan(option3, capabilities2).selectable;
+    };
+    const standard = list.find((o) => o.resolution < 2160);
+    for (const candidate of [
+      Number(remembered) === 1080 && standard ? standard.resolution : Number(remembered),
+      options && options.defaultResolution,
+      ...list.map((o) => o.resolution)
+    ])
+      if (works(candidate)) return candidate;
+    return null;
+  }
+  var resolutionKey = (userId) => `mw:stream-resolution:${userId || "anonymous"}`;
+  function rememberedResolution(userId, storage2) {
+    try {
+      const value = Number(storage2 && storage2.getItem(resolutionKey(userId)));
+      return RESOLUTIONS.includes(value) ? value : null;
+    } catch {
+      return null;
+    }
+  }
+  function rememberResolution(userId, resolution, storage2) {
+    try {
+      if (KNOWN_RESOLUTIONS.includes(Number(resolution)))
+        storage2.setItem(resolutionKey(userId), String(Number(resolution) >= 2160 ? 2160 : 1080));
+    } catch {
+    }
+  }
+  function startupView(status, { elapsedMs = 0 } = {}) {
+    if (!status) return { stage: "sources", title: "Finding sources", detail: "", progress: null };
+    const peers = Number(status.peers) || 0;
+    const speed = status.downloadSpeed ? formatSpeed(status.downloadSpeed) : "";
+    const live = [plural(peers, "peer"), speed].filter(Boolean).join(" \xB7 ");
+    const state = status.state;
+    if (state === "failed")
+      return { stage: "failed", title: status.message, detail: "", progress: null };
+    if (state === "stopped")
+      return { stage: "stopped", title: status.message || "Stopped", detail: "", progress: null };
+    if (status.conversion && status.conversion.state === "ready" && state !== "buffering")
+      return { stage: "playing", title: "Playing", detail: live, progress: 1 };
+    if (state === "finding-peers") {
+      const trying = (status.attempts || []).filter((a) => a.state === "trying").length;
+      const slow = elapsedMs >= 1e4;
+      return {
+        stage: "sources",
+        title: "Finding sources",
+        detail: slow ? `Still looking${trying > 1 ? ` across ${trying} releases` : ""}. Quiet releases can take up to 45 seconds.` : trying > 1 ? `Trying ${trying} releases` : "Looking for people sharing this release",
+        progress: null
+      };
+    }
+    if (state === "fetching-metadata")
+      return {
+        stage: "connecting",
+        title: "Connecting",
+        detail: `${live} \xB7 getting the file list`,
+        progress: null
+      };
+    if (state === "probing") {
+      const file = status.file;
+      const target = file ? Math.min(file.size || HEAD_TAIL_BYTES, HEAD_TAIL_BYTES) : HEAD_TAIL_BYTES;
+      const done = file ? Math.min(target, file.downloaded || 0) : 0;
+      const reading = done >= target * 0.98;
+      return {
+        stage: "buffering",
+        title: "Buffering",
+        detail: reading ? `Reading the video \xB7 ${live}` : `${formatBytes(done)} of ${formatBytes(target)} \xB7 ${live}`,
+        progress: Math.min(0.95, done / target * 0.95)
+      };
+    }
+    if (state === "buffering") {
+      const ahead = Number(status.buffer && status.buffer.convertedAheadSeconds) || 0;
+      return {
+        stage: "buffering",
+        title: "Buffering",
+        detail: live,
+        progress: Math.min(1, ahead / 6)
+      };
+    }
+    return { stage: "buffering", title: "Starting playback", detail: live, progress: 0.97 };
+  }
+  function fallbackNote(status) {
+    const fallback = status && status.fallback;
+    if (!fallback || !fallback.to) return "";
+    const to = fallback.to;
+    const name = [to.service, to.group].filter(Boolean).join(" \xB7 ") || formatBytes(to.sizeBytes);
+    return `The first choice was slow to answer, so this plays a different copy (${name}).`;
+  }
+  function failureView(reason, message, context = {}) {
+    const other = context.other && context.other.available ? context.other.resolution : null;
+    const switchTo = other ? [{ id: "other-resolution", label: `Try ${resolutionLabel(other)}`, resolution: other }] : [];
+    const download = context.canDownload === false ? [] : [{ id: "download", label: "Download instead" }];
+    const retry = [{ id: "retry", label: "Try again" }];
+    switch (reason) {
+      case "vpn":
+        return {
+          title: "Connect the VPN to stream",
+          body: context.guardMessage || message || "Streaming waits for the VPN so peers never see this server\u2019s address.",
+          actions: [{ id: "retry", label: "Check again" }, ...download]
+        };
+      case "unavailable":
+        return {
+          title: `No ${resolutionLabel(context.resolution)} release right now`,
+          body: unavailableNote(message, resolutionLabel(context.resolution)),
+          actions: [...switchTo, ...download]
+        };
+      // Every release at this quality was checked and is another film with the same name.
+      case "wrong-film":
+        return {
+          title: "Only a different film is available",
+          body: message || "The releases listed at this quality are a different film with the same name.",
+          actions: [...switchTo, ...download]
+        };
+      case "no-peers":
+      case "no-release":
+        return {
+          title: "Nobody is sharing this right now",
+          body: "None of the releases answered in time. This often changes within a few minutes.",
+          actions: [...retry, ...switchTo, ...download]
+        };
+      case "disk":
+        return {
+          title: "Not enough free space to stream",
+          body: message || "The server needs more free disk space for this stream.",
+          actions: [
+            ...other && other < (context.resolution || 0) ? [
+              {
+                id: "other-resolution",
+                label: `Try ${resolutionLabel(other)} (smaller)`,
+                resolution: other
+              }
+            ] : [],
+            ...retry
+          ]
+        };
+      // Only this player's own sessions may be stopped from here; other devices keep playing.
+      case "limit":
+        return context.ownOthers ? {
+          title: "Too many streams at once",
+          body: "This device still holds other streams. Stop them to start this one; your other devices keep playing.",
+          actions: [{ id: "stop-others", label: "Stop the others on this device" }, ...retry]
+        } : {
+          title: "Too many streams at once",
+          body: "Your other devices are using all of this account\u2019s streams. Stop playback on one of them, then try again.",
+          actions: [...retry, ...download]
+        };
+      // The video did not play here (decoder or player error). Converting it on the server
+      // for this device is the next step, unless that is what just failed.
+      case "playback":
+        return {
+          title: "This video did not play on this device",
+          body: context.compatible ? "Even the converted version did not play. Try again, or download it instead." : "Compatibility playback converts it on the server for this device. It starts a little slower.",
+          actions: [
+            ...context.compatible ? [] : [{ id: "compatibility", label: "Use compatibility playback" }],
+            ...retry,
+            ...switchTo,
+            ...download
+          ]
+        };
+      case "stopped":
+        return {
+          title: "The stream stopped",
+          body: message && message !== "Stopped" ? message : "The server closed this stream.",
+          actions: [{ id: "retry", label: "Resume" }, ...switchTo, ...download]
+        };
+      case "permission":
+        return {
+          title: "This account cannot stream",
+          body: "Ask an administrator to allow downloads for your account.",
+          actions: [{ id: "close", label: "Back" }]
+        };
+      default:
+        return {
+          title: "Playback could not start",
+          body: message || "Something went wrong while starting the stream.",
+          actions: [...retry, ...switchTo, ...download]
+        };
+    }
+  }
+  function failureReason(statusOrError) {
+    if (!statusOrError) return "failed";
+    if (statusOrError.error && typeof statusOrError.error === "object")
+      return statusOrError.error.reason || "failed";
+    return statusOrError.reason || "failed";
+  }
+
+  // public/stream-ui.js
+  var playerKey = (() => {
+    const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+    let id = "";
+    try {
+      const bytes = new Uint8Array(12);
+      window.crypto.getRandomValues(bytes);
+      for (let i = 0; i < bytes.length; i++) id += chars[bytes[i] % chars.length];
+    } catch {
+      id = (Math.random().toString(36) + Math.random().toString(36)).replace(/[^a-z0-9]/g, "");
+    }
+    return `web-${id.slice(0, 16)}`;
+  })();
+  var playerId = () => playerKey;
+  var user = null;
+  var capabilities = null;
+  function configureStreaming(account) {
+    user = account;
+    capabilities = detectCapabilities(window);
+  }
+  var canStream = () => !!(user == null ? void 0 : user.canDownload);
+  var deviceCapabilities = () => capabilities || (capabilities = detectCapabilities(window));
+  function decodeFailed(info) {
+    if (rememberDecodeFailure(window, info)) capabilities = detectCapabilities(window);
+  }
+  var storage = () => {
+    try {
+      return window.localStorage;
+    } catch {
+      return null;
+    }
+  };
+  var preferredResolution = (options) => chooseResolution(options, rememberedResolution(user == null ? void 0 : user.id, storage()), deviceCapabilities());
+  var lastResolution = () => rememberedResolution(user == null ? void 0 : user.id, storage());
+  var saveResolution = (resolution) => rememberResolution(user == null ? void 0 : user.id, resolution, storage());
+  var optionsCache = /* @__PURE__ */ new Map();
+  function streamOptions(itemId, { refresh = false } = {}) {
+    const hit = optionsCache.get(itemId);
+    if (!refresh && hit && Date.now() - hit.at < 6e4) return hit.promise;
+    const entry = { at: Date.now(), data: (hit == null ? void 0 : hit.data) || null, promise: null };
+    entry.promise = api(`/api/items/${itemId}/stream-options${refresh ? "?refresh=1" : ""}`).then(
+      (data) => entry.data = data
+    );
+    entry.promise.catch(() => optionsCache.get(itemId) === entry && optionsCache.delete(itemId));
+    optionsCache.set(itemId, entry);
+    return entry.promise;
+  }
+  var cachedOptions = (itemId) => {
+    var _a;
+    return ((_a = optionsCache.get(itemId)) == null ? void 0 : _a.data) || null;
+  };
+  var prepared = /* @__PURE__ */ new Map();
+  function prepareStream(itemId, resolution) {
+    const key = `${itemId}:${resolution}`, hit = prepared.get(key);
+    if (hit && Date.now() - hit.at < 4e4) return hit.promise;
+    const entry = {
+      at: Date.now(),
+      promise: api(`/api/items/${itemId}/stream/prepare`, { resolution, player: playerKey })
+    };
+    entry.promise.catch(() => prepared.get(key) === entry && prepared.delete(key));
+    prepared.set(key, entry);
+    return entry.promise;
+  }
+  var forgetPrepared = (itemId) => {
+    for (const key of [...prepared.keys()]) if (key.startsWith(`${itemId}:`)) prepared.delete(key);
+  };
+  var stoppedAt = /* @__PURE__ */ new Map();
+  function streamStopped(itemId) {
+    if (!itemId) return;
+    forgetPrepared(itemId);
+    stoppedAt.set(itemId, Date.now());
+  }
+  var recentlyStopped = (itemId) => Date.now() - (stoppedAt.get(itemId) || 0) < 3e4;
+  async function warmStream(itemId, resolution) {
+    var _a;
+    if (!canStream() || !itemId) return null;
+    try {
+      const options = await streamOptions(itemId);
+      if (!options.canStream || !((_a = options.guard) == null ? void 0 : _a.ok)) return null;
+      const chosen = resolution || preferredResolution(options);
+      return chosen ? await prepareStream(itemId, chosen) : null;
+    } catch {
+      return null;
+    }
+  }
+  function bindWarmUp(root) {
+    let timer2 = null, target = null;
+    const schedule2 = (element, delay) => {
+      var _a;
+      const warm = (_a = element == null ? void 0 : element.closest) == null ? void 0 : _a.call(element, "[data-warm]");
+      if (warm === target) return;
+      clearTimeout(timer2);
+      target = warm;
+      if (warm) timer2 = setTimeout(() => void warmStream(warm.dataset.warm), delay);
+    };
+    root.addEventListener("focusin", (event) => schedule2(event.target, 250));
+    root.addEventListener("mouseover", (event) => schedule2(event.target, 500));
+    root.addEventListener("mouseleave", () => schedule2(null, 0));
+    root.addEventListener("focusout", () => schedule2(null, 0));
+  }
+  var checkIcon = '<svg class="stream-option-check" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>';
+  function optionCards(options, selected) {
+    if (!options)
+      return RESOLUTIONS.map(
+        (resolution) => `<div class="stream-option loading" aria-hidden="true"><span class="stream-option-head"><strong>${resolutionLabel(resolution)}</strong></span><span class="stream-option-facts">Checking releases\u2026</span><span class="stream-option-detail">&nbsp;</span></div>`
+      ).join("");
+    return options.resolutions.map((option3) => {
+      const resolution = option3.resolution;
+      const plan = streamPlan(option3, deviceCapabilities());
+      const pressed = plan.selectable && resolution === selected;
+      const facts = plan.selectable ? releaseFacts(option3.release).join(" \xB7 ") : "Not available";
+      const detail = plan.note || plan.warning || releaseDetail(option3.release);
+      const label = `${resolutionLabel(resolution)}: ${facts}. ${detail}`;
+      return `<button type="button" class="stream-option${plan.warning ? " warns" : ""}" data-stream-resolution="${resolution}" aria-pressed="${pressed}" aria-label="${esc(label)}" ${plan.selectable ? "" : "disabled"}><span class="stream-option-head"><strong>${resolutionLabel(resolution)}</strong>${checkIcon}</span><span class="stream-option-facts">${esc(facts)}</span><span class="stream-option-detail">${esc(detail)}</span></button>`;
+    }).join("");
+  }
+  function readinessText(status) {
+    var _a;
+    if (!status) return "";
+    if (status.state === "failed") {
+      const view2 = failureView(failureReason(status), ((_a = status.error) == null ? void 0 : _a.message) || status.message, {
+        resolution: status.resolution
+      });
+      return `${view2.title}. You can still try, or pick the other quality.`;
+    }
+    if (status.state === "ready" || status.conversion) return "Ready: starts instantly";
+    const view = startupView(status);
+    if (view.stage === "buffering" && view.progress != null)
+      return `Getting ready: buffering ${Math.round(view.progress / 0.95 * 100)}%`;
+    if (view.stage === "connecting") return `Getting ready: connected to ${status.peers || 0} peers`;
+    return "Getting ready: finding sources";
+  }
+  function readinessWatcher(element, onGone, onStatus = () => {
+  }) {
+    let events = null, sessionId = null;
+    const close = () => {
+      events == null ? void 0 : events.close();
+      events = null;
+      sessionId = null;
+    };
+    const gone = () => {
+      close();
+      if (!element.isConnected) return;
+      element.classList.remove("ready");
+      element.textContent = "";
+      onGone();
+    };
+    return {
+      close,
+      follow(status) {
+        if (!(status == null ? void 0 : status.id) || status.id === sessionId) return;
+        close();
+        sessionId = status.id;
+        element.classList.remove("ready");
+        element.textContent = "Getting ready\u2026";
+        const show = (next) => {
+          if (!element.isConnected) return close();
+          if (next.state === "stopped") return gone();
+          element.classList.toggle("ready", next.state === "ready" || !!next.conversion);
+          element.textContent = readinessText(next);
+          onStatus(next);
+        };
+        if (!window.EventSource) {
+          api(`/api/streams/${status.id}`).then(show, gone);
+          return;
+        }
+        const source2 = events = new EventSource(`/api/streams/${status.id}/events`);
+        source2.addEventListener("status", (event) => {
+          if (events !== source2) return;
+          try {
+            show(JSON.parse(event.data));
+          } catch {
+          }
+        });
+        source2.onerror = () => {
+          if (events === source2 && source2.readyState === 2) gone();
+        };
+      }
+    };
+  }
+  function bindChooser(root, itemId, { onChange = () => {
+  }, auto = false } = {}) {
+    const cards = root.querySelector(".stream-options"), readiness = root.querySelector(".stream-readiness");
+    let synced = null;
+    const verify = (status) => {
+      var _a, _b, _c;
+      const shown = options == null ? void 0 : options.resolutions.find((o) => o.resolution === status.resolution);
+      const wrongFilm = ((_a = status.error) == null ? void 0 : _a.reason) === "wrong-film";
+      const hash = status.state === "ready" ? (_b = status.release) == null ? void 0 : _b.hash : null;
+      if (!wrongFilm && (!hash || hash === ((_c = shown == null ? void 0 : shown.release) == null ? void 0 : _c.hash))) return;
+      const key = `${status.id}:${hash || "none"}`;
+      if (synced === key) return;
+      synced = key;
+      streamOptions(itemId, { refresh: true }).then((data) => {
+        var _a2;
+        if (!root.isConnected) return;
+        options = data;
+        const focused = root.contains(document.activeElement) ? document.activeElement.dataset.streamResolution : null;
+        render();
+        if (focused) (_a2 = root.querySelector(`[data-stream-resolution="${focused}"]`)) == null ? void 0 : _a2.focus();
+      }).catch(() => {
+      });
+    };
+    const watcher = readinessWatcher(readiness, () => forgetPrepared(itemId), verify);
+    let options = cachedOptions(itemId), selected = options ? preferredResolution(options) : lastResolution(), picked = false;
+    const state = {
+      // True once the viewer has chosen a card; only such a choice is remembered.
+      get picked() {
+        return picked;
+      },
+      get selected() {
+        return selected;
+      },
+      get options() {
+        return options;
+      },
+      close: watcher.close
+    };
+    const prepare = (intent = !auto) => {
+      var _a;
+      if (!(options == null ? void 0 : options.canStream) || !((_a = options.guard) == null ? void 0 : _a.ok) || !selected) return;
+      if (!intent && recentlyStopped(itemId)) return;
+      readiness.classList.remove("ready");
+      readiness.textContent = "Getting ready\u2026";
+      prepareStream(itemId, selected).then((status) => {
+        if (root.isConnected && status.resolution === selected) watcher.follow(status);
+      }).catch((error) => {
+        if (!root.isConnected) return;
+        readiness.classList.remove("ready");
+        readiness.textContent = failureView(error.reason, error.message, {
+          resolution: selected
+        }).title;
+      });
+    };
+    const render = () => {
+      var _a, _b;
+      cards.innerHTML = optionCards(options, selected);
+      if (!options) {
+        readiness.textContent = "Checking what can be streamed\u2026";
+        return;
+      }
+      if (!options.canStream) {
+        readiness.textContent = failureView("permission").body;
+      } else if (!((_a = options.guard) == null ? void 0 : _a.ok)) {
+        readiness.classList.remove("ready");
+        readiness.innerHTML = `<span>${esc(((_b = options.guard) == null ? void 0 : _b.message) || "Connect the VPN to stream.")}</span> <button type="button" class="text-button stream-recheck">Check again</button>`;
+      } else if (!selected) {
+        readiness.textContent = "Nothing here can play on this device right now. You can download it instead.";
+      } else if (/^Checking/.test(readiness.textContent)) readiness.textContent = "";
+      onChange(selected, options);
+    };
+    root.addEventListener("click", (event) => {
+      var _a;
+      const card2 = event.target.closest("[data-stream-resolution]");
+      if (card2 && !card2.disabled) {
+        const resolution = Number(card2.dataset.streamResolution);
+        if (resolution === selected) return;
+        selected = resolution;
+        picked = true;
+        watcher.close();
+        render();
+        (_a = root.querySelector(`[data-stream-resolution="${resolution}"]`)) == null ? void 0 : _a.focus();
+        prepare(true);
+        return;
+      }
+      if (event.target.closest(".stream-recheck")) {
+        readiness.textContent = "Checking the VPN\u2026";
+        streamOptions(itemId, { refresh: true }).then((data) => {
+          var _a2, _b;
+          options = data;
+          selected = preferredResolution(options);
+          render();
+          prepare(true);
+          if (!((_a2 = options.guard) == null ? void 0 : _a2.ok)) (_b = root.querySelector(".stream-recheck")) == null ? void 0 : _b.focus();
+        }).catch((error) => readiness.textContent = error.message);
+      }
+    });
+    render();
+    if (options) prepare();
+    streamOptions(itemId).then((data) => {
+      var _a;
+      if (!root.isConnected) return;
+      const first = !options;
+      options = data;
+      if (first) selected = preferredResolution(options);
+      else if (!streamPlan(
+        options.resolutions.find((o) => o.resolution === selected),
+        deviceCapabilities()
+      ).selectable)
+        selected = preferredResolution(options);
+      const focused = root.contains(document.activeElement) ? document.activeElement.dataset.streamResolution : null;
+      render();
+      if (focused) (_a = root.querySelector(`[data-stream-resolution="${focused}"]`)) == null ? void 0 : _a.focus();
+      if (first) prepare();
+    }).catch((error) => {
+      if (!root.isConnected) return;
+      cards.innerHTML = "";
+      readiness.textContent = `${error.message} You can download it instead.`;
+      onChange(null, null);
+    });
+    return state;
+  }
+  var artwork = (...urls) => urls.find((url) => /^https?:\/\//.test(url || "")) || "";
+  function openStreamSheet({ item, title, onPlay, onDownload }) {
+    var _a, _b;
+    const image = artwork(item.thumbnail, title.background, title.poster);
+    const resumable = ((_a = item.state) == null ? void 0 : _a.position) >= 10 && !((_b = item.state) == null ? void 0 : _b.completed);
+    const subtitle = title.kind === "movie" ? title.year || "Movie" : `${episodeLabel(item)}${item.name ? " \xB7 " + item.name : ""}`;
+    modal(
+      `<div class="stream-sheet"><div class="stream-sheet-head">${image ? `<img class="stream-sheet-art" src="${esc(image)}" alt="">` : ""}<div class="stream-sheet-title"><p class="eyebrow">Stream now</p><h2>${esc(title.name)}</h2><p class="meta">${esc(subtitle)}</p></div></div><div class="stream-options" role="group" aria-label="Stream quality"></div><p class="stream-readiness" role="status" aria-live="polite"></p><div class="actions stream-sheet-actions"><button type="button" class="primary stream-play" data-sheet-play>${icon("play")}<span>${resumable ? `Resume from ${clockTime(item.state.position)}` : "Play"}</span></button>${resumable ? '<button type="button" data-sheet-restart>From the beginning</button>' : ""}<button type="button" class="quiet" data-sheet-download>Download instead</button></div></div>`
+    );
+    const root = $("#dialog-content .stream-sheet");
+    const play2 = root.querySelector("[data-sheet-play]");
+    const chooser = bindChooser(root, item.id, {
+      onChange: (resolution, options) => {
+        var _a2, _b2;
+        play2.disabled = !!options && (!options.canStream || !((_a2 = options.guard) == null ? void 0 : _a2.ok) || !resolution);
+        if (play2.disabled && document.activeElement === play2)
+          (_b2 = root.querySelector(".stream-recheck, [data-sheet-download]")) == null ? void 0 : _b2.focus();
+      }
+    });
+    setTimeout(() => (play2.disabled ? root.querySelector("[data-sheet-download]") : play2).focus(), 0);
+    $("#dialog").addEventListener("close", chooser.close, { once: true });
+    $("#dialog-content").onclick = (event) => {
+      const start = event.target.closest("[data-sheet-play], [data-sheet-restart]");
+      if (start && !start.disabled) {
+        chooser.close();
+        if (chooser.picked && chooser.selected) saveResolution(chooser.selected);
+        onPlay({ resolution: chooser.selected, replay: start.hasAttribute("data-sheet-restart") });
+      } else if (event.target.closest("[data-sheet-download]")) {
+        chooser.close();
+        onDownload();
+      }
+    };
+  }
+  var streamPanelHtml = (item) => `<div class="stream-panel" data-stream-panel="${esc(item.id)}"><p class="stream-panel-label">Stream quality</p><div class="stream-options" role="group" aria-label="Stream quality"></div><p class="stream-readiness" role="status" aria-live="polite"></p></div>`;
+  var panelState = null;
+  function closeStreamPanel() {
+    panelState == null ? void 0 : panelState.close();
+  }
+  function bindStreamPanel(item) {
+    panelState == null ? void 0 : panelState.close();
+    panelState = null;
+    const root = document.querySelector(`[data-stream-panel="${item.id}"]`);
+    if (!root) return;
+    const button2 = document.querySelector(`[data-action="stream-play"][data-item="${item.id}"]`);
+    panelState = bindChooser(root, item.id, {
+      auto: true,
+      onChange: (resolution, options) => {
+        var _a;
+        if (!button2) return;
+        if (resolution) button2.dataset.resolution = String(resolution);
+        else delete button2.dataset.resolution;
+        button2.dataset.picked = String(!!(panelState == null ? void 0 : panelState.picked));
+        button2.disabled = !!options && (!options.canStream || !((_a = options.guard) == null ? void 0 : _a.ok) || !resolution);
+      }
+    });
+  }
+
   // public/player.js
   var subtitleRenderer = null;
   var active = null;
@@ -1266,9 +1981,17 @@
     $("#subtitles").focus();
   }
   function clearSubtitleTrack() {
+    var _a;
     subtitleRenderer == null ? void 0 : subtitleRenderer.detach();
     for (const track of Array.from(video().textTracks || [])) track.mode = "disabled";
-    video().querySelectorAll("track").forEach((t) => t.remove());
+    video().querySelectorAll("track").forEach((t) => {
+      if (t.dataset.blob) URL.revokeObjectURL(t.dataset.blob);
+      t.remove();
+    });
+    if (active == null ? void 0 : active.stream) {
+      clearTimeout((_a = active.stream.subtitle) == null ? void 0 : _a.retry);
+      active.stream.subtitle = null;
+    }
   }
   function releaseSubtitleFile() {
     clearSubtitleTrack();
@@ -1295,7 +2018,7 @@
     }
   }
   async function report(type = "progress", beacon = false) {
-    if (!active || loading) return;
+    if (!active || loading || !active.session) return;
     const payload = {
       type,
       seq: ++active.seq,
@@ -1324,10 +2047,20 @@
     });
     clearInterval(timer);
     cancelNext();
-    await report("stop");
+    const stream = active == null ? void 0 : active.stream;
+    if (stream) detachStream(stream);
+    hideStartup();
+    const owner = active;
+    const stopped = report("stop");
     loading = true;
     video().pause();
+    $("#player").hidden = true;
+    document.body.classList.remove("player-open");
     releaseSubtitleFile();
+    if (stream) stopStream(stream);
+    await stopped;
+    if (active !== owner) return;
+    $("#shell").removeAttribute("inert");
     await releaseConversion();
     video().removeAttribute("src");
     video().load();
@@ -1337,20 +2070,23 @@
     closeSubtitles();
     queue = null;
     loading = false;
-    $("#player").hidden = true;
-    document.body.classList.remove("player-open");
-    $("#shell").removeAttribute("inert");
     window.dispatchEvent(new Event("library-changed"));
   }
-  async function play(itemId, titleId, { replay = false, queueId = null } = {}) {
-    var _a, _b, _c;
+  async function play(itemId, titleId, { replay = false, queueId = null, stream = null } = {}) {
+    var _a;
+    if (stream) return playStream(itemId, titleId, { replay, queueId, ...stream });
+    closeStreamPanel();
     await closeLive();
     clearInterval(timer);
     cancelNext();
+    const previousStream = active == null ? void 0 : active.stream;
+    if (previousStream) detachStream(previousStream);
+    hideStartup();
     await report("stop");
     loading = true;
     video().pause();
     releaseSubtitleFile();
+    if (previousStream) stopStream(previousStream);
     await releaseConversion();
     try {
       const title = await api(`/api/titles/${titleId}`), item = title.items.find((i) => i.id === itemId);
@@ -1388,6 +2124,7 @@
       $("#subtitle-status").textContent = "";
       $("#subtitle-find").disabled = false;
       $("#player-subtitles-toggle").classList.remove("subtitles-active");
+      renderQuality();
       scrubbing = false;
       updateTransport();
       $("#player").hidden = false;
@@ -1398,39 +2135,11 @@
       $("#player-title").textContent = title.name;
       $("#player-episode").textContent = title.kind === "movie" ? "" : `${episodeLabel(item)}${item.name ? " \xB7 " + item.name : ""}`;
       $("#player-message").textContent = "";
-      $("#audio").innerHTML = info.audio.map(
-        (t) => `<option value="${t.index}">${esc(t.language)} \xB7 ${esc(t.title || t.codec)} ${t.channels || ""}</option>`
-      ).join("");
-      const supportedSubtitles = info.subtitles.filter(
-        (t) => ["subrip", "ass", "ssa", "webvtt", "mov_text"].includes(t.codec)
-      );
-      $("#subtitles").innerHTML = '<option value="">Off</option>' + supportedSubtitles.map(
-        (t) => `<option value="${t.index}">${esc(subtitleLanguageLabel(t.language))} \xB7 ${esc(t.title || t.codec)}</option>`
-      ).join("");
-      if (!supportedSubtitles.length)
-        $("#subtitle-status").textContent = info.subtitles.length ? "This file only has image subtitles. Find online subtitles or open an SRT/VTT file." : "No subtitles in this file. Find online subtitles or open an SRT/VTT file.";
-      $("#previous").disabled = !queue || queue.index <= 0;
-      $("#next").disabled = !queue || queue.index >= queue.items.length - 1;
-      $("#player-queue").disabled = !queue;
-      $("#previous").hidden = $("#next").hidden = $("#player-queue").hidden = !queue;
-      $("#chapters").hidden = !((_a = info.chapters) == null ? void 0 : _a.length);
-      $("#chapters").disabled = !((_b = info.chapters) == null ? void 0 : _b.length);
-      const preferred = info.audio.find(
-        (t) => preferences.audioLanguage && t.language === preferences.audioLanguage
-      );
-      if (preferred) $("#audio").value = String(preferred.index);
-      if (info.direct && (!preferred || preferred.index === ((_c = info.audio[0]) == null ? void 0 : _c.index)))
+      const { supportedSubtitles, preferred } = populateMenus(info, preferences);
+      if (info.direct && (!preferred || preferred.index === ((_a = info.audio[0]) == null ? void 0 : _a.index)))
         await source(`/api/items/${itemId}/file`, session.position);
       else await convert(session.position);
-      if (preferences.subtitleMode === "preferred") {
-        const track = supportedSubtitles.find(
-          (t) => t.language === preferences.subtitleLanguage || isArabic(t.language) && isArabic(preferences.subtitleLanguage)
-        );
-        if (track) {
-          $("#subtitles").value = String(track.index);
-          setSubtitles();
-        }
-      }
+      applyPreferredSubtitles(supportedSubtitles, preferences);
       loading = false;
       active.pendingPosition = null;
       updateTransport();
@@ -1448,26 +2157,738 @@
       if (!active) $("#player").hidden = true;
     }
   }
+  var textSubtitleCodecs = ["subrip", "ass", "ssa", "webvtt", "mov_text"];
+  function populateMenus(info, preferences) {
+    $("#audio").innerHTML = info.audio.map(
+      (t) => `<option value="${t.index}">${esc(t.language)} \xB7 ${esc(t.title || t.codec)} ${t.channels || ""}</option>`
+    ).join("");
+    const supportedSubtitles = info.subtitles.filter((t) => textSubtitleCodecs.includes(t.codec));
+    $("#subtitles").innerHTML = '<option value="">Off</option>' + supportedSubtitles.map(
+      (t) => `<option value="${t.index}">${esc(subtitleLanguageLabel(t.language))} \xB7 ${esc(t.title || t.codec)}</option>`
+    ).join("");
+    if (!supportedSubtitles.length)
+      $("#subtitle-status").textContent = info.subtitles.length ? "This file only has image subtitles. Find online subtitles or open an SRT/VTT file." : "No subtitles in this file. Find online subtitles or open an SRT/VTT file.";
+    updateQueueButtons();
+    const preferred = info.audio.find(
+      (t) => preferences.audioLanguage && t.language === preferences.audioLanguage
+    );
+    if (preferred) $("#audio").value = String(preferred.index);
+    return { supportedSubtitles, preferred };
+  }
+  function updateQueueButtons() {
+    var _a, _b;
+    if (!active) return;
+    $("#previous").disabled = !queue || queue.index <= 0;
+    $("#next").disabled = !queue || queue.index >= queue.items.length - 1;
+    $("#player-queue").disabled = !queue;
+    $("#previous").hidden = $("#next").hidden = $("#player-queue").hidden = !queue;
+    $("#chapters").hidden = !((_a = active.info.chapters) == null ? void 0 : _a.length);
+    $("#chapters").disabled = !((_b = active.info.chapters) == null ? void 0 : _b.length);
+  }
+  function applyPreferredSubtitles(supportedSubtitles, preferences) {
+    if (preferences.subtitleMode !== "preferred") return;
+    const track = supportedSubtitles.find(
+      (t) => t.language === preferences.subtitleLanguage || isArabic(t.language) && isArabic(preferences.subtitleLanguage)
+    );
+    if (track) {
+      $("#subtitles").value = String(track.index);
+      setSubtitles();
+    }
+  }
+  function renderTitle() {
+    const { title, item } = active;
+    $("#player-title").textContent = title.name || "";
+    $("#player-episode").textContent = title.kind === "movie" || !item.episode ? "" : `${episodeLabel(item)}${item.name ? " \xB7 " + item.name : ""}`;
+  }
+  var artworkUrl = (...urls) => urls.find((url) => /^https?:\/\//.test(url || "")) || "";
+  var absolutePosition = () => active ? playbackPosition(video().currentTime, active.offset, active.info.duration) : 0;
+  var newStream = (fields) => ({
+    id: null,
+    itemId: null,
+    resolution: null,
+    // Compatibility playback: every start/convert of this stream asks for an H.264 transcode.
+    forceTranscode: false,
+    // Conversions this player has already used or seen on the session. A start always makes
+    // a new one, but the first status after it may still describe the previous attempt.
+    seen: /* @__PURE__ */ new Set(),
+    status: null,
+    startedAt: Date.now(),
+    sourced: false,
+    probed: false,
+    failed: null,
+    closing: false,
+    stale: false,
+    events: null,
+    heartbeat: null,
+    tick: null,
+    switching: null,
+    nextPrepared: false,
+    conversionSubtitles: [],
+    subtitle: null,
+    recoveredAt: 0,
+    ...fields
+  });
+  var streamCapabilities = (stream) => stream.forceTranscode ? { ...deviceCapabilities(), forceTranscode: true } : deviceCapabilities();
+  var freshConversion = (stream, status) => status.conversion && !stream.seen.has(status.conversion.id) ? status.conversion : null;
+  function streamEvents(owner, id, handler) {
+    const gone = (error) => {
+      if (error.status === 404 && active === owner)
+        handler({ id, state: "stopped", message: "The stream ended. It may have expired." });
+    };
+    if (!window.EventSource) {
+      const poll2 = setInterval(() => api(`/api/streams/${id}`).then(handler, gone), 500);
+      return { close: () => clearInterval(poll2) };
+    }
+    const events = new EventSource(`/api/streams/${id}/events`);
+    events.addEventListener("status", (event) => {
+      if (active !== owner) return events.close();
+      let status;
+      try {
+        status = JSON.parse(event.data);
+      } catch {
+        return;
+      }
+      handler(status);
+    });
+    events.onerror = () => {
+      if (events.readyState === 2 && active === owner) api(`/api/streams/${id}`).then(handler, gone);
+    };
+    return events;
+  }
+  function detachStream(stream) {
+    var _a, _b;
+    (_a = stream.events) == null ? void 0 : _a.close();
+    stream.events = null;
+    clearInterval(stream.heartbeat);
+    clearInterval(stream.tick);
+    const switching = stream.switching;
+    if (switching) {
+      (_b = switching.events) == null ? void 0 : _b.close();
+      clearTimeout(switching.timer);
+    }
+  }
+  function stopStream(stream) {
+    var _a;
+    detachStream(stream);
+    if (stream.closing) return;
+    stream.closing = true;
+    const ids = [stream.id, (_a = stream.switching) == null ? void 0 : _a.id].filter(Boolean);
+    stream.switching = null;
+    for (const id of ids) api(`/api/streams/${id}`, {}, "DELETE").catch(() => {
+    });
+    if (ids.length) streamStopped(stream.itemId);
+  }
+  function heartbeat2(owner) {
+    var _a, _b;
+    const stream = owner.stream;
+    if (active !== owner || !stream.id || stream.failed || stream.closing) return;
+    const position = Math.max(0, (_a = owner.pendingPosition) != null ? _a : absolutePosition());
+    api(`/api/streams/${stream.id}/heartbeat`, { position }).catch((error) => {
+      if (error.status === 404 && active === owner && owner.stream === stream && !stream.closing)
+        void showStreamFailure(owner, "stopped", "The stream ended on the server.");
+    });
+    const subtitle = stream.subtitle;
+    const c = (_b = stream.status) == null ? void 0 : _b.conversion;
+    const written = c && c.id === conversion ? c.offset + (c.convertedSeconds || 0) : Infinity;
+    if (subtitle && subtitle.loaded && !subtitle.complete && !subtitle.fetching && !loading && $("#subtitles").value === String(subtitle.index) && written > subtitle.until + 20 && (position > subtitle.until - 60 || Date.now() - subtitle.loadedAt > 45e3))
+      refreshStreamSubtitle(owner, subtitle);
+  }
+  function hideStartup() {
+    $("#stream-start").hidden = true;
+    $("#stream-start").classList.remove("failed");
+    $("#player").classList.remove("stream-starting");
+  }
+  function showStartupShell(owner) {
+    const image = artworkUrl(owner.title.background, owner.item.thumbnail, owner.title.poster);
+    const art = $("#stream-start-art");
+    if (image && art.getAttribute("src") !== image) art.src = image;
+    if (!image) art.removeAttribute("src");
+    art.hidden = !image;
+    $("#stream-start").hidden = false;
+    $("#player").classList.add("stream-starting");
+  }
+  var startupSteps = ["sources", "connecting", "buffering"];
+  function renderStartup(owner, status) {
+    const stream = owner.stream;
+    if (active !== owner || stream.failed) return;
+    const view = startupView(status, { elapsedMs: Date.now() - stream.startedAt });
+    const panel = $("#stream-start");
+    panel.classList.remove("failed");
+    $("#stream-start-title").textContent = view.title;
+    $("#stream-start-detail").textContent = view.detail;
+    const current = startupSteps.indexOf(view.stage);
+    panel.querySelectorAll("[data-step]").forEach((step, index) => {
+      step.classList.toggle("done", index < current || view.stage === "playing");
+      step.classList.toggle("current", index === current);
+    });
+    $("#stream-start-meter").classList.toggle("indeterminate", view.progress == null);
+    $("#stream-start-bar").style.width = view.progress == null ? "" : `${Math.round(view.progress * 100)}%`;
+    const resolution = (status == null ? void 0 : status.resolution) || stream.resolution;
+    $("#stream-start-quality").textContent = [
+      resolution ? resolutionLabel(resolution) : "",
+      ...releaseFacts(status == null ? void 0 : status.release)
+    ].filter(Boolean).join(" \xB7 ");
+    $("#stream-start-note").textContent = fallbackNote(status) || (owner.stream.forceTranscode ? "This device cannot play the original video, so the server is converting it." : "");
+    $("#stream-start-actions").innerHTML = "";
+  }
+  function showStreamFailure(owner, reason, message) {
+    var _a;
+    const stream = owner.stream;
+    if (active !== owner || stream.closing) return;
+    stream.failed = { reason, message };
+    if (stream.sourced) stream.failedAt = Math.max(0, (_a = owner.pendingPosition) != null ? _a : absolutePosition());
+    clearInterval(stream.tick);
+    if (stream.switching) cancelSwitch(owner);
+    loading = false;
+    owner.pendingPosition = null;
+    video().pause();
+    closeSettings();
+    closeSubtitles();
+    if (reason === "playback" && !stream.forceTranscode) {
+      decodeFailed(owner.info);
+      void restartStream(owner, { forceTranscode: true });
+      return;
+    }
+    let ownOthers = 0;
+    const render = () => {
+      var _a2, _b;
+      if (active !== owner || owner.stream !== stream || !stream.failed) return;
+      const options = cachedOptions(owner.item.id);
+      const option3 = (options == null ? void 0 : options.resolutions.find((o) => o.resolution !== stream.resolution)) || null;
+      const otherResolution = option3 ? option3.resolution : stream.resolution === 2160 ? 1080 : 2160;
+      const view = failureView(reason, message, {
+        resolution: stream.resolution,
+        other: option3 && {
+          resolution: otherResolution,
+          available: streamPlan(option3, deviceCapabilities()).selectable
+        },
+        canDownload: canStream(),
+        ownOthers,
+        compatible: stream.forceTranscode
+      });
+      $("#stream-start").classList.add("failed");
+      $("#stream-start-title").textContent = view.title;
+      $("#stream-start-detail").textContent = view.body;
+      $("#stream-start-note").textContent = "";
+      const focused = (_b = (_a2 = document.activeElement) == null ? void 0 : _a2.dataset) == null ? void 0 : _b.streamAction;
+      $("#stream-start-actions").innerHTML = view.actions.map(
+        (action2, index) => `<button type="button" class="${index ? "" : "primary"}" data-stream-action="${action2.id}" ${action2.resolution ? `data-resolution="${action2.resolution}"` : ""}>${esc(action2.label)}</button>`
+      ).join("");
+      const target = focused && $(`#stream-start-actions [data-stream-action="${focused}"]`) || $("#stream-start-actions button");
+      target == null ? void 0 : target.focus();
+    };
+    showStartupShell(owner);
+    render();
+    streamOptions(owner.item.id).then(render, () => {
+    });
+    if (reason === "limit")
+      ownStreams(owner).then(
+        (list) => {
+          ownOthers = list.length;
+          render();
+        },
+        () => {
+        }
+      );
+    updateTransport();
+    showControls();
+  }
+  function restartStream(owner, { resolution = owner.stream.resolution, forceTranscode = owner.stream.forceTranscode } = {}) {
+    var _a;
+    const position = owner.stream.sourced ? (_a = owner.stream.failedAt) != null ? _a : absolutePosition() : void 0;
+    return playStream(owner.item.id, owner.title.id, {
+      queueId: queue == null ? void 0 : queue.id,
+      resolution,
+      position,
+      forceTranscode,
+      hint: { title: owner.title, item: owner.item }
+    });
+  }
+  async function ownStreams(owner) {
+    var _a;
+    const { items } = await api("/api/streams");
+    const keep = [owner.stream.id, (_a = owner.stream.switching) == null ? void 0 : _a.id];
+    return items.filter((s) => s.player === playerId() && !keep.includes(s.id));
+  }
+  async function stopOtherStreams(owner) {
+    const mine = await ownStreams(owner);
+    await Promise.all(mine.map((s) => api(`/api/streams/${s.id}`, {}, "DELETE").catch(() => {
+    })));
+  }
+  async function playStream(itemId, titleId, {
+    replay = false,
+    queueId = null,
+    resolution = null,
+    hint = null,
+    position,
+    forceTranscode = false
+  } = {}) {
+    var _a, _b, _c, _d;
+    clearInterval(timer);
+    cancelNext();
+    closeStreamPanel();
+    const previous = active;
+    const previousStream = (previous == null ? void 0 : previous.stream) || null;
+    if (previousStream) detachStream(previousStream);
+    void report("stop");
+    loading = true;
+    video().pause();
+    releaseSubtitleFile();
+    let released = Promise.resolve();
+    if (previousStream) {
+      if (hls2) hls2.destroy();
+      hls2 = null;
+      conversion = null;
+    } else released = releaseConversion();
+    video().removeAttribute("src");
+    video().load();
+    const title = (hint == null ? void 0 : hint.title) || (((_a = previous == null ? void 0 : previous.title) == null ? void 0 : _a.id) === titleId ? previous.title : { id: titleId, name: "" });
+    const item = (hint == null ? void 0 : hint.item) || ((_b = title.items) == null ? void 0 : _b.find((i) => i.id === itemId)) || { id: itemId };
+    active = {
+      item,
+      title,
+      info: { duration: 0, audio: [], subtitles: [], chapters: [] },
+      preferences: (previous == null ? void 0 : previous.preferences) || {},
+      session: null,
+      seq: 0,
+      offset: 0,
+      pendingPosition: replay ? 0 : position != null ? position : item.state && !item.state.completed ? item.state.position || 0 : 0,
+      subtitleDelay: 0,
+      onlineSubtitles: [],
+      stream: newStream({
+        itemId,
+        resolution: resolution || null,
+        forceTranscode,
+        // A retry reuses this player's session: the earlier attempts' conversions are stale.
+        seen: new Set(
+          previousStream ? [...previousStream.seen, (_d = (_c = previousStream.status) == null ? void 0 : _c.conversion) == null ? void 0 : _d.id].filter(Boolean) : []
+        )
+      })
+    };
+    const owner = active, stream = owner.stream;
+    const releasePrevious = (keepId) => {
+      var _a2;
+      if ((previousStream == null ? void 0 : previousStream.id) && previousStream.id !== keepId && previousStream.id !== ((_a2 = active == null ? void 0 : active.stream) == null ? void 0 : _a2.id))
+        stopStream(previousStream);
+    };
+    queue = null;
+    try {
+      const saved = Number(localStorage.getItem(`mw:subsync:${itemId}`));
+      if (Number.isFinite(saved)) owner.subtitleDelay = Math.max(-120, Math.min(120, saved));
+    } catch {
+    }
+    $("#subtitle-delay").value = String(owner.subtitleDelay);
+    $("#subtitle-status").textContent = "";
+    $("#subtitle-find").disabled = false;
+    $("#player-subtitles-toggle").classList.remove("subtitles-active");
+    $("#audio").innerHTML = "";
+    $("#subtitles").innerHTML = '<option value="">Off</option>';
+    scrubbing = false;
+    $("#player").hidden = false;
+    document.body.classList.add("player-open");
+    closeSettings();
+    closeSubtitles();
+    $("#shell").setAttribute("inert", "");
+    renderTitle();
+    $("#player-message").textContent = "";
+    updateQueueButtons();
+    showStartupShell(owner);
+    renderStartup(owner, null);
+    stream.tick = setInterval(() => {
+      if (!stream.sourced) renderStartup(owner, stream.status);
+    }, 1e3);
+    renderQuality();
+    updateTransport();
+    $("#player-close").focus();
+    showControls();
+    try {
+      const titleRequest = api(`/api/titles/${titleId}`);
+      titleRequest.catch(() => {
+      });
+      const teardown = Promise.all([closeLive().catch(() => {
+      }), released.catch(() => {
+      })]);
+      const start = async () => {
+        let chosen = resolution;
+        if (!chosen) {
+          const options = await streamOptions(itemId).catch(() => null);
+          if (active !== owner) return null;
+          chosen = options ? preferredResolution(options) : null;
+          if (options && !chosen) {
+            const fallback = options.resolutions[0];
+            throw Object.assign(new Error((fallback == null ? void 0 : fallback.reason) || ""), { reason: "unavailable" });
+          }
+          stream.resolution = chosen;
+          renderStartup(owner, null);
+        }
+        const body = { capabilities: streamCapabilities(stream), player: playerId() };
+        if (chosen) body.resolution = chosen;
+        if (replay) body.position = 0;
+        else if (position != null) body.position = Math.max(0, position);
+        return api(`/api/items/${itemId}/stream`, body);
+      };
+      const [status] = await Promise.all([start(), teardown]);
+      if (!status) return releasePrevious();
+      releasePrevious(status.id);
+      const fresh = await titleRequest.catch((error) => {
+        api(`/api/streams/${status.id}`, {}, "DELETE").catch(() => {
+        });
+        throw error;
+      });
+      if (active !== owner) {
+        if (!active || active.item.id !== itemId)
+          api(`/api/streams/${status.id}`, {}, "DELETE").catch(() => {
+          });
+        return;
+      }
+      owner.title = fresh;
+      owner.item = fresh.items.find((i) => i.id === itemId) || item;
+      stream.id = status.id;
+      stream.resolution = status.resolution;
+      renderTitle();
+      showStartupShell(owner);
+      renderQuality();
+      stream.events = streamEvents(owner, status.id, (next) => onStreamStatus(owner, next));
+      stream.heartbeat = setInterval(() => heartbeat2(owner), 3e3);
+      stream.setup = (async () => {
+        const [preferences2, q2] = await Promise.all([
+          api("/api/preferences"),
+          queueId ? api(`/api/queues/${queueId}`) : fresh.kind !== "movie" ? api("/api/queues", { titleId, startItem: itemId }) : null
+        ]);
+        const session2 = await api("/api/playback", { itemId, replay, queueId: q2 == null ? void 0 : q2.id });
+        return { preferences: preferences2, q: q2, session: session2 };
+      })();
+      onStreamStatus(owner, status);
+      const { preferences, q, session } = await stream.setup;
+      if (active !== owner) return;
+      owner.preferences = preferences;
+      owner.session = session;
+      queue = q;
+      updateQueueButtons();
+      timer = setInterval(() => void report(), 1e4);
+    } catch (error) {
+      releasePrevious();
+      if (active === owner) showStreamFailure(owner, failureReason(error), error.message);
+    }
+  }
+  function onStreamStatus(owner, status) {
+    var _a, _b, _c;
+    const stream = owner.stream;
+    if (active !== owner || status.id !== stream.id || stream.closing) return;
+    stream.status = status;
+    if (status.playback && !stream.probed) {
+      stream.probed = true;
+      owner.info = status.playback;
+      populateMenus(owner.info, owner.preferences || {});
+    }
+    const fresh = stream.sourced ? status.conversion : freshConversion(stream, status);
+    const staleFailure = ((_a = status.error) == null ? void 0 : _a.reason) === "conversion" && status.conversion && !fresh && !stream.sourced;
+    if ((fresh == null ? void 0 : fresh.audio) != null && !stream.sourced) $("#audio").value = String(fresh.audio);
+    if (status.state === "failed" && !staleFailure)
+      return showStreamFailure(owner, failureReason(status), ((_b = status.error) == null ? void 0 : _b.message) || status.message);
+    if (status.state === "stopped") return showStreamFailure(owner, "stopped", status.message);
+    if (stream.failed) return;
+    stream.stale = ((_c = status.conversion) == null ? void 0 : _c.state) === "stopped";
+    if (!stream.sourced) {
+      if ((fresh == null ? void 0 : fresh.requested) != null) owner.pendingPosition = fresh.requested;
+      else if (status.resumePosition != null) owner.pendingPosition = status.resumePosition;
+      renderStartup(
+        owner,
+        staleFailure || status.conversion && !fresh ? { ...status, state: "starting", conversion: null, error: null } : status
+      );
+      if ((fresh == null ? void 0 : fresh.state) === "ready" && fresh.url) void beginPlayback(owner, fresh);
+    }
+    updateTransport();
+  }
+  async function beginPlayback(owner, c) {
+    const stream = owner.stream;
+    stream.sourced = true;
+    stream.seen.add(c.id);
+    clearInterval(stream.tick);
+    try {
+      const { preferences } = await stream.setup;
+      if (active !== owner || owner.stream !== stream || stream.failed) return;
+      conversion = c.id;
+      owner.offset = c.offset;
+      stream.conversionSubtitles = c.subtitles || [];
+      await source(c.url, Math.max(0, (c.requested || 0) - c.offset), true);
+      if (active !== owner || owner.stream !== stream) return;
+      hideStartup();
+      applyPreferredSubtitles(
+        owner.info.subtitles.filter((t) => textSubtitleCodecs.includes(t.codec)),
+        preferences
+      );
+      loading = false;
+      owner.pendingPosition = null;
+      updateTransport();
+      if (preferences.subtitleMode === "preferred" && preferences.subtitleLanguage && $("#subtitles").value === "")
+        void findSubtitles(true);
+      showControls();
+    } catch (error) {
+      if (active === owner && owner.stream === stream)
+        showStreamFailure(owner, failureReason(error), error.message);
+    }
+  }
+  async function convertStream(owner, position, autoplay) {
+    let stream = owner.stream;
+    if (stream.switching) {
+      if (stream.switching.latest) stream = promoteSwitch(owner, stream, stream.switching, true);
+      else cancelSwitch(owner);
+    }
+    if (hls2) hls2.destroy();
+    hls2 = null;
+    let result;
+    try {
+      result = await api(`/api/streams/${stream.id}/convert`, {
+        position,
+        audio: Number($("#audio").value) || void 0,
+        capabilities: streamCapabilities(stream)
+      });
+    } catch (error) {
+      if (active === owner && owner.stream === stream) {
+        owner.pendingPosition = position;
+        showStreamFailure(owner, failureReason(error), error.message);
+      }
+      return;
+    }
+    if (active !== owner || owner.stream !== stream) return;
+    conversion = result.id;
+    stream.seen.add(result.id);
+    owner.offset = result.offset;
+    stream.conversionSubtitles = result.subtitles || [];
+    stream.stale = false;
+    try {
+      await source(result.url, Math.max(0, position - result.offset), autoplay);
+    } catch (error) {
+      if (active === owner && owner.stream === stream) {
+        owner.pendingPosition = position;
+        showStreamFailure(owner, "playback", error.message);
+      }
+      return;
+    }
+    setSubtitles();
+    $("#player-message").textContent = "";
+  }
+  function renderQuality() {
+    var _a, _b;
+    const group = $("#stream-quality"), stream = active == null ? void 0 : active.stream;
+    group.hidden = !stream;
+    if (!stream) return;
+    const options = cachedOptions(active.item.id);
+    const focused = group.contains(document.activeElement) ? document.activeElement.dataset.streamResolution : null;
+    $("#stream-quality-options").innerHTML = optionCards(
+      options,
+      ((_a = stream.switching) == null ? void 0 : _a.resolution) || stream.resolution
+    );
+    if (focused) (_b = $(`#stream-quality-options [data-stream-resolution="${focused}"]`)) == null ? void 0 : _b.focus();
+    streamOptions(active.item.id).then(
+      (fresh) => (active == null ? void 0 : active.stream) === stream && fresh !== options && renderQuality(),
+      () => {
+      }
+    );
+  }
+  var switchMessageTimer = null;
+  function switchMessage(text, clearAfter = 0) {
+    clearTimeout(switchMessageTimer);
+    $("#stream-quality-status").textContent = text;
+    $("#player-message").textContent = text;
+    if (clearAfter)
+      switchMessageTimer = setTimeout(() => {
+        if ($("#player-message").textContent === text) $("#player-message").textContent = "";
+        if ($("#stream-quality-status").textContent === text)
+          $("#stream-quality-status").textContent = "";
+      }, clearAfter);
+  }
+  function cancelSwitch(owner) {
+    var _a;
+    const switching = owner.stream.switching;
+    if (!switching) return;
+    owner.stream.switching = null;
+    (_a = switching.events) == null ? void 0 : _a.close();
+    clearTimeout(switching.timer);
+    if (switching.id) api(`/api/streams/${switching.id}`, {}, "DELETE").catch(() => {
+    });
+    renderQuality();
+  }
+  async function changeResolution(resolution) {
+    var _a, _b;
+    const owner = active, stream = owner == null ? void 0 : owner.stream;
+    if (!(stream == null ? void 0 : stream.id) || resolution === (((_a = stream.switching) == null ? void 0 : _a.resolution) || stream.resolution)) return;
+    saveResolution(resolution);
+    if (!stream.sourced || stream.failed) {
+      closeSettings();
+      return void restartStream(owner, { resolution });
+    }
+    cancelSwitch(owner);
+    if (resolution === stream.resolution) {
+      switchMessage(`Staying in ${resolutionLabel(resolution)}`, 4e3);
+      return;
+    }
+    const label = resolutionLabel(resolution);
+    const switching = { resolution, id: null, events: null, latest: null, readyAt: 0, timer: null };
+    stream.switching = switching;
+    renderQuality();
+    switchMessage(`Switching to ${label}. Playback continues meanwhile.`);
+    try {
+      const status = await api(`/api/streams/${stream.id}/resolution`, {
+        resolution,
+        position: Math.max(0, absolutePosition()),
+        capabilities: streamCapabilities(stream)
+      });
+      if (active !== owner || owner.stream !== stream || stream.switching !== switching) {
+        if (status.id !== ((_b = active == null ? void 0 : active.stream) == null ? void 0 : _b.id))
+          api(`/api/streams/${status.id}`, {}, "DELETE").catch(() => {
+          });
+        return;
+      }
+      switching.id = status.id;
+      switching.events = streamEvents(
+        owner,
+        status.id,
+        (next) => onSwitchStatus(owner, stream, switching, next)
+      );
+      onSwitchStatus(owner, stream, switching, status);
+    } catch (error) {
+      if (stream.switching !== switching) return;
+      stream.switching = null;
+      renderQuality();
+      const view = failureView(failureReason(error), error.message, { resolution });
+      switchMessage(`${view.title}. Still playing in ${resolutionLabel(stream.resolution)}.`, 8e3);
+    }
+  }
+  function onSwitchStatus(owner, stream, switching, status) {
+    var _a;
+    if (active !== owner || owner.stream !== stream || stream.switching !== switching) return;
+    if (status.id !== switching.id) return;
+    const label = resolutionLabel(switching.resolution);
+    if (status.state === "failed" || status.state === "stopped") {
+      cancelSwitch(owner);
+      const view2 = failureView(failureReason(status), ((_a = status.error) == null ? void 0 : _a.message) || status.message, {
+        resolution: switching.resolution
+      });
+      switchMessage(`${view2.title}. Still playing in ${resolutionLabel(stream.resolution)}.`, 8e3);
+      return;
+    }
+    switching.latest = status;
+    const c = status.conversion;
+    if ((c == null ? void 0 : c.state) === "ready" && c.url) {
+      if (!switching.readyAt) {
+        switching.readyAt = Date.now();
+        switching.timer = setTimeout(() => void swapStream(owner, stream, switching), 8e3);
+      }
+      if (video().paused || c.offset + (c.convertedSeconds || 0) >= absolutePosition() + 3)
+        void swapStream(owner, stream, switching);
+      else switchMessage(`Switching to ${label}: almost ready.`);
+      return;
+    }
+    const view = startupView(status);
+    switchMessage(
+      `Switching to ${label}: ${view.title.toLowerCase()}${view.progress != null && status.state === "probing" ? ` ${Math.round(view.progress / 0.95 * 100)}%` : ""}. Playback continues meanwhile.`
+    );
+  }
+  function promoteSwitch(owner, old, switching, stopOld) {
+    var _a, _b, _c, _d, _e;
+    old.switching = null;
+    (_a = switching.events) == null ? void 0 : _a.close();
+    clearTimeout(switching.timer);
+    detachStream(old);
+    const status = switching.latest;
+    const next = newStream({
+      id: status.id,
+      itemId: old.itemId,
+      resolution: switching.resolution,
+      forceTranscode: old.forceTranscode,
+      seen: new Set(status.conversion ? [status.conversion.id] : []),
+      status,
+      sourced: true,
+      probed: !!status.playback,
+      // Next Up is prepared again at the new resolution.
+      nextPrepared: false,
+      conversionSubtitles: ((_b = status.conversion) == null ? void 0 : _b.subtitles) || []
+    });
+    owner.stream = next;
+    next.events = streamEvents(owner, status.id, (s) => onStreamStatus(owner, s));
+    next.heartbeat = setInterval(() => heartbeat2(owner), 3e3);
+    if (status.playback) {
+      const choice = $("#subtitles").value;
+      const language = (_c = owner.info.subtitles.find((t) => String(t.index) === choice)) == null ? void 0 : _c.language;
+      owner.info = status.playback;
+      populateMenus(owner.info, owner.preferences || {});
+      if (((_d = status.conversion) == null ? void 0 : _d.audio) != null) $("#audio").value = String(status.conversion.audio);
+      addOnlineSubtitles(owner.onlineSubtitles);
+      if (owner.subtitleFile) addFileOption(((_e = owner.subtitleUpload) == null ? void 0 : _e.name) || "Subtitle file");
+      const same = language && owner.info.subtitles.find((t) => t.language === language);
+      $("#subtitles").value = choice.startsWith("online:") || choice === "file" ? choice : same ? String(same.index) : "";
+    }
+    if (stopOld) stopStream(old);
+    renderQuality();
+    return next;
+  }
+  async function swapStream(owner, old, switching) {
+    if (active !== owner || owner.stream !== old || old.switching !== switching) return;
+    if (loading) {
+      clearTimeout(switching.timer);
+      switching.timer = setTimeout(() => void swapStream(owner, old, switching), 500);
+      return;
+    }
+    const position = absolutePosition(), resume = !video().paused;
+    const next = promoteSwitch(owner, old, switching, false);
+    const c = switching.latest.conversion;
+    loading = true;
+    owner.pendingPosition = position;
+    updateTransport();
+    if (hls2) hls2.destroy();
+    hls2 = null;
+    conversion = c.id;
+    owner.offset = c.offset;
+    try {
+      await source(c.url, Math.max(0, position - c.offset), resume);
+      if (active !== owner || owner.stream !== next) return;
+      setSubtitles();
+      switchMessage(`Now streaming in ${resolutionLabel(next.resolution)}.`, 4e3);
+    } catch (error) {
+      if (active === owner && owner.stream === next)
+        showStreamFailure(owner, "playback", error.message);
+    } finally {
+      stopStream(old);
+      if (active === owner) {
+        loading = false;
+        owner.pendingPosition = null;
+        updateTransport();
+        showControls();
+      }
+    }
+  }
   async function source(url, seek = 0, autoplay = true) {
     clearSubtitleTrack();
     return new Promise((resolve, reject) => {
       var _a;
       const timeout = setTimeout(() => {
         cleanup();
-        reject(new Error("Playback could not start. Try compatibility playback."));
+        reject(
+          Object.assign(new Error("Playback could not start. Try compatibility playback."), {
+            reason: "playback"
+          })
+        );
       }, 25e3);
       const error = () => {
         cleanup();
-        reject(new Error("This format needs compatibility playback."));
+        reject(
+          Object.assign(new Error("This format needs compatibility playback."), {
+            reason: "playback"
+          })
+        );
       };
       const cleanup = () => {
         clearTimeout(timeout);
         video().removeEventListener("error", error);
         video().onloadedmetadata = null;
       };
+      let settled = false;
       video().addEventListener("error", error, { once: true });
       video().onloadedmetadata = () => {
         cleanup();
+        settled = true;
         if (seek > 0) video().currentTime = seek;
         if (autoplay)
           video().play().catch(() => {
@@ -1476,15 +2897,34 @@
         resolve();
       };
       if (url.includes(".m3u8") && ((_a = window.Hls) == null ? void 0 : _a.isSupported())) {
-        hls2 = new window.Hls({ startPosition: 0, lowLatencyMode: false });
+        const instance = hls2 = new window.Hls({ startPosition: 0, lowLatencyMode: false });
         hls2.loadSource(url);
         hls2.attachMedia(video());
         hls2.on(window.Hls.Events.ERROR, (_, data) => {
-          if (data.fatal) {
+          if (!data.fatal || hls2 !== instance) return;
+          const owner = active, stream = owner == null ? void 0 : owner.stream;
+          if (!settled) {
             cleanup();
-            $("#player-message").textContent = "Playback failed. Try compatibility playback again.";
-            reject(new Error("Compatibility playback failed"));
+            if (!stream)
+              $("#player-message").textContent = "Playback failed. Try compatibility playback again.";
+            reject(
+              Object.assign(
+                new Error(
+                  stream ? "The video could not be played." : "Compatibility playback failed"
+                ),
+                { reason: "playback" }
+              )
+            );
+            return;
           }
+          if (!stream) {
+            $("#player-message").textContent = "Playback failed. Try compatibility playback again.";
+            return;
+          }
+          if (!loading && Date.now() - stream.recoveredAt > 15e3) {
+            stream.recoveredAt = Date.now();
+            void convert(absolutePosition(), !video().paused).catch((e) => toast(e.message));
+          } else showStreamFailure(owner, "playback", "Playback kept failing on this device.");
         });
       } else video().src = url;
     });
@@ -1499,6 +2939,7 @@
     $("#player-message").textContent = "";
     video().pause();
     try {
+      if (owner.stream) return await convertStream(owner, position, autoplay);
       await releaseConversion();
       const result = await api(`/api/items/${active.item.id}/convert`, {
         seek: position,
@@ -1521,23 +2962,9 @@
       showControls();
     }
   }
-  function setSubtitles() {
-    var _a, _b, _c;
-    clearSubtitleTrack();
-    const index = $("#subtitles").value;
-    $("#player-subtitles-toggle").classList.toggle("subtitles-active", index !== "");
-    if (index === "" || !active) return;
-    const owner = active;
-    const track = document.createElement("track");
-    track.kind = "subtitles";
-    track.label = ((_a = $("#subtitles").selectedOptions[0]) == null ? void 0 : _a.textContent) || "Subtitles";
-    const language = index.startsWith("online:") ? (_b = active.onlineSubtitles.find((t) => t.id === index.slice(7))) == null ? void 0 : _b.language : (_c = active.info.subtitles.find((t) => String(t.index) === index)) == null ? void 0 : _c.language;
-    if (language) track.srclang = isArabic(language) ? "ar" : language;
-    const external = index.startsWith("online:") || index === "file";
-    track.src = index === "file" ? active.subtitleFile : index.startsWith("online:") ? `/api/items/${active.item.id}/subtitles/online/${encodeURIComponent(index.slice(7))}` : `/api/items/${active.item.id}/subtitles/${index}?offset=${active.offset}`;
-    track.default = true;
+  function syncFor(owner, track, external) {
     const originals = /* @__PURE__ */ new WeakMap();
-    active.syncSubtitles = () => {
+    return () => {
       if (active !== owner || !track.isConnected) return;
       shiftSubtitleCues(
         track.track.cues,
@@ -1547,6 +2974,46 @@
       );
       subtitleRenderer.render();
     };
+  }
+  function setSubtitles() {
+    var _a, _b, _c;
+    clearSubtitleTrack();
+    const index = $("#subtitles").value;
+    $("#player-subtitles-toggle").classList.toggle("subtitles-active", index !== "");
+    if (index === "" || !active) return;
+    const owner = active;
+    const label = ((_a = $("#subtitles").selectedOptions[0]) == null ? void 0 : _a.textContent) || "Subtitles";
+    const language = index.startsWith("online:") ? (_b = active.onlineSubtitles.find((t) => t.id === index.slice(7))) == null ? void 0 : _b.language : (_c = active.info.subtitles.find((t) => String(t.index) === index)) == null ? void 0 : _c.language;
+    const srclang = language ? isArabic(language) ? "ar" : language : "";
+    const external = index.startsWith("online:") || index === "file";
+    if (!external && active.stream) {
+      if (!active.stream.conversionSubtitles.includes(Number(index))) {
+        $("#subtitles").value = "";
+        $("#player-subtitles-toggle").classList.remove("subtitles-active");
+        $("#subtitle-status").textContent = "This track is not available while streaming. Find online subtitles instead.";
+        return;
+      }
+      active.stream.subtitle = {
+        index: Number(index),
+        label,
+        srclang,
+        until: 0,
+        complete: false,
+        loadedAt: 0,
+        loaded: false,
+        fetching: false,
+        attempts: 0,
+        retry: null
+      };
+      return loadStreamSubtitle(owner, active.stream.subtitle);
+    }
+    const track = document.createElement("track");
+    track.kind = "subtitles";
+    track.label = label;
+    if (srclang) track.srclang = srclang;
+    track.src = index === "file" ? active.subtitleFile : index.startsWith("online:") ? `/api/items/${active.item.id}/subtitles/online/${encodeURIComponent(index.slice(7))}` : `/api/items/${active.item.id}/subtitles/${index}?offset=${active.offset}`;
+    track.default = true;
+    active.syncSubtitles = syncFor(owner, track, external);
     track.addEventListener("load", () => {
       if (active !== owner || !track.isConnected) return;
       active.syncSubtitles();
@@ -1560,8 +3027,89 @@
     video().appendChild(track);
     subtitleRenderer.attach(track);
   }
-  async function findSubtitles(selectPreferred = false) {
+  function loadStreamSubtitle(owner, state) {
+    const stream = owner.stream;
+    const current = () => active === owner && owner.stream === stream && stream.subtitle === state && $("#subtitles").value === String(state.index);
+    const failed = () => {
+      state.fetching = false;
+      if (!current() || state.loaded) return;
+      $("#subtitle-status").textContent = "These subtitles could not be loaded. Choose another track or open a subtitle file.";
+      toast("These subtitles could not be loaded");
+    };
+    state.fetching = true;
+    fetch(`/api/streams/${stream.id}/subtitles/embedded/${state.index}`).then(async (response) => {
+      if (response.status === 409 && current() && ++state.attempts < 30) {
+        state.fetching = false;
+        state.retry = setTimeout(() => current() && loadStreamSubtitle(owner, state), 1500);
+        return;
+      }
+      if (!response.ok) throw new Error("Subtitles unavailable");
+      const text = await response.text();
+      if (!current()) return;
+      const url = URL.createObjectURL(new Blob([text], { type: "text/vtt" }));
+      const track = document.createElement("track");
+      track.kind = "subtitles";
+      track.label = state.label;
+      if (state.srclang) track.srclang = state.srclang;
+      track.dataset.blob = url;
+      track.src = url;
+      track.addEventListener(
+        "load",
+        () => {
+          if (!current() || !track.isConnected) {
+            URL.revokeObjectURL(url);
+            return track.remove();
+          }
+          state.until = Number(response.headers.get("X-Subtitle-Until")) || 0;
+          state.complete = response.headers.get("X-Subtitle-Complete") === "true";
+          state.loadedAt = Date.now();
+          state.loaded = true;
+          state.fetching = false;
+          subtitleRenderer.attach(track);
+          active.syncSubtitles = syncFor(owner, track, false);
+          active.syncSubtitles();
+          video().querySelectorAll("track").forEach((old) => {
+            if (old === track) return;
+            if (old.dataset.blob) URL.revokeObjectURL(old.dataset.blob);
+            old.remove();
+          });
+          $("#subtitle-status").textContent = "";
+        },
+        { once: true }
+      );
+      track.addEventListener("error", () => {
+        URL.revokeObjectURL(url);
+        track.remove();
+        failed();
+      });
+      video().appendChild(track);
+      track.track.mode = "hidden";
+    }).catch(failed);
+  }
+  function refreshStreamSubtitle(owner, state) {
+    state.loadedAt = Date.now();
+    loadStreamSubtitle(owner, state);
+  }
+  function addOnlineSubtitles(tracks) {
     var _a;
+    (_a = $("#subtitles-online")) == null ? void 0 : _a.remove();
+    if (!tracks.length) return;
+    const group = document.createElement("optgroup");
+    group.id = "subtitles-online";
+    group.label = "Online \xB7 OpenSubtitles";
+    group.innerHTML = tracks.map((t) => `<option value="online:${esc(t.id)}">${esc(t.label)}</option>`).join("");
+    $("#subtitles").appendChild(group);
+  }
+  function addFileOption(name) {
+    var _a;
+    (_a = $("#subtitle-file-option")) == null ? void 0 : _a.remove();
+    const option3 = document.createElement("option");
+    option3.id = "subtitle-file-option";
+    option3.value = "file";
+    option3.textContent = name;
+    $("#subtitles").appendChild(option3);
+  }
+  async function findSubtitles(selectPreferred = false) {
     if (!active || $("#subtitle-find").disabled) return;
     const owner = active;
     $("#subtitle-find").disabled = true;
@@ -1571,13 +3119,8 @@
       if (active !== owner) return;
       const selection = $("#subtitles").value;
       active.onlineSubtitles = tracks;
-      (_a = $("#subtitles-online")) == null ? void 0 : _a.remove();
+      addOnlineSubtitles(tracks);
       if (tracks.length) {
-        const group = document.createElement("optgroup");
-        group.id = "subtitles-online";
-        group.label = "Online \xB7 OpenSubtitles";
-        group.innerHTML = tracks.map((t) => `<option value="online:${esc(t.id)}">${esc(t.label)}</option>`).join("");
-        $("#subtitles").appendChild(group);
         $("#subtitles").value = selection;
         if (selectPreferred && !selection && !active.subtitleUserChoice) {
           const preferred = tracks.find(
@@ -1610,9 +3153,15 @@
     $("#subtitle-bg-opacity").disabled = subtitleRenderer.style.bg === "none";
   }
   async function advance(delta) {
+    var _a, _b;
     if (!queue || loading) return;
     cancelNext();
-    await report("stop");
+    const stopped = report("stop");
+    const wasPlaying = !video().paused;
+    loading = true;
+    video().pause();
+    updateTransport();
+    await stopped;
     try {
       queue = await api(
         `/api/queues/${queue.id}`,
@@ -1621,10 +3170,21 @@
       );
       const next = await api(`/api/queues/${queue.id}`);
       const item = next.entries[next.index];
-      if (!item.available)
+      if (!item.available && !canStream())
         throw new Error("This queued episode is unavailable. Download it, or use Queue to skip it.");
-      await play(item.id, item.title_id, { queueId: queue.id, replay: queue.mode === "shuffle" });
+      await play(item.id, item.title_id, {
+        queueId: queue.id,
+        replay: item.available && queue.mode === "shuffle",
+        stream: item.available ? null : { resolution: ((_a = active == null ? void 0 : active.stream) == null ? void 0 : _a.resolution) || lastResolution(), hint: { item } }
+      });
     } catch (error) {
+      if (loading && active && !((_b = active.stream) == null ? void 0 : _b.failed)) {
+        loading = false;
+        updateTransport();
+        if (wasPlaying)
+          video().play().catch(() => {
+          });
+      }
       toast(error.message);
       $("#player-message").textContent = error.message;
     }
@@ -1638,9 +3198,10 @@
     if (!queueId) return;
     const data = await api(`/api/queues/${queueId}`);
     modal(
-      `<h2>${esc(data.name)} \xB7 ${data.mode === "shuffle" ? "Shuffle" : "Queue"}</h2><div class="actions"><button data-queue-clear>Clear queue</button></div>${data.entries.map((item, index) => `<div class="row ${index === data.index ? "queue-current" : ""}"><div class="row-main"><strong>${index + 1}. ${esc(item.name)}</strong><p class="meta">${esc(episodeLabel(item))} \xB7 ${item.available ? "Downloaded" : "Unavailable"}</p></div><button data-queue-play="${index}" ${item.available ? "" : "disabled"}>Play</button><button data-queue-up="${index}" ${index === 0 ? "disabled" : ""} aria-label="Move ${esc(item.name)} up">\u2191</button><button data-queue-remove="${index}" aria-label="Remove ${esc(item.name)}">Remove</button></div>`).join("") || "<p>Queue is empty.</p>"}`
+      `<h2>${esc(data.name)} \xB7 ${data.mode === "shuffle" ? "Shuffle" : "Queue"}</h2><div class="actions"><button data-queue-clear>Clear queue</button></div>${data.entries.map((item, index) => `<div class="row ${index === data.index ? "queue-current" : ""}"><div class="row-main"><strong>${index + 1}. ${esc(item.name)}</strong><p class="meta">${esc(episodeLabel(item))} \xB7 ${item.available ? "Downloaded" : canStream() ? "Not downloaded" : "Unavailable"}</p></div><button data-queue-play="${index}" ${item.available || canStream() ? "" : "disabled"}>${item.available || !canStream() ? "Play" : "Stream"}</button><button data-queue-up="${index}" ${index === 0 ? "disabled" : ""} aria-label="Move ${esc(item.name)} up">\u2191</button><button data-queue-remove="${index}" aria-label="Remove ${esc(item.name)}">Remove</button></div>`).join("") || "<p>Queue is empty.</p>"}`
     );
     $("#dialog-content").onclick = async (event) => {
+      var _a;
       const b = event.target.closest("button");
       if (!b) return;
       try {
@@ -1656,7 +3217,8 @@
           const item = data.entries[index];
           await play(item.id, item.title_id, {
             queueId: updated2.id,
-            replay: data.mode === "shuffle" && index !== data.index
+            replay: item.available && data.mode === "shuffle" && index !== data.index,
+            stream: item.available ? null : { resolution: ((_a = active == null ? void 0 : active.stream) == null ? void 0 : _a.resolution) || lastResolution(), hint: { item } }
           });
           return;
         }
@@ -1690,7 +3252,7 @@
     if (!scrubbing) slider.value = String(position);
     const shown = scrubbing ? Number(slider.value) : position;
     slider.style.setProperty("--played", `${duration ? shown / duration * 100 : 0}%`);
-    $("#player-time").textContent = `${clockTime(shown)} / ${clockTime(duration)}`;
+    $("#player-time").textContent = duration ? `${clockTime(shown)} / ${clockTime(duration)}` : clockTime(shown);
     slider.setAttribute("aria-valuetext", `${clockTime(shown)} of ${clockTime(duration)}`);
     iconButton(
       "player-toggle",
@@ -1705,8 +3267,15 @@
       "M"
     );
     $("#player-volume").value = String(video().volume);
-    $("#player-buffering").textContent = loading ? "Preparing\u2026" : !video().paused && video().readyState < 3 ? "Buffering\u2026" : "";
-    $("#player-loading").hidden = !$("#player-buffering").textContent;
+    const stream = active.stream;
+    const waiting = loading || !video().paused && video().readyState < 3;
+    $("#player-buffering").textContent = loading ? (stream == null ? void 0 : stream.sourced) ? `Buffering at ${clockTime(position)}` : "Preparing\u2026" : waiting ? "Buffering\u2026" : "";
+    const live = (stream == null ? void 0 : stream.sourced) && waiting && stream.status ? startupView(stream.status) : null;
+    $("#player-buffer-detail").textContent = (live == null ? void 0 : live.detail) || "";
+    $("#player-buffer-meter").hidden = !(live && live.progress != null && (stream.status.state === "buffering" || stream.status.state === "probing"));
+    if ((live == null ? void 0 : live.progress) != null)
+      $("#player-buffer-bar").style.width = `${Math.round(live.progress * 100)}%`;
+    $("#player-loading").hidden = !$("#player-buffering").textContent || !$("#stream-start").hidden;
     for (const id of [
       "player-toggle",
       "player-back",
@@ -1788,7 +3357,6 @@
     };
     $("#subtitle-find").onclick = () => void findSubtitles();
     $("#subtitle-file").onchange = async () => {
-      var _a;
       const file = $("#subtitle-file").files[0] || (active == null ? void 0 : active.subtitleUpload), owner = active;
       if (!file || !owner) return;
       try {
@@ -1811,12 +3379,7 @@
         active.subtitleUserChoice = true;
         if (active.subtitleFile) URL.revokeObjectURL(active.subtitleFile);
         active.subtitleFile = URL.createObjectURL(new Blob([text], { type: "text/vtt" }));
-        (_a = $("#subtitle-file-option")) == null ? void 0 : _a.remove();
-        const option3 = document.createElement("option");
-        option3.id = "subtitle-file-option";
-        option3.value = "file";
-        option3.textContent = file.name;
-        $("#subtitles").appendChild(option3);
+        addFileOption(file.name);
         $("#subtitles").value = "file";
         setSubtitles();
       } catch (error) {
@@ -1900,10 +3463,50 @@
       else if (event.keyCode === 19) video().pause();
     });
     $("#player-toggle").onclick = () => {
+      var _a;
+      if (video().paused && ((_a = active == null ? void 0 : active.stream) == null ? void 0 : _a.stale) && !loading)
+        return void convert(absolutePosition(), true).catch((e) => toast(e.message));
       if (video().paused)
         video().play().catch((e) => toast(e.message));
       else video().pause();
     };
+    $("#stream-start-actions").onclick = (event) => {
+      const button2 = event.target.closest("[data-stream-action]");
+      const owner = active;
+      if (!button2 || !(owner == null ? void 0 : owner.stream)) return;
+      const action2 = button2.dataset.streamAction;
+      if (action2 === "close") return void closePlayer();
+      if (action2 === "download") {
+        const itemId = owner.item.id;
+        return void closePlayer().then(() => releases(itemId));
+      }
+      button2.disabled = true;
+      if (action2 === "stop-others")
+        return void stopOtherStreams(owner).then(() => active === owner && restartStream(owner)).catch((e) => {
+          button2.disabled = false;
+          toast(e.message);
+        });
+      const resolution = action2 === "other-resolution" ? Number(button2.dataset.resolution) : owner.stream.resolution;
+      if (action2 === "other-resolution") saveResolution(resolution);
+      void restartStream(owner, {
+        resolution,
+        forceTranscode: owner.stream.forceTranscode || action2 === "compatibility"
+      });
+    };
+    $("#stream-quality-options").onclick = (event) => {
+      const card2 = event.target.closest("[data-stream-resolution]");
+      if (card2 && !card2.disabled) void changeResolution(Number(card2.dataset.streamResolution));
+    };
+    video().addEventListener("timeupdate", () => {
+      const stream = active == null ? void 0 : active.stream;
+      const duration = active == null ? void 0 : active.info.duration;
+      if (!(stream == null ? void 0 : stream.id) || stream.nextPrepared || loading || !duration) return;
+      if (!queue || queue.index >= queue.items.length - 1) return;
+      if (absolutePosition() < duration * 0.8) return;
+      stream.nextPrepared = true;
+      api(`/api/streams/${stream.id}/prepare-next`, {}).catch(() => {
+      });
+    });
     $("#player-back").onclick = () => seekTo((video().currentTime || 0) + ((active == null ? void 0 : active.offset) || 0) - 10).catch((e) => toast(e.message));
     $("#player-forward").onclick = () => seekTo((video().currentTime || 0) + ((active == null ? void 0 : active.offset) || 0) + 10).catch((e) => toast(e.message));
     $("#player-seek").oninput = () => {
@@ -1971,10 +3574,14 @@
     $("#previous").onclick = () => void advance(-1);
     $("#next").onclick = () => void advance(1);
     $("#player-queue").onclick = () => showQueue().catch((e) => toast(e.message));
-    $("#convert").onclick = () => convert((video().currentTime || 0) + ((active == null ? void 0 : active.offset) || 0), !video().paused).catch(
+    const restartConversion = () => convert((video().currentTime || 0) + ((active == null ? void 0 : active.offset) || 0), !video().paused).catch(
       (e) => toast(e.message)
     );
-    $("#audio").onchange = $("#convert").onclick;
+    $("#convert").onclick = () => {
+      if (active == null ? void 0 : active.stream) active.stream.forceTranscode = true;
+      return restartConversion();
+    };
+    $("#audio").onchange = restartConversion;
     $("#subtitles").onchange = () => {
       if (active) active.subtitleUserChoice = true;
       setSubtitles();
@@ -1998,6 +3605,7 @@
         $("#player-message").textContent = "This format may need compatibility playback. Select that button below.";
     });
     video().addEventListener("ended", async () => {
+      var _a;
       if (!active || loading) return;
       if (!atTitleEnd(
         playbackPosition(video().currentTime, active.offset, active.info.duration),
@@ -2009,10 +3617,13 @@
       }
       await report("ended");
       if (!queue || queue.index >= queue.items.length - 1) return;
+      const following = (_a = active.title.items) == null ? void 0 : _a.find((i) => i.id === queue.items[queue.index + 1]);
+      const offerStream = !active.stream && following && !following.available && canStream();
       $("#up-next").hidden = false;
       let seconds = 10;
-      $("#up-next-label").textContent = "Next episode is ready";
-      if (active.preferences.autoplay)
+      $("#up-next-label").textContent = offerStream ? "The next episode is not downloaded" : "Next episode is ready";
+      $("#up-next-play").textContent = offerStream ? "Stream it" : "Play now";
+      if (active.preferences.autoplay && !offerStream)
         countdown = setInterval(() => {
           $("#up-next-label").textContent = `Next episode in ${--seconds} seconds`;
           if (seconds <= 0) void advance(1);
@@ -2023,11 +3634,23 @@
     document.addEventListener("visibilitychange", () => {
       if (document.hidden) void report("pause", true);
     });
-    window.addEventListener("pagehide", () => void report("stop", true));
+    window.addEventListener("pagehide", () => {
+      var _a, _b, _c;
+      void report("stop", true);
+      const ids = [(_a = active == null ? void 0 : active.stream) == null ? void 0 : _a.id, (_c = (_b = active == null ? void 0 : active.stream) == null ? void 0 : _b.switching) == null ? void 0 : _c.id].filter(Boolean);
+      for (const id of ids)
+        fetch(`/api/streams/${id}`, {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: "{}",
+          keepalive: true
+        }).catch(() => {
+        });
+    });
   }
 
   // public/app.js
-  var user = null;
+  var user2 = null;
   var generation = 0;
   var poll = null;
   var currentTitle = null;
@@ -2036,24 +3659,25 @@
   var returnPositions = {};
   var featuredTitles = [];
   var featuredIndex = 0;
+  var homeTitles = /* @__PURE__ */ new Map();
   var main = () => $("#main");
   var button = (label, action2, attrs = "", style = "") => `<button class="${style}" data-action="${action2}" ${attrs}>${esc(label)}</button>`;
   var option2 = (value, label, current) => `<option value="${esc(value)}" ${value === current ? "selected" : ""}>${esc(label)}</option>`;
   var grid = (items) => `<div class="grid">${items.map((t) => card(t)).join("")}</div>`;
   function shelf(label, items, mode = "landscape") {
-    return items.length ? `<section class="section media-shelf"><div class="section-heading"><h2>${esc(label)}</h2><div class="rail-controls"><button data-action="rail-back" aria-label="Scroll ${esc(label)} left">${icon("left")}</button><button data-action="rail-next" aria-label="Scroll ${esc(label)} right">${icon("right")}</button></div></div><div class="rail ${mode === "resume" || mode === "next" ? "resume-rail" : ""}" aria-label="${esc(label)}">${items.map((t) => card(t, mode)).join("")}</div></section>` : "";
+    return items.length ? `<section class="section media-shelf"><div class="section-heading"><h2>${esc(label)}</h2><div class="rail-controls"><button data-action="rail-back" aria-label="Scroll ${esc(label)} left">${icon("left")}</button><button data-action="rail-next" aria-label="Scroll ${esc(label)} right">${icon("right")}</button></div></div><div class="rail ${mode === "resume" || mode === "next" ? "resume-rail" : ""}" aria-label="${esc(label)}">${items.map((t) => card(t, mode, { canStream: canStream() })).join("")}</div></section>` : "";
   }
   function featureHtml() {
     const title = featuredTitles[featuredIndex];
     if (!title) return "";
-    const artwork = [title.background, title.poster].find((url) => /^https?:\/\//.test(url || ""));
+    const artwork2 = [title.background, title.poster].find((url) => /^https?:\/\//.test(url || ""));
     const item = title.primary;
     const saved = title.tags.includes("watchlist");
-    return `<div class="hero-art ${title.background ? "" : "hero-poster"}" aria-hidden="true">${artwork ? `<img src="${esc(artwork)}" alt="" fetchpriority="high">` : '<span class="hero-monogram">m.</span>'}</div><div class="hero-shade"></div><div class="hero-copy"><p class="hero-label">Featured in your library</p><h2>${esc(title.name)}</h2><p class="hero-facts">${esc([title.year, title.kind === "movie" ? "Movie" : title.kind === "anime" ? "Anime" : "Series", ...(title.genres || []).slice(0, 2)].filter(Boolean).join(" \xB7 "))}</p>${title.description ? `<p class="hero-description">${esc(title.description)}</p>` : ""}<div class="hero-actions">${(item == null ? void 0 : item.available) ? `<button class="hero-play" data-action="play" data-item="${esc(item.id)}" data-title="${esc(title.id)}">${icon("play")}${title.resumable ? "Resume watching" : "Watch now"}</button>` : `<a class="hero-play" href="#/title/${esc(title.id)}">View title</a>`}<a class="hero-round" href="#/title/${esc(title.id)}" aria-label="Details for ${esc(title.name)}" title="Title details">${icon("info")}</a><button class="hero-round" data-action="feature-save" data-title="${esc(title.id)}" aria-label="${saved ? "Remove from" : "Add to"} My List" aria-pressed="${saved}" title="${saved ? "Remove from" : "Add to"} My List">${icon(saved ? "check" : "plus")}</button></div>${title.readyCount ? `<p class="hero-availability">${icon("check")}Available in your library</p>` : ""}</div>${featuredTitles.length > 1 ? `<div class="feature-controls"><button class="feature-arrow" data-action="feature-prev" aria-label="Previous featured title">${icon("left")}</button><div class="feature-dots" role="group" aria-label="Featured titles">${featuredTitles.map((t, i) => `<button class="feature-dot" data-action="feature-select" data-index="${i}" aria-label="Feature ${esc(t.name)}" aria-pressed="${i === featuredIndex}"></button>`).join("")}</div><button class="feature-arrow" data-action="feature-next" aria-label="Next featured title">${icon("right")}</button></div>` : ""}`;
+    return `<div class="hero-art ${title.background ? "" : "hero-poster"}" aria-hidden="true">${artwork2 ? `<img src="${esc(artwork2)}" alt="" fetchpriority="high">` : '<span class="hero-monogram">m.</span>'}</div><div class="hero-shade"></div><div class="hero-copy"><p class="hero-label">Featured in your library</p><h2>${esc(title.name)}</h2><p class="hero-facts">${esc([title.year, title.kind === "movie" ? "Movie" : title.kind === "anime" ? "Anime" : "Series", ...(title.genres || []).slice(0, 2)].filter(Boolean).join(" \xB7 "))}</p>${title.description ? `<p class="hero-description">${esc(title.description)}</p>` : ""}<div class="hero-actions">${(item == null ? void 0 : item.available) ? `<button class="hero-play" data-action="play" data-item="${esc(item.id)}" data-title="${esc(title.id)}">${icon("play")}${title.resumable ? "Resume watching" : "Watch now"}</button>` : `<a class="hero-play" href="#/title/${esc(title.id)}">View title</a>`}<a class="hero-round" href="#/title/${esc(title.id)}" aria-label="Details for ${esc(title.name)}" title="Title details">${icon("info")}</a><button class="hero-round" data-action="feature-save" data-title="${esc(title.id)}" aria-label="${saved ? "Remove from" : "Add to"} My List" aria-pressed="${saved}" title="${saved ? "Remove from" : "Add to"} My List">${icon(saved ? "check" : "plus")}</button></div>${title.readyCount ? `<p class="hero-availability">${icon("check")}Available in your library</p>` : ""}</div>${featuredTitles.length > 1 ? `<div class="feature-controls"><button class="feature-arrow" data-action="feature-prev" aria-label="Previous featured title">${icon("left")}</button><div class="feature-dots" role="group" aria-label="Featured titles">${featuredTitles.map((t, i) => `<button class="feature-dot" data-action="feature-select" data-index="${i}" aria-label="Feature ${esc(t.name)}" aria-pressed="${i === featuredIndex}"></button>`).join("")}</div><button class="feature-arrow" data-action="feature-next" aria-label="Next featured title">${icon("right")}</button></div>` : ""}`;
   }
   async function route({ quiet = false } = {}) {
     var _a;
-    if (!user) return;
+    if (!user2) return;
     const ticket = ++generation;
     clearInterval(poll);
     currentTitle = null;
@@ -2092,7 +3716,7 @@
     if (!quiet) main().innerHTML = '<p class="loading" role="status">Loading\u2026</p>';
     try {
       if (page === "sports") {
-        const html = await sportsPage(url, user);
+        const html = await sportsPage(url, user2);
         draw(html);
         if (ticket !== generation) return;
         bindSportsFilters();
@@ -2104,6 +3728,8 @@
         const data = await api("/api/home"), queues = await api("/api/queues");
         const kind = ["movie", "tv", "anime"].includes(url.searchParams.get("kind")) ? url.searchParams.get("kind") : "";
         const visible = (items) => items.filter((t) => !kind || t.kind === kind);
+        homeTitles = /* @__PURE__ */ new Map();
+        for (const items of Object.values(data)) for (const t of items) homeTitles.set(t.id, t);
         const count = Object.values(data).reduce((total, items) => total + visible(items).length, 0);
         featuredTitles = [
           ...new Map(
@@ -2125,7 +3751,7 @@
             ([value, label]) => `<a href="#/${value ? "?kind=" + value : ""}" ${kind === value ? 'aria-current="page"' : ""}>${label}</a>`
           ).join("")}</nav>` + (featuredTitles.length ? `<section class="feature" id="feature" aria-label="Featured title">${featureHtml()}</section>` : "") + '<div class="home-content">' + shelf("Continue watching", visible(data.continueWatching), "resume") + shelf("Next up", visible(data.nextUp), "next") + shelf("Recently added", visible(data.recentlyAdded)) + shelf("My List", visible(data.watchlist)) + (!count ? empty(
             kind ? "No titles in this category yet" : "Your library starts here",
-            "Find a title in Discover to add it to your library.",
+            canStream() ? "Find a title in Discover, then stream it right away or download it." : "Find a title in Discover to add it to your library.",
             `<a class="primary empty-action" href="#/discover">Browse titles</a>`
           ) : "") + (queues.some((q) => q.items.length) ? `<section class="section"><h2>Saved queues</h2>${queues.filter((q) => q.items.length).slice(0, 3).map(
             (q) => `<div class="row"><div class="row-main"><h3>${esc(q.name)}</h3><p class="meta">${q.mode === "shuffle" ? "Shuffle" : "In order"} \xB7 ${q.items.length} items</p></div>${button("Open queue", "queue", `data-id="${q.id}"`)}</div>`
@@ -2190,6 +3816,7 @@
         if (ticket !== generation) return;
         currentTitle = title;
         draw(detailHtml(title));
+        if (title.primary && !title.primary.available && canStream()) bindStreamPanel(title.primary);
       } else if (page === "downloads") {
         const [jobs, seasons] = await Promise.all([
           api("/api/downloads"),
@@ -2203,9 +3830,9 @@
         }, 5e3);
       } else if (page === "settings") {
         const prefs = await api("/api/preferences");
-        const admin = user.role === "admin" ? await api("/api/admin") : null;
+        const admin = user2.role === "admin" ? await api("/api/admin") : null;
         draw(
-          heading("Settings") + torrentRulesForm(admin) + `<form id="preferences" class="form"><h2>Playback</h2><label class="check section"><input type="checkbox" name="autoplay" ${prefs.autoplay ? "checked" : ""}>Play the next episode automatically</label><label>Preferred audio language<input name="audioLanguage" placeholder="eng, dan, jpn\u2026" maxlength="20" value="${esc(prefs.audioLanguage)}"></label><label>Preferred subtitle language<input name="subtitleLanguage" maxlength="20" placeholder="eng, dan\u2026" value="${esc(prefs.subtitleLanguage)}"></label><label>Subtitles<select name="subtitleMode">${option2("off", "Off", prefs.subtitleMode)}${option2("preferred", "Use preferred language", prefs.subtitleMode)}</select></label><button class="primary">Save preferences</button></form>${admin ? `<section class="section"><h2>Server</h2><p class="meta">Real-Debrid: ${admin.debridConfigured ? "Configured" : "Not configured"}</p><p class="meta">Import folders: ${esc(admin.importRoots.join(", ") || "None configured")}</p></section><section class="section"><div class="section-heading"><h2>People</h2>${button("Add person", "add-user")}</div>${admin.users.map((u) => `<div class="row"><div class="row-main"><h3>${esc(u.name)}</h3><p class="meta">${esc(u.email)} \xB7 ${u.active ? "Active" : "Disabled"} \xB7 ${u.role === "admin" || u.can_download ? "Downloads allowed" : "Viewing only"}</p></div>${u.id !== user.id ? button(u.can_download ? "Disable downloads" : "Allow downloads", "user-permission", `data-id="${u.id}" data-active="${!!u.active}" data-allowed="${!u.can_download}"`) : ""}</div>`).join("")}</section>` : ""}<section class="section">${button("Sign out", "logout")}</section>`
+          heading("Settings") + torrentRulesForm(admin) + `<form id="preferences" class="form"><h2>Playback</h2><label class="check section"><input type="checkbox" name="autoplay" ${prefs.autoplay ? "checked" : ""}>Play the next episode automatically</label><label>Preferred audio language<input name="audioLanguage" placeholder="eng, dan, jpn\u2026" maxlength="20" value="${esc(prefs.audioLanguage)}"></label><label>Preferred subtitle language<input name="subtitleLanguage" maxlength="20" placeholder="eng, dan\u2026" value="${esc(prefs.subtitleLanguage)}"></label><label>Subtitles<select name="subtitleMode">${option2("off", "Off", prefs.subtitleMode)}${option2("preferred", "Use preferred language", prefs.subtitleMode)}</select></label><button class="primary">Save preferences</button></form>${admin ? `<section class="section"><h2>Server</h2><p class="meta">Real-Debrid: ${admin.debridConfigured ? "Configured" : "Not configured"}</p><p class="meta">Import folders: ${esc(admin.importRoots.join(", ") || "None configured")}</p></section><section class="section"><div class="section-heading"><h2>People</h2>${button("Add person", "add-user")}</div>${admin.users.map((u) => `<div class="row"><div class="row-main"><h3>${esc(u.name)}</h3><p class="meta">${esc(u.email)} \xB7 ${u.active ? "Active" : "Disabled"} \xB7 ${u.role === "admin" || u.can_download ? "Downloads allowed" : "Viewing only"}</p></div>${u.id !== user2.id ? button(u.can_download ? "Disable downloads" : "Allow downloads", "user-permission", `data-id="${u.id}" data-active="${!!u.active}" data-allowed="${!u.can_download}"`) : ""}</div>`).join("")}</section>` : ""}<section class="section">${button("Sign out", "logout")}</section>`
         );
         bindTorrentRules();
         $("#preferences").onsubmit = async (e) => {
@@ -2232,14 +3859,41 @@
       draw(empty("Could not open this page", error.message, button("Try again", "refresh")));
     }
   }
+  var partlyWatched = (item) => item.state.position >= 10 && !item.state.completed;
+  function primaryActions(title, primary) {
+    if (!primary) return "";
+    const attrs = `data-item="${primary.id}" data-title="${title.id}"`;
+    if (primary.available)
+      return button(
+        title.resumable ? "Resume " + episodeLabel(primary) : primary.state.completed ? "Replay" : "Play " + episodeLabel(primary),
+        "play",
+        attrs,
+        "primary"
+      );
+    if (!canStream()) return button("Find a release", "release", attrs, "primary");
+    const what = title.kind === "movie" ? "" : " " + episodeLabel(primary);
+    return button(
+      partlyWatched(primary) ? `Resume${what}` : what ? `Stream${what}` : "Stream now",
+      "stream-play",
+      `${attrs} data-warm="${primary.id}"`,
+      "primary"
+    ) + button("Download", "release", attrs, "quiet");
+  }
+  function episodeActions(title, item) {
+    const attrs = `data-item="${item.id}" data-title="${title.id}"`;
+    const label = partlyWatched(item) ? "Resume" : null;
+    if (item.available) return button(label || "Play", "play", attrs);
+    if (!canStream()) return button("Download", "release", attrs, "quiet");
+    return button(label || "Stream", "stream", `${attrs} data-warm="${item.id}"`) + button("Download", "release", attrs, "quiet");
+  }
   function detailHtml(title) {
     var _a;
     const primary = title.primary;
-    let html = `<div class="detail">${/^https?:\/\//.test(title.background || "") ? `<div class="detail-backdrop" aria-hidden="true"><img src="${esc(title.background)}" alt=""></div>` : ""}<div class="detail-art poster">${poster(title)}</div><div class="detail-copy"><p class="eyebrow">${esc(title.kind === "movie" ? "Movie" : title.kind === "anime" ? "Anime" : "Series")} ${esc(title.year)}</p><h1>${esc(title.name)}</h1>${metadataHtml(title)}<p class="muted">${esc(title.description)}</p><div class="actions">${primary ? button(primary.available ? title.resumable ? "Resume " + episodeLabel(primary) : primary.state.completed ? "Replay" : "Play " + episodeLabel(primary) : "Find a release", primary.available ? "play" : "release", `data-item="${primary.id}" data-title="${title.id}"`, "primary") : ""}${title.kind !== "movie" && title.readyCount ? button("Shuffle episodes", "shuffle", `data-title="${title.id}"`) : ""}${button(title.tags.includes("watchlist") ? "In My List" : "Add to My List", "tag", `data-tag="watchlist" data-active="${!title.tags.includes("watchlist")}"`)}${button(title.tags.includes("favorite") ? "Favorited" : "Favorite", "tag", `data-tag="favorite" data-active="${!title.tags.includes("favorite")}"`)}${button("Collections", "add-collection")}</div><p class="meta">${title.readyCount} downloaded${((_a = title.genres) == null ? void 0 : _a.length) ? " \xB7 " + esc(title.genres.join(" / ")) : ""}</p></div></div>`;
+    let html = `<div class="detail">${/^https?:\/\//.test(title.background || "") ? `<div class="detail-backdrop" aria-hidden="true"><img src="${esc(title.background)}" alt=""></div>` : ""}<div class="detail-art poster">${poster(title)}</div><div class="detail-copy"><p class="eyebrow">${esc(title.kind === "movie" ? "Movie" : title.kind === "anime" ? "Anime" : "Series")} ${esc(title.year)}</p><h1>${esc(title.name)}</h1>${metadataHtml(title)}<p class="muted">${esc(title.description)}</p><div class="actions">${primaryActions(title, primary)}${title.kind !== "movie" && title.readyCount ? button("Shuffle episodes", "shuffle", `data-title="${title.id}"`) : ""}${button(title.tags.includes("watchlist") ? "In My List" : "Add to My List", "tag", `data-tag="watchlist" data-active="${!title.tags.includes("watchlist")}"`)}${button(title.tags.includes("favorite") ? "Favorited" : "Favorite", "tag", `data-tag="favorite" data-active="${!title.tags.includes("favorite")}"`)}${button("Collections", "add-collection")}</div>${primary && !primary.available && canStream() ? streamPanelHtml(primary) : ""}<p class="meta">${title.readyCount} downloaded${((_a = title.genres) == null ? void 0 : _a.length) ? " \xB7 " + esc(title.genres.join(" / ")) : ""}</p></div></div>`;
     const seasons = [...new Set(title.items.map((i) => i.season))];
     for (const season of seasons) {
       const items = title.items.filter((i) => i.season === season);
-      html += `<section><div class="season-header"><h2>${title.kind === "movie" ? "Your copy" : season ? `Season ${season}` : title.kind === "anime" ? "Episodes" : "Specials"}</h2><div class="actions">${title.kind !== "movie" && user.canDownload && items.some((i) => !i.available) ? button(title.kind === "anime" && !season ? "Download all episodes" : "Download season", "download-season", `data-season="${season}"`) : ""}${title.kind !== "movie" && items.some((i) => i.available) ? button("Shuffle season", "shuffle", `data-title="${title.id}" data-season="${season}"`) : ""}${button(items.every((i) => i.state.completed) ? "Mark unwatched" : "Mark watched", "bulk-watched", `data-season="${season}" data-watched="${!items.every((i) => i.state.completed)}"`)}</div></div>${items.map((i) => `<div class="episode"><span class="episode-number">${i.episode || "\u2014"}</span><div class="episode-body">${i.thumbnail ? `<img class="episode-thumbnail" src="${esc(i.thumbnail)}" alt="" loading="lazy">` : ""}<h3>${esc(i.name || episodeLabel(i))}</h3><p class="meta">${i.available ? "Downloaded" : "Not downloaded"} \xB7 ${i.state.completed ? "Watched" : i.state.position >= 10 ? "In progress" : "Unwatched"}${i.released ? " \xB7 " + esc(String(i.released).slice(0, 10)) : ""}</p>${episodeMetadata(i)}${progress(i.state)}</div><div class="actions">${button(i.available ? i.state.position >= 10 && !i.state.completed ? "Resume" : "Play" : "Download", i.available ? "play" : "release", `data-item="${i.id}" data-title="${title.id}"`, i.available ? "" : "quiet")}${button("More", "item-menu", `data-item="${i.id}"`)}</div></div>`).join("")}</section>`;
+      html += `<section><div class="season-header"><h2>${title.kind === "movie" ? "Your copy" : season ? `Season ${season}` : title.kind === "anime" ? "Episodes" : "Specials"}</h2><div class="actions">${title.kind !== "movie" && user2.canDownload && items.some((i) => !i.available) ? button(title.kind === "anime" && !season ? "Download all episodes" : "Download season", "download-season", `data-season="${season}"`) : ""}${title.kind !== "movie" && items.some((i) => i.available) ? button("Shuffle season", "shuffle", `data-title="${title.id}" data-season="${season}"`) : ""}${button(items.every((i) => i.state.completed) ? "Mark unwatched" : "Mark watched", "bulk-watched", `data-season="${season}" data-watched="${!items.every((i) => i.state.completed)}"`)}</div></div>${items.map((i) => `<div class="episode"><span class="episode-number">${i.episode || "\u2014"}</span><div class="episode-body">${i.thumbnail ? `<img class="episode-thumbnail" src="${esc(i.thumbnail)}" alt="" loading="lazy">` : ""}<h3>${esc(i.name || episodeLabel(i))}</h3><p class="meta">${i.available ? "Downloaded" : "Not downloaded"} \xB7 ${i.state.completed ? "Watched" : i.state.position >= 10 ? "In progress" : "Unwatched"}${i.released ? " \xB7 " + esc(String(i.released).slice(0, 10)) : ""}</p>${episodeMetadata(i)}${progress(i.state)}</div><div class="actions">${episodeActions(title, i)}${button("More", "item-menu", `data-item="${i.id}"`)}</div></div>`).join("")}</section>`;
     }
     return html;
   }
@@ -2279,7 +3933,7 @@
     };
   }
   async function action(event) {
-    var _a, _b;
+    var _a, _b, _c;
     const b = event.target.closest("[data-action]");
     if (!b) return;
     const actionName = b.dataset.action;
@@ -2322,6 +3976,27 @@
         closeModal();
         await closeLive();
         await play(b.dataset.item, b.dataset.title, { replay: b.dataset.replay === "true" });
+      } else if (actionName === "stream") {
+        const title = currentTitle, item = title.items.find((i) => i.id === b.dataset.item);
+        openStreamSheet({
+          item,
+          title,
+          onPlay: ({ resolution, replay }) => {
+            closeModal();
+            void play(item.id, title.id, { replay, stream: { resolution, hint: { title, item } } });
+          },
+          onDownload: () => void releases(item.id)
+        });
+      } else if (actionName === "stream-play") {
+        closeModal();
+        const title = (currentTitle == null ? void 0 : currentTitle.id) === b.dataset.title ? currentTitle : homeTitles.get(b.dataset.title);
+        const item = ((_c = title == null ? void 0 : title.items) == null ? void 0 : _c.find((i) => i.id === b.dataset.item)) || [title == null ? void 0 : title.resumable, title == null ? void 0 : title.next, title == null ? void 0 : title.primary].find((i) => (i == null ? void 0 : i.id) === b.dataset.item);
+        const resolution = Number(b.dataset.resolution) || null;
+        if (resolution && b.dataset.picked === "true") saveResolution(resolution);
+        void play(b.dataset.item, b.dataset.title, {
+          replay: b.dataset.replay === "true",
+          stream: { resolution, hint: title && { title, item } }
+        });
       } else if (actionName === "release") await releases(b.dataset.item);
       else if (actionName === "download-season")
         await downloadSeason(currentTitle, Number(b.dataset.season));
@@ -2399,7 +4074,7 @@
       } else if (actionName === "item-menu") {
         const item = currentTitle.items.find((i) => i.id === b.dataset.item), attrs = `data-item="${item.id}"`;
         modal(
-          `<h2>${esc(item.name || episodeLabel(item))}</h2><div class="actions">${button(item.state.completed ? "Mark unwatched" : "Mark watched", "watched", `${attrs} data-watched="${!item.state.completed}"`)}${item.available ? button("Play from beginning", "play", `${attrs} data-title="${currentTitle.id}" data-replay="true"`) + button("Add to queue", "enqueue", attrs) + button("Play next", "enqueue", `${attrs} data-next="true"`) : ""}${user.role === "admin" ? button("Import local file", "import", attrs) : ""}</div>`
+          `<h2>${esc(item.name || episodeLabel(item))}</h2><div class="actions">${button(item.state.completed ? "Mark unwatched" : "Mark watched", "watched", `${attrs} data-watched="${!item.state.completed}"`)}${item.available ? button("Play from beginning", "play", `${attrs} data-title="${currentTitle.id}" data-replay="true"`) + button("Add to queue", "enqueue", attrs) + button("Play next", "enqueue", `${attrs} data-next="true"`) : canStream() && partlyWatched(item) ? button("Stream from the beginning", "stream-play", `${attrs} data-title="${currentTitle.id}" data-replay="true"`) : ""}${user2.role === "admin" ? button("Import local file", "import", attrs) : ""}</div>`
         );
         $("#dialog-content").onclick = action;
       } else if (actionName === "enqueue") {
@@ -2503,8 +4178,8 @@
   }
   async function boot() {
     const auth = await api("/api/auth");
-    user = auth.user;
-    if (!user) {
+    user2 = auth.user;
+    if (!user2) {
       $("#sidebar").hidden = true;
       main().classList.add("auth-page");
       main().innerHTML = `<div class="login"><a class="brand" href="#/">mediawan</a><h1>Sign in</h1>${auth.setupRequired ? "<p>Set ADMIN_EMAIL and an ADMIN_PASSWORD of at least 10 characters on the server, then restart Mediawan.</p>" : '<form id="login" class="form"><label>Email<input name="email" type="email" autocomplete="username" required></label><label>Password<input name="password" type="password" autocomplete="current-password" required></label><button class="primary">Sign in</button><p id="login-error" class="error" role="alert"></p></form>'}</div>`;
@@ -2521,8 +4196,8 @@
         };
       return;
     }
-    $("#account").textContent = user.name;
-    $("#avatar").textContent = user.name.slice(0, 1).toUpperCase();
+    $("#account").textContent = user2.name;
+    $("#avatar").textContent = user2.name.slice(0, 1).toUpperCase();
     document.addEventListener("click", (event) => {
       if (!event.target.closest(".account-menu"))
         document.querySelector(".account-menu").removeAttribute("open");
@@ -2530,6 +4205,8 @@
     $("#signout").onclick = logout;
     $("#dialog-close").onclick = closeModal;
     main().onclick = action;
+    configureStreaming(user2);
+    bindWarmUp(main());
     initPlayer();
     window.addEventListener("hashchange", () => {
       closeModal();

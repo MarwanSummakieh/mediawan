@@ -46,6 +46,18 @@ export function createStore(file) {
     db.exec('ALTER TABLE playback ADD COLUMN touched INTEGER NOT NULL DEFAULT 0');
   if (!playbackColumns.has('stopped'))
     db.exec('ALTER TABLE playback ADD COLUMN stopped INTEGER NOT NULL DEFAULT 0');
+  // Streamed episodes have no local asset; this keeps them in Continue Watching.
+  if (
+    !db
+      .prepare('PRAGMA table_info(history)')
+      .all()
+      .some((c) => c.name === 'streamed')
+  )
+    db.exec('ALTER TABLE history ADD COLUMN streamed INTEGER NOT NULL DEFAULT 0');
+  // The release a season was streamed from, so later episodes prefer the same group.
+  db.exec(
+    `CREATE TABLE IF NOT EXISTS stream_locks(title_id TEXT NOT NULL,season INTEGER NOT NULL,resolution INTEGER NOT NULL,updated INTEGER NOT NULL,json TEXT NOT NULL,PRIMARY KEY(title_id,season,resolution));`,
+  );
   const retained = new Map();
   const one = (sql, ...args) => db.prepare(sql).get(...args);
   const all = (sql, ...args) => db.prepare(sql).all(...args);
@@ -209,6 +221,7 @@ export function createStore(file) {
           completed: 0,
           ever_watched: 0,
           played_at: 0,
+          streamed: 0,
         }
       );
     },

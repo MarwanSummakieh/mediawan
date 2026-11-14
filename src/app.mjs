@@ -1,4 +1,5 @@
 import express from 'express';
+import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { realpath, stat } from 'node:fs/promises';
@@ -9,13 +10,19 @@ import { createNavigation } from './navigation.mjs';
 import { createQueues } from './queues.mjs';
 import { createCatalog } from './catalog.mjs';
 import { createDownloads } from './downloads.mjs';
-import { createTorrentPolicy, assessRelease, assessQuality, qualityRule } from './torrent-policy.mjs';
+import {
+  createTorrentPolicy,
+  assessRelease,
+  assessQuality,
+  qualityRule,
+} from './torrent-policy.mjs';
 import { createTorrentDownloads } from './torrent-downloads.mjs';
 import { createMedia, probe } from './media.mjs';
 import { createSubtitles } from './subtitles.mjs';
 import { createSeasonDownloads } from './season-downloads.mjs';
 import { createLiveStore } from './live/store.mjs';
 import { createLivePlayback } from './live/playback.mjs';
+import { createStreaming, catalogReleases } from './streaming.mjs';
 
 const publicPath = fileURLToPath(new URL('../public/', import.meta.url));
 const wrap = (fn) => (req, res, next) =>
@@ -25,14 +32,17 @@ const wrap = (fn) => (req, res, next) =>
 export function createApplication(config, dependencies = {}) {
   const store = dependencies.store || createStore(config.database),
     app = express();
-  const history = createHistory(store),
+  // Streaming is created below; history and subtitles ask it whether a user is streaming.
+  let streaming = null;
+  const isStreaming = (user, itemId) => !!streaming?.has(user, itemId);
+  const history = createHistory(store, { streaming: isStreaming }),
     navigation = createNavigation(store),
     queues = createQueues(store);
   const catalog = dependencies.catalog || createCatalog(store, config),
     downloads = dependencies.downloads || createDownloads(store, config),
     media = createMedia(store, config);
   const torrentPolicy = createTorrentPolicy(store);
-  const subtitles = createSubtitles(store, dependencies.subtitles);
+  const subtitles = createSubtitles(store, { ...dependencies.subtitles, streaming: isStreaming });
   const torrents = dependencies.torrents || createTorrentDownloads(store, config, torrentPolicy);
   const seasons = createSeasonDownloads(store, config, catalog, downloads, torrents, torrentPolicy);
   const live = createLiveStore(store, config, dependencies.live);
@@ -42,6 +52,14 @@ export function createApplication(config, dependencies = {}) {
     ...dependencies.livePlayback,
   });
   media.externalSessions = () => livePlayback.active();
+  streaming = createStreaming(store, config, {
+    releases: catalogReleases(catalog),
+    rules: () => torrentPolicy.get(),
+    media,
+    warmSubtitles: (user, itemId) => void subtitles.list(user, itemId).catch(() => {}),
+    onlineSubtitles: (user, itemId) => subtitles.list(user, itemId),
+    ...dependencies.streaming,
+  });
   app.disable('x-powered-by');
   app.set('trust proxy', config.trustProxy);
   app.use((req, res, next) => {
@@ -82,7 +100,7 @@ export function createApplication(config, dependencies = {}) {
   );
   // Cast receivers cannot send the browser's login cookie. These read-only
   // URLs require a scoped, expiring receiver token issued by an authenticated viewer.
-  app.use('/cast/live', (req, res, next) => {
+  const castHeaders = (req, res, next) => {
     res.set({
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
@@ -93,10 +111,24 @@ export function createApplication(config, dependencies = {}) {
     });
     if (req.method === 'OPTIONS') return res.status(204).end();
     next();
-  });
+  };
+  app.use('/cast/live', castHeaders);
+  app.use('/cast/media', castHeaders);
   app.get(
     '/cast/live/:id/:file',
     wrap((req, res) => livePlayback.media(req, res, true)),
+  );
+  app.get(
+    '/cast/media/:id/:file',
+    wrap(async (req, res) => {
+      const result = await media.castFile(
+        req.params.id,
+        req.params.file,
+        String(req.query.token || ''),
+      );
+      if (result.file) res.sendFile(result.file);
+      else res.type(result.type).send(result.body);
+    }),
   );
   setupAuth(app, store, config);
   const admin = (req) => {
@@ -273,7 +305,12 @@ export function createApplication(config, dependencies = {}) {
   );
   app.post(
     '/api/playback/:id/events',
-    wrap((req, res) => res.json(history.event(req.user, req.params.id, req.body))),
+    wrap((req, res) => {
+      const result = history.event(req.user, req.params.id, req.body);
+      const itemId = store.one('SELECT item_id FROM playback WHERE id=?', req.params.id)?.item_id;
+      if (itemId && !result.ignored) streaming.observe(req.user, itemId, req.body.position);
+      res.json(result);
+    }),
   );
   app.get(
     '/api/queues',
@@ -435,9 +472,16 @@ export function createApplication(config, dependencies = {}) {
           (r) => r.hash === req.body.hash && r.fileIndex === req.body.fileIndex,
         );
         if (!release) fail(400, 'Release is no longer in the search results. Refresh the list.');
-        const quality = assessQuality(release, store.title(store.item(req.params.id).title_id).kind);
+        const quality = assessQuality(
+          release,
+          store.title(store.item(req.params.id).title_id).kind,
+        );
         if (!quality.accepted) fail(400, quality.reasons.join('; '));
-        const job = await (req.body.provider === 'torrent' ? torrents : downloads).enqueue(req.user, req.params.id, release);
+        const job = await (req.body.provider === 'torrent' ? torrents : downloads).enqueue(
+          req.user,
+          req.params.id,
+          release,
+        );
         res.status(202).json({ id: job.id });
       } else fail(400, 'Unknown download provider');
     }),
@@ -473,6 +517,168 @@ export function createApplication(config, dependencies = {}) {
     wrap(async (req, res) => {
       const engine = store.job(req.params.id)?.provider === 'torrent' ? torrents : downloads;
       await engine.action(req.user, req.params.id, req.body.action);
+      res.json({ ok: true });
+    }),
+  );
+  // Stream now. Request and response shapes are documented in docs/streaming.md.
+  app.get(
+    '/api/streams/guard',
+    wrap((req, res) => res.json(streaming.guard())),
+  );
+  app.get(
+    '/api/items/:id/stream-options',
+    wrap(async (req, res) =>
+      res.json(
+        await streaming.options(req.user, req.params.id, { refresh: req.query.refresh === '1' }),
+      ),
+    ),
+  );
+  app.post(
+    '/api/items/:id/stream/prepare',
+    wrap(async (req, res) =>
+      res.status(202).json(
+        await streaming.prepare(req.user, req.params.id, {
+          resolution: req.body.resolution,
+          after: req.body.after,
+          player: req.body.player,
+        }),
+      ),
+    ),
+  );
+  app.post(
+    '/api/items/:id/stream',
+    wrap(async (req, res) =>
+      res.status(201).json(
+        await streaming.start(req.user, req.params.id, {
+          resolution: req.body.resolution,
+          capabilities: req.body.capabilities,
+          audio: req.body.audio,
+          position: req.body.position,
+          wait: req.body.wait === true,
+          player: req.body.player,
+        }),
+      ),
+    ),
+  );
+  app.get(
+    '/api/streams',
+    wrap((req, res) => res.json({ items: streaming.list(req.user) })),
+  );
+  app.get(
+    '/api/streams/:id',
+    wrap((req, res) =>
+      res.json(
+        streaming.status(req.user, req.params.id, {
+          position: req.query.position == null ? undefined : Number(req.query.position),
+        }),
+      ),
+    ),
+  );
+  app.get(
+    '/api/streams/:id/events',
+    wrap((req, res) => streaming.events(req.user, req.params.id, res)),
+  );
+  app.post(
+    '/api/streams/:id/heartbeat',
+    wrap((req, res) => res.json(streaming.heartbeat(req.user, req.params.id, req.body))),
+  );
+  app.get(
+    '/api/streams/:id/media',
+    wrap(async (req, res) => res.json(await streaming.info(req.user, req.params.id))),
+  );
+  app.post(
+    '/api/streams/:id/convert',
+    wrap(async (req, res) =>
+      res.json(
+        await streaming.convert(req.user, req.params.id, {
+          audio: req.body.audio,
+          position: req.body.position,
+          capabilities: req.body.capabilities,
+        }),
+      ),
+    ),
+  );
+  app.post(
+    '/api/streams/:id/resolution',
+    wrap(async (req, res) =>
+      res.status(201).json(
+        await streaming.switchResolution(req.user, req.params.id, {
+          resolution: req.body.resolution,
+          position: req.body.position,
+          capabilities: req.body.capabilities,
+        }),
+      ),
+    ),
+  );
+  app.post(
+    '/api/streams/:id/prepare-next',
+    wrap(async (req, res) =>
+      res.status(202).json(await streaming.prepareNext(req.user, req.params.id)),
+    ),
+  );
+  app.get(
+    '/api/streams/:id/subtitles',
+    wrap(async (req, res) => res.json(await streaming.subtitles(req.user, req.params.id))),
+  );
+  app.get(
+    '/api/streams/:id/subtitles/embedded/:index',
+    wrap(async (req, res) => {
+      const result = await streaming.subtitleFile(
+        req.user,
+        req.params.id,
+        Number(req.params.index),
+      );
+      res
+        .set({
+          'X-Stream-Offset': String(result.offset),
+          'X-Subtitle-Until': String(result.until),
+          'X-Subtitle-Complete': String(result.complete),
+        })
+        .type('text/vtt')
+        .send(result.text);
+    }),
+  );
+  app.get(
+    '/api/streams/:id/file',
+    wrap(async (req, res) => {
+      const url = streaming.direct(req.user, req.params.id);
+      await new Promise((resolve) => {
+        const upstream = http.get(
+          url,
+          { headers: req.headers.range ? { range: req.headers.range } : {} },
+          (response) => {
+            res.status(response.statusCode);
+            for (const header of [
+              'content-type',
+              'content-length',
+              'content-range',
+              'accept-ranges',
+            ])
+              if (response.headers[header]) res.setHeader(header, response.headers[header]);
+            response.pipe(res);
+            response.on('end', resolve);
+            response.on('error', resolve);
+          },
+        );
+        upstream.on('error', () => {
+          if (!res.headersSent) res.status(502).end();
+          resolve();
+        });
+        res.on('close', () => {
+          upstream.destroy();
+          resolve();
+        });
+      });
+    }),
+  );
+  app.post(
+    '/api/streams/:id/cast',
+    wrap(async (req, res) => res.json(await streaming.cast(req.user, req.params.id))),
+  );
+  app.delete(
+    '/api/streams/:id',
+    wrap(async (req, res) => {
+      streaming.stop(req.user, req.params.id);
       res.json({ ok: true });
     }),
   );
@@ -643,6 +849,8 @@ export function createApplication(config, dependencies = {}) {
     res.status(status).json({
       error:
         status === 500 ? 'The operation failed. Check the server configuration.' : error.message,
+      // A machine-readable cause where the interface reacts differently, e.g. 'vpn'.
+      ...(error.reason && status !== 500 ? { reason: error.reason } : {}),
     });
     if (status === 500) console.error('Request failed:', error.code || error.name);
   });
@@ -657,13 +865,16 @@ export function createApplication(config, dependencies = {}) {
     seasons,
     live,
     livePlayback,
+    streaming,
     start() {
       downloads.start();
       torrents.start();
       seasons.start();
       live.start();
+      setTimeout(() => void streaming.warm(), 1000).unref();
     },
     async close() {
+      await streaming.close();
       await livePlayback.close();
       await live.close();
       await seasons.close();

@@ -32,6 +32,15 @@ import {
   replaceQueue,
   showQueue,
 } from './player.js';
+import {
+  configureStreaming,
+  canStream,
+  openStreamSheet,
+  streamPanelHtml,
+  bindStreamPanel,
+  bindWarmUp,
+  saveResolution,
+} from './stream-ui.js';
 let user = null,
   generation = 0,
   poll = null,
@@ -40,7 +49,8 @@ let user = null,
   locationKey = '',
   returnPositions = {},
   featuredTitles = [],
-  featuredIndex = 0;
+  featuredIndex = 0,
+  homeTitles = new Map();
 const main = () => $('#main');
 const button = (label, action, attrs = '', style = '') =>
   `<button class="${style}" data-action="${action}" ${attrs}>${esc(label)}</button>`;
@@ -49,7 +59,7 @@ const option = (value, label, current) =>
 const grid = (items) => `<div class="grid">${items.map((t) => card(t)).join('')}</div>`;
 function shelf(label, items, mode = 'landscape') {
   return items.length
-    ? `<section class="section media-shelf"><div class="section-heading"><h2>${esc(label)}</h2><div class="rail-controls"><button data-action="rail-back" aria-label="Scroll ${esc(label)} left">${icon('left')}</button><button data-action="rail-next" aria-label="Scroll ${esc(label)} right">${icon('right')}</button></div></div><div class="rail ${mode === 'resume' || mode === 'next' ? 'resume-rail' : ''}" aria-label="${esc(label)}">${items.map((t) => card(t, mode)).join('')}</div></section>`
+    ? `<section class="section media-shelf"><div class="section-heading"><h2>${esc(label)}</h2><div class="rail-controls"><button data-action="rail-back" aria-label="Scroll ${esc(label)} left">${icon('left')}</button><button data-action="rail-next" aria-label="Scroll ${esc(label)} right">${icon('right')}</button></div></div><div class="rail ${mode === 'resume' || mode === 'next' ? 'resume-rail' : ''}" aria-label="${esc(label)}">${items.map((t) => card(t, mode, { canStream: canStream() })).join('')}</div></section>`
     : '';
 }
 function featureHtml() {
@@ -122,6 +132,8 @@ async function route({ quiet = false } = {}) {
         ? url.searchParams.get('kind')
         : '';
       const visible = (items) => items.filter((t) => !kind || t.kind === kind);
+      homeTitles = new Map();
+      for (const items of Object.values(data)) for (const t of items) homeTitles.set(t.id, t);
       const count = Object.values(data).reduce((total, items) => total + visible(items).length, 0);
       featuredTitles = [
         ...new Map(
@@ -157,7 +169,9 @@ async function route({ quiet = false } = {}) {
           (!count
             ? empty(
                 kind ? 'No titles in this category yet' : 'Your library starts here',
-                'Find a title in Discover to add it to your library.',
+                canStream()
+                  ? 'Find a title in Discover, then stream it right away or download it.'
+                  : 'Find a title in Discover to add it to your library.',
                 `<a class="primary empty-action" href="#/discover">Browse titles</a>`,
               )
             : '') +
@@ -252,6 +266,8 @@ async function route({ quiet = false } = {}) {
       if (ticket !== generation) return;
       currentTitle = title;
       draw(detailHtml(title));
+      // Seeing the title is the earliest sensible moment to prepare its main stream.
+      if (title.primary && !title.primary.available && canStream()) bindStreamPanel(title.primary);
     } else if (page === 'downloads') {
       const [jobs, seasons] = await Promise.all([
         api('/api/downloads'),
@@ -304,13 +320,51 @@ async function route({ quiet = false } = {}) {
     draw(empty('Could not open this page', error.message, button('Try again', 'refresh')));
   }
 }
+const partlyWatched = (item) => item.state.position >= 10 && !item.state.completed;
+// The title's main action: a local file plays; otherwise Stream now leads and Download
+// stays beside it; accounts that cannot stream keep "Find a release".
+function primaryActions(title, primary) {
+  if (!primary) return '';
+  const attrs = `data-item="${primary.id}" data-title="${title.id}"`;
+  if (primary.available)
+    return button(
+      title.resumable
+        ? 'Resume ' + episodeLabel(primary)
+        : primary.state.completed
+          ? 'Replay'
+          : 'Play ' + episodeLabel(primary),
+      'play',
+      attrs,
+      'primary',
+    );
+  if (!canStream()) return button('Find a release', 'release', attrs, 'primary');
+  const what = title.kind === 'movie' ? '' : ' ' + episodeLabel(primary);
+  return (
+    button(
+      partlyWatched(primary) ? `Resume${what}` : what ? `Stream${what}` : 'Stream now',
+      'stream-play',
+      `${attrs} data-warm="${primary.id}"`,
+      'primary',
+    ) + button('Download', 'release', attrs, 'quiet')
+  );
+}
+function episodeActions(title, item) {
+  const attrs = `data-item="${item.id}" data-title="${title.id}"`;
+  const label = partlyWatched(item) ? 'Resume' : null;
+  if (item.available) return button(label || 'Play', 'play', attrs);
+  if (!canStream()) return button('Download', 'release', attrs, 'quiet');
+  return (
+    button(label || 'Stream', 'stream', `${attrs} data-warm="${item.id}"`) +
+    button('Download', 'release', attrs, 'quiet')
+  );
+}
 function detailHtml(title) {
   const primary = title.primary;
-  let html = `<div class="detail">${/^https?:\/\//.test(title.background || '') ? `<div class="detail-backdrop" aria-hidden="true"><img src="${esc(title.background)}" alt=""></div>` : ''}<div class="detail-art poster">${poster(title)}</div><div class="detail-copy"><p class="eyebrow">${esc(title.kind === 'movie' ? 'Movie' : title.kind === 'anime' ? 'Anime' : 'Series')} ${esc(title.year)}</p><h1>${esc(title.name)}</h1>${metadataHtml(title)}<p class="muted">${esc(title.description)}</p><div class="actions">${primary ? button(primary.available ? (title.resumable ? 'Resume ' + episodeLabel(primary) : primary.state.completed ? 'Replay' : 'Play ' + episodeLabel(primary)) : 'Find a release', primary.available ? 'play' : 'release', `data-item="${primary.id}" data-title="${title.id}"`, 'primary') : ''}${title.kind !== 'movie' && title.readyCount ? button('Shuffle episodes', 'shuffle', `data-title="${title.id}"`) : ''}${button(title.tags.includes('watchlist') ? 'In My List' : 'Add to My List', 'tag', `data-tag="watchlist" data-active="${!title.tags.includes('watchlist')}"`)}${button(title.tags.includes('favorite') ? 'Favorited' : 'Favorite', 'tag', `data-tag="favorite" data-active="${!title.tags.includes('favorite')}"`)}${button('Collections', 'add-collection')}</div><p class="meta">${title.readyCount} downloaded${title.genres?.length ? ' · ' + esc(title.genres.join(' / ')) : ''}</p></div></div>`;
+  let html = `<div class="detail">${/^https?:\/\//.test(title.background || '') ? `<div class="detail-backdrop" aria-hidden="true"><img src="${esc(title.background)}" alt=""></div>` : ''}<div class="detail-art poster">${poster(title)}</div><div class="detail-copy"><p class="eyebrow">${esc(title.kind === 'movie' ? 'Movie' : title.kind === 'anime' ? 'Anime' : 'Series')} ${esc(title.year)}</p><h1>${esc(title.name)}</h1>${metadataHtml(title)}<p class="muted">${esc(title.description)}</p><div class="actions">${primaryActions(title, primary)}${title.kind !== 'movie' && title.readyCount ? button('Shuffle episodes', 'shuffle', `data-title="${title.id}"`) : ''}${button(title.tags.includes('watchlist') ? 'In My List' : 'Add to My List', 'tag', `data-tag="watchlist" data-active="${!title.tags.includes('watchlist')}"`)}${button(title.tags.includes('favorite') ? 'Favorited' : 'Favorite', 'tag', `data-tag="favorite" data-active="${!title.tags.includes('favorite')}"`)}${button('Collections', 'add-collection')}</div>${primary && !primary.available && canStream() ? streamPanelHtml(primary) : ''}<p class="meta">${title.readyCount} downloaded${title.genres?.length ? ' · ' + esc(title.genres.join(' / ')) : ''}</p></div></div>`;
   const seasons = [...new Set(title.items.map((i) => i.season))];
   for (const season of seasons) {
     const items = title.items.filter((i) => i.season === season);
-    html += `<section><div class="season-header"><h2>${title.kind === 'movie' ? 'Your copy' : season ? `Season ${season}` : title.kind === 'anime' ? 'Episodes' : 'Specials'}</h2><div class="actions">${title.kind !== 'movie' && user.canDownload && items.some((i) => !i.available) ? button(title.kind === 'anime' && !season ? 'Download all episodes' : 'Download season', 'download-season', `data-season="${season}"`) : ''}${title.kind !== 'movie' && items.some((i) => i.available) ? button('Shuffle season', 'shuffle', `data-title="${title.id}" data-season="${season}"`) : ''}${button(items.every((i) => i.state.completed) ? 'Mark unwatched' : 'Mark watched', 'bulk-watched', `data-season="${season}" data-watched="${!items.every((i) => i.state.completed)}"`)}</div></div>${items.map((i) => `<div class="episode"><span class="episode-number">${i.episode || '—'}</span><div class="episode-body">${i.thumbnail ? `<img class="episode-thumbnail" src="${esc(i.thumbnail)}" alt="" loading="lazy">` : ''}<h3>${esc(i.name || episodeLabel(i))}</h3><p class="meta">${i.available ? 'Downloaded' : 'Not downloaded'} · ${i.state.completed ? 'Watched' : i.state.position >= 10 ? 'In progress' : 'Unwatched'}${i.released ? ' · ' + esc(String(i.released).slice(0, 10)) : ''}</p>${episodeMetadata(i)}${progress(i.state)}</div><div class="actions">${button(i.available ? (i.state.position >= 10 && !i.state.completed ? 'Resume' : 'Play') : 'Download', i.available ? 'play' : 'release', `data-item="${i.id}" data-title="${title.id}"`, i.available ? '' : 'quiet')}${button('More', 'item-menu', `data-item="${i.id}"`)}</div></div>`).join('')}</section>`;
+    html += `<section><div class="season-header"><h2>${title.kind === 'movie' ? 'Your copy' : season ? `Season ${season}` : title.kind === 'anime' ? 'Episodes' : 'Specials'}</h2><div class="actions">${title.kind !== 'movie' && user.canDownload && items.some((i) => !i.available) ? button(title.kind === 'anime' && !season ? 'Download all episodes' : 'Download season', 'download-season', `data-season="${season}"`) : ''}${title.kind !== 'movie' && items.some((i) => i.available) ? button('Shuffle season', 'shuffle', `data-title="${title.id}" data-season="${season}"`) : ''}${button(items.every((i) => i.state.completed) ? 'Mark unwatched' : 'Mark watched', 'bulk-watched', `data-season="${season}" data-watched="${!items.every((i) => i.state.completed)}"`)}</div></div>${items.map((i) => `<div class="episode"><span class="episode-number">${i.episode || '—'}</span><div class="episode-body">${i.thumbnail ? `<img class="episode-thumbnail" src="${esc(i.thumbnail)}" alt="" loading="lazy">` : ''}<h3>${esc(i.name || episodeLabel(i))}</h3><p class="meta">${i.available ? 'Downloaded' : 'Not downloaded'} · ${i.state.completed ? 'Watched' : i.state.position >= 10 ? 'In progress' : 'Unwatched'}${i.released ? ' · ' + esc(String(i.released).slice(0, 10)) : ''}</p>${episodeMetadata(i)}${progress(i.state)}</div><div class="actions">${episodeActions(title, i)}${button('More', 'item-menu', `data-item="${i.id}"`)}</div></div>`).join('')}</section>`;
   }
   return html;
 }
@@ -401,6 +455,33 @@ async function action(event) {
       closeModal();
       await closeLive();
       await play(b.dataset.item, b.dataset.title, { replay: b.dataset.replay === 'true' });
+    } else if (actionName === 'stream') {
+      // Episode rows: the sheet opens at once, prepares while it is read, Play is focused.
+      const title = currentTitle,
+        item = title.items.find((i) => i.id === b.dataset.item);
+      openStreamSheet({
+        item,
+        title,
+        onPlay: ({ resolution, replay }) => {
+          closeModal();
+          void play(item.id, title.id, { replay, stream: { resolution, hint: { title, item } } });
+        },
+        onDownload: () => void releases(item.id),
+      });
+    } else if (actionName === 'stream-play') {
+      // Title page, Continue Watching and Next Up: straight into the player.
+      closeModal();
+      const title =
+        currentTitle?.id === b.dataset.title ? currentTitle : homeTitles.get(b.dataset.title);
+      const item =
+        title?.items?.find((i) => i.id === b.dataset.item) ||
+        [title?.resumable, title?.next, title?.primary].find((i) => i?.id === b.dataset.item);
+      const resolution = Number(b.dataset.resolution) || null;
+      if (resolution && b.dataset.picked === 'true') saveResolution(resolution);
+      void play(b.dataset.item, b.dataset.title, {
+        replay: b.dataset.replay === 'true',
+        stream: { resolution, hint: title && { title, item } },
+      });
     } else if (actionName === 'release') await releases(b.dataset.item);
     else if (actionName === 'download-season')
       await downloadSeason(currentTitle, Number(b.dataset.season));
@@ -489,7 +570,7 @@ async function action(event) {
       const item = currentTitle.items.find((i) => i.id === b.dataset.item),
         attrs = `data-item="${item.id}"`;
       modal(
-        `<h2>${esc(item.name || episodeLabel(item))}</h2><div class="actions">${button(item.state.completed ? 'Mark unwatched' : 'Mark watched', 'watched', `${attrs} data-watched="${!item.state.completed}"`)}${item.available ? button('Play from beginning', 'play', `${attrs} data-title="${currentTitle.id}" data-replay="true"`) + button('Add to queue', 'enqueue', attrs) + button('Play next', 'enqueue', `${attrs} data-next="true"`) : ''}${user.role === 'admin' ? button('Import local file', 'import', attrs) : ''}</div>`,
+        `<h2>${esc(item.name || episodeLabel(item))}</h2><div class="actions">${button(item.state.completed ? 'Mark unwatched' : 'Mark watched', 'watched', `${attrs} data-watched="${!item.state.completed}"`)}${item.available ? button('Play from beginning', 'play', `${attrs} data-title="${currentTitle.id}" data-replay="true"`) + button('Add to queue', 'enqueue', attrs) + button('Play next', 'enqueue', `${attrs} data-next="true"`) : canStream() && partlyWatched(item) ? button('Stream from the beginning', 'stream-play', `${attrs} data-title="${currentTitle.id}" data-replay="true"`) : ''}${user.role === 'admin' ? button('Import local file', 'import', attrs) : ''}</div>`,
       );
       $('#dialog-content').onclick = action;
     } else if (actionName === 'enqueue') {
@@ -621,6 +702,8 @@ async function boot() {
   $('#signout').onclick = logout;
   $('#dialog-close').onclick = closeModal;
   main().onclick = action;
+  configureStreaming(user);
+  bindWarmUp(main());
   initPlayer();
   window.addEventListener('hashchange', () => {
     closeModal();

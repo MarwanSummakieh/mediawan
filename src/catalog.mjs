@@ -208,7 +208,9 @@ export function createCatalog(store, config, dependencies = {}) {
         return title;
       });
     },
-    async releases(itemId) {
+    // `detailed` adds the file name and tracker list that streaming needs. Downloads keep
+    // the original shape so their stored jobs and checks are unchanged.
+    async releases(itemId, { detailed = false } = {}) {
       const item = store.item(itemId);
       if (!item) fail(404, 'Episode not found');
       const title = store.title(item.title_id);
@@ -236,6 +238,16 @@ export function createCatalog(store, config, dependencies = {}) {
           hash: s.infoHash.toLowerCase(),
           fileIndex: Number.isInteger(s.fileIdx) ? s.fileIdx : null,
           ...releaseFacts(s),
+          ...(detailed
+            ? {
+                filename: String(s.behaviorHints?.filename || '').slice(0, 300),
+                trackers: (Array.isArray(s.sources) ? s.sources : [])
+                  .filter((x) => typeof x === 'string' && x.startsWith('tracker:'))
+                  .map((x) => x.slice(8))
+                  .filter((x) => /^(?:udp|https?|wss?):\/\/[^\s]{3,300}$/i.test(x))
+                  .slice(0, 40),
+              }
+            : {}),
         }));
     },
   };

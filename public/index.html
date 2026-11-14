@@ -63,7 +63,29 @@
       <video id="video" playsinline></video>
       <div id="subtitle-layer" hidden aria-hidden="true"></div>
       <div id="player-loading" hidden role="status">
-        <span class="player-spinner"></span><span id="player-buffering"></span>
+        <span class="player-spinner"></span><span id="player-buffering"></span
+        ><span id="player-buffer-detail"></span>
+        <span id="player-buffer-meter" class="stream-meter" hidden aria-hidden="true"
+          ><span id="player-buffer-bar"></span
+        ></span>
+      </div>
+      <div id="stream-start" hidden>
+        <img id="stream-start-art" alt="" hidden />
+        <div class="stream-start-panel" role="status" aria-live="polite">
+          <p id="stream-start-quality" class="stream-start-quality"></p>
+          <h2 id="stream-start-title">Finding sources</h2>
+          <ol class="stream-steps" aria-hidden="true">
+            <li data-step="sources">Sources</li>
+            <li data-step="connecting">Connecting</li>
+            <li data-step="buffering">Buffering</li>
+          </ol>
+          <span id="stream-start-meter" class="stream-meter indeterminate" aria-hidden="true"
+            ><span id="stream-start-bar"></span
+          ></span>
+          <p id="stream-start-detail" class="stream-start-detail"></p>
+          <p id="stream-start-note" class="stream-start-note"></p>
+          <div id="stream-start-actions" class="stream-start-actions"></div>
+        </div>
       </div>
       <div id="player-transport" aria-label="Playback controls">
         <div id="player-message" role="status"></div>
@@ -175,6 +197,11 @@
               aria-label="Close playback settings"
               title="Close settings"
             ></button>
+          </div>
+          <div id="stream-quality" hidden role="group" aria-labelledby="stream-quality-label">
+            <span id="stream-quality-label" class="stream-quality-label">Stream quality</span>
+            <div id="stream-quality-options" class="stream-options"></div>
+            <p id="stream-quality-status" class="stream-readiness" role="status"></p>
           </div>
           <label>Audio<select id="audio"></select></label>
           <button id="player-subtitles-settings">Subtitles & appearance</button>
