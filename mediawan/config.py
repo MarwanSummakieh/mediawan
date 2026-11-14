@@ -35,6 +35,15 @@ class Config:
     usenet_dav_user: str = ""
     usenet_dav_password: str = ""
     usenet_dav_category: str = "movies"
+    # Online movies and TV over BitTorrent (see torrent.py): the torrent sidecar's address
+    # (torrentd.py, inside the VPN container's network; empty = off) and the key both share,
+    # and where releases are listed.
+    torrent_url: str = ""
+    torrent_key: str = ""
+    torrentio_url: str = "https://torrentio.strem.fun"
+    torrent_fallback_seconds: float = 6
+    # DEVELOPMENT ONLY: an IMDb id whose releases are replaced by the free film Sintel.
+    torrent_dev_sintel: str = ""
     # Subtitle languages offered on every title; missing ones are machine-translated by the
     # LibreTranslate server at translate_url (see translate.py). Empty url = no translation.
     subtitle_languages: list[str] = field(default_factory=lambda: ["ar", "da", "pt"])
@@ -75,6 +84,11 @@ class Config:
             usenet_dav_user=env.get("USENET_DAV_USER", ""),
             usenet_dav_password=env.get("USENET_DAV_PASSWORD", ""),
             usenet_dav_category=env.get("USENET_DAV_CATEGORY", "movies"),
+            torrent_url=env.get("TORRENT_URL", "").strip(),
+            torrent_key=env.get("TORRENT_KEY", ""),
+            torrentio_url=env.get("TORRENTIO_URL", "https://torrentio.strem.fun"),
+            torrent_fallback_seconds=min(60.0, max(2.0, float(env.get("TORRENT_FALLBACK_SECONDS", "6")))),
+            torrent_dev_sintel=env.get("TORRENT_DEV_SINTEL", "").strip(),
             subtitle_languages=[
                 code.strip().lower()
                 for code in env.get("SUBTITLE_LANGUAGES", "ar,da,pt").split(",")

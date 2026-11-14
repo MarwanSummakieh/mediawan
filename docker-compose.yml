@@ -22,6 +22,10 @@ services:
       USENET_DAV_USER: ${USENET_DAV_USER:-}
       USENET_DAV_PASSWORD: ${USENET_DAV_PASSWORD:-}
       USENET_DAV_CATEGORY: ${USENET_DAV_CATEGORY:-movies}
+      # Torrent streaming: the torrent service below, reached through the vpn container
+      # (set TORRENT_URL=http://vpn:8792 to turn it on). Empty = off.
+      TORRENT_URL: ${TORRENT_URL:-}
+      TORRENT_KEY: ${TORRENT_KEY:-}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
       FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-127.0.0.1}
       # Offered on every title; missing ones are translated by the libretranslate service.
@@ -64,10 +68,10 @@ services:
       TUNNEL_TOKEN: ${TUNNEL_TOKEN}
     depends_on: [mediawan]
 
-  # Optional NordVPN tunnel. It is off unless started with --profile vpn, and nothing is
-  # routed through it yet: a service that should use it joins it with
-  # network_mode: "service:vpn". Credentials are never written in this file or in .env;
-  # run ./vpn-credentials.sh, which saves them in VPN_SECRETS_DIR, readable by root only.
+  # Optional NordVPN tunnel. It is off unless started with --profile vpn. The torrent service
+  # joins it with network_mode: "service:vpn", so its traffic has no route but the tunnel.
+  # Credentials are never written in this file or in .env; run ./vpn-credentials.sh, which
+  # saves them in VPN_SECRETS_DIR, readable by root only.
   vpn:
     profiles: [vpn]
     image: qmcgaw/gluetun:v3.40.0
@@ -84,8 +88,47 @@ services:
       OPENVPN_PASSWORD_SECRETFILE: /run/secrets/vpn/openvpn_password
       WIREGUARD_PRIVATE_KEY_SECRETFILE: /run/secrets/vpn/wireguard_private_key
       TZ: ${TZ:-Europe/Copenhagen}
+      # Gluetun's firewall drops inbound connections; this lets Mediawan reach the torrent
+      # service (which lives in this container's network) at http://vpn:8792. The port only
+      # opens on the compose network side, never through the tunnel.
+      FIREWALL_INPUT_PORTS: ${TORRENTD_PORT:-8792}
     volumes:
       - ${VPN_SECRETS_DIR:-./vpn-secrets}:/run/secrets/vpn:ro
+
+  # Torrent streaming engine (mediawan/torrentd.py), from the same image. It shares the vpn
+  # container's network, so peers only ever see the VPN's address: Gluetun's kill switch is
+  # the guard, and the engine itself refuses to start torrents unless the tunnel is up.
+  # Its cache lives under the transcode folder, capped, and is wiped on start and when idle.
+  torrent:
+    profiles: [vpn]
+    build: .
+    image: mediawan:3-local
+    restart: unless-stopped
+    user: "${PUID:-0}:${PGID:-0}"
+    network_mode: "service:vpn"
+    command: ["python", "-m", "mediawan.torrentd"]
+    environment:
+      # The same long random string as Mediawan's TORRENT_KEY; without it the engine exits.
+      TORRENT_KEY: ${TORRENT_KEY:-}
+      TORRENTD_PORT: ${TORRENTD_PORT:-8792}
+      TRANSCODE_DIR: /transcode
+      TORRENT_CACHE_GB: ${TORRENT_CACHE_GB:-60}
+      TORRENT_MIN_FREE_GB: ${TORRENT_MIN_FREE_GB:-10}
+      TORRENT_UPLOAD_KBPS: ${TORRENT_UPLOAD_KBPS:-1024}
+      TORRENT_INTERFACE: ${TORRENT_INTERFACE:-}
+      TORRENT_BIND_TUNNEL: ${TORRENT_BIND_TUNNEL:-true}
+      TORRENT_REQUIRE_VPN: "true"
+    volumes:
+      - ${TRANSCODE_DIR:-./transcode}:/transcode
+    depends_on:
+      vpn:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys,os; sys.exit(urllib.request.urlopen('http://127.0.0.1:%s/health' % os.environ.get('TORRENTD_PORT','8792')).status != 200)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
 
 volumes:
   libretranslate-models:

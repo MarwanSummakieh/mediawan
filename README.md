@@ -40,6 +40,22 @@ kept on the `backup/v2-before-rebuild` branch.
   answer requests carrying their own Referer, which browsers cannot send, so Mediawan fetches
   the playlists, segments and subtitles and passes them through unchanged (never re-encoded).
   Proxied links are signed, so the server cannot be used to fetch anything else.
+- **Online films and series over BitTorrent**, through the VPN. Title pages from search offer
+  one Play with the quality beside it (1080p and 4K; 720p or SD instead of 1080p for older
+  series that have nothing sound at 1080p), and Usenet as the other source when it is set up.
+  Releases come from Torrentio by IMDb id and are checked and ranked (`release_rules.py`):
+  untouched service WEB-DLs first, a season kept on one group or pack, re-encodes, dubs,
+  other-language releases, upscales, Dolby-Vision-only and sign-language versions last; films
+  may also come from Blu-ray, series only when no WEB-DL of that episode exists. A release
+  labelled with a year outside the title's own is never offered, and a film file whose real
+  length is far from the catalog runtime is rejected for good and the next release played.
+  Opening a title page prepares the stream, so play usually starts at once; while it connects
+  the player says what is happening (finding sources, connecting to N peers, buffering N%),
+  a slow release is raced against the next one, and every failure is a screen with a next
+  step. The engine (`torrentd.py`) is a separate service inside the vpn container's network,
+  so torrent traffic has no route but the tunnel; it refuses to start torrents when no tunnel
+  is up, fetches the pieces the player needs first (a seek moves the window at once), and
+  keeps its data in a capped cache that is deleted when a stream stops or idles.
 - **Subtitles in your languages, always.** Arabic, Danish and Portuguese (`SUBTITLE_LANGUAGES`)
   are offered on every film, episode and anime. A real track is used when there is one; otherwise
   the best text track (English first) is translated by the LibreTranslate service in the compose
@@ -104,6 +120,14 @@ All settings are environment variables; see [.env.example](.env.example).
 | `SUBTITLE_LANGUAGES` | `ar,da,pt` | Subtitle languages offered on every title; missing ones are machine-translated |
 | `TRANSLATE_URL` | *(compose: the libretranslate service)* | LibreTranslate server for those translations; empty turns translation off |
 | `ONLINE_ANIME` | `true` | Anime search and streaming from AniList + MegaPlay; `false` turns it off |
+| `TORRENT_URL` | *(none)* | The torrent service (`http://vpn:8792` in the compose file); empty turns torrent streaming off |
+| `TORRENT_KEY` | *(none)* | Shared by Mediawan and the torrent service; required by the service |
+| `TORRENTIO_URL` | `https://torrentio.strem.fun` | Where releases are listed |
+| `TORRENT_FALLBACK_SECONDS` | `6` | Wait for a release's file list before racing the next one (2–60) |
+| `TORRENT_CACHE_GB`, `TORRENT_MIN_FREE_GB` | `60`, `10` | Torrent service: cache cap, and free space it always leaves |
+| `TORRENT_UPLOAD_KBPS` | `1024` | Torrent service: upload limit (0 = none) |
+| `TORRENT_REQUIRE_VPN` | `true` | Torrent service: refuse to start torrents unless a tunnel interface (`tun*`, `wg*`…) is up. `false` only for development |
+| `TORRENT_INTERFACE`, `TORRENT_BIND_TUNNEL` | *(any tunnel)*, `true` | Torrent service: which tunnel to require, and whether libtorrent binds its sockets to it |
 | `LIVE_TV` | `true` | Live sports and channels from your IPTV provider; `false` turns it off |
 | `LIVE_TV_DIR` | `live-tv/` beside the database | Channel list (with the provider login) and TV guide cache |
 | `LIVE_GUIDES` | epgshare01 UK1, DE1, NL1, BEIN1 | XMLTV guides, comma-separated (gzip is fine). The provider's own guide is added when it has one |
@@ -149,6 +173,9 @@ characters. A test skips itself when FFmpeg is missing.
 | `mediawan/scanner.py` | Library walk, missing files, review list, admin placements |
 | `mediawan/metadata.py` | Cinemeta matching, locked admin edits, artwork cache |
 | `mediawan/media.py` | ffprobe, playback decisions, HLS sessions, hardware encoding, subtitles |
+| `mediawan/torrent.py` | Torrent releases (Torrentio), streams with fallback, wrong-film rejection, season locks |
+| `mediawan/release_rules.py` | Which release to stream: the hard rules and the ranking (pure functions) |
+| `mediawan/torrentd.py` | The torrent engine service: libtorrent, piece priorities, HTTP with ranges, tunnel check |
 | `mediawan/live.py` | IPTV channel import (Xtream, M3U), name matching, shared live streams |
 | `mediawan/sports.py` | TV guides, ESPN fixtures, and the merged sports schedule |
 | `mediawan/live_api.py` | Live sports routes and the Admin → Live TV page |

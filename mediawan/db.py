@@ -105,6 +105,21 @@ MIGRATIONS = [
     """
     ALTER TABLE titles ADD COLUMN extra TEXT NOT NULL DEFAULT '{}';
     """,
+    # 5: torrent streaming (torrent.py). Online history is shared by both sources, so each row
+    # says which one played it and at what quality, and resuming reopens the same. Season
+    # locks keep a season on one release group or pack; rejects are releases that turned out
+    # to be a different film with the same name, never offered again for that title.
+    """
+    ALTER TABLE usenet_history ADD COLUMN source TEXT NOT NULL DEFAULT 'usenet';
+    ALTER TABLE usenet_history ADD COLUMN quality INTEGER NOT NULL DEFAULT 0;
+    CREATE TABLE torrent_locks(
+      imdb_id TEXT NOT NULL, season INTEGER NOT NULL, quality INTEGER NOT NULL,
+      json TEXT NOT NULL, updated INTEGER NOT NULL,
+      PRIMARY KEY(imdb_id, season, quality));
+    CREATE TABLE torrent_rejects(
+      imdb_id TEXT NOT NULL, hash TEXT NOT NULL, reason TEXT NOT NULL, at INTEGER NOT NULL,
+      PRIMARY KEY(imdb_id, hash));
+    """,
 ]
 
 

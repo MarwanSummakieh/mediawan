@@ -90,7 +90,10 @@
         }
         if (!response.ok) {
           var detail = data && data.detail;
-          throw new Error(typeof detail === "string" ? detail : "Request failed (" + response.status + ")");
+          var error = new Error(typeof detail === "string" ? detail : "Request failed (" + response.status + ")");
+          error.status = response.status;
+          error.reason = data && data.reason; // torrent errors say which next step fits
+          throw error;
         }
         return data;
       });
@@ -519,7 +522,8 @@
   function watchLabel(e) { return e.kind === "show" ? "S" + e.season + " · E" + e.episode : ""; }
   function watchEntryCard(e) { // Continue Watching · Online
     var k = feature({ type: "watch-entry", id: e.id, kind: e.kind, season: e.season, episode: e.episode, name: e.name,
-      label: watchLabel(e), position: e.position, duration: e.duration, background: e.background || e.poster, poster: e.poster });
+      label: watchLabel(e), position: e.position, duration: e.duration, background: e.background || e.poster, poster: e.poster,
+      source: e.source, quality: e.quality });
     var sub = [watchLabel(e), e.duration ? left(e.position, e.duration) : ""].filter(Boolean).join(" · ");
     return '<a class="card wide" href="#/watch/' + e.kind + "/" + e.id + "?play=" + e.season + "." + e.episode + '" data-k="' + k + '">' +
       art(e.background || e.poster, e.name, bar(e.position, e.duration) + PLAY_OVER, "wide") +
@@ -715,7 +719,9 @@
     if (!f) return;
     if (f.type === "entry") Player.open({ item_id: f.item_id });
     else if (f.type === "anime-entry") Player.open({ online: { anilist_id: f.id, episode: f.episode, lang: f.lang } });
-    else if (f.type === "watch-entry") Player.open({ usenet: { kind: f.kind, id: f.id, season: f.season, episode: f.episode } });
+    else if (f.type === "watch-entry") Player.open(f.source === "torrent"
+      ? { torrent: { kind: f.kind, id: f.id, season: f.season, episode: f.episode, quality: f.quality || 0 } }
+      : { usenet: { kind: f.kind, id: f.id, season: f.season, episode: f.episode } });
     else if (f.type === "anime") location.hash = infoHref(f);
     else api("/api/titles/" + f.id).then(function (t) {
       if (t.next) Player.open({ item_id: t.next.item_id, title_id: t.id });
@@ -1283,7 +1289,98 @@
     if ($("#play")) $("#play").onclick = function () { play(a.next.episode); };
   }
 
-  // ---- online movies and TV (Cinemeta details, Usenet streams) ---------------------------
+  // ---- torrent sources: the quality picker, the status line, the prepared stream ----------
+  var QUALITY_NAMES = { 480: "SD", 720: "720p", 1080: "1080p", 2160: "4K" };
+  function rate(bytes) { return bytes >= 1048576 ? (bytes / 1048576).toFixed(1) + " MB/s" : Math.max(1, Math.round(bytes / 1024)) + " KB/s"; }
+  function releaseLine(r) {
+    return r ? [r.tags.slice(1).join(" "), r.size ? size(r.size) : "", r.seeders != null ? plural(r.seeders, "seeder") : ""].filter(Boolean).join(" · ") : "";
+  }
+  // 4K only by default where it plays as it is: a 4K HEVC file on a 1080p or non-HEVC screen
+  // would be converted on the NAS. The menu still offers it.
+  function defaultQuality(options) {
+    var c = Player.caps(), prefs = (ME && ME.preferences) || {};
+    var uhd = c.max_height >= 2160 && c.video.indexOf("hevc") >= 0 && (!prefs.max_height || +prefs.max_height >= 2160);
+    var standard = options.qualities[0], q = options.default;
+    if (q === 2160 && !uhd && standard && standard.available) q = standard.quality;
+    return q || (standard && standard.quality) || 1080;
+  }
+  function sourceLabel(state, sources, options) {
+    if (state.source === "usenet") return '<span class="lbl">Source</span>Usenet';
+    var name = state.quality ? QUALITY_NAMES[state.quality] : options ? "–" : "Auto";
+    return '<span class="lbl">' + (sources.usenet ? "Torrent" : "Quality") + "</span>" + esc(name);
+  }
+  // The line under Play: what will play and whether it is ready, live while the page is open.
+  function sourceStatus(state, options, s) {
+    var dot = function (kind) { return '<i class="sl-dot ' + kind + '"></i>'; };
+    var rel = function (r) { return r && r.name ? '<span class="sl-rel">' + esc(r.name) + "</span>" : ""; };
+    if (state.source !== "torrent") return "";
+    if (!options) return dot("wait") + "<span>Checking sources…</span>";
+    if (options.error) return dot("bad") + "<span>" + esc(options.error) + "</span>";
+    if (!options.enabled || (options.engine && !options.engine.ok)) {
+      return dot("bad") + "<span>" + esc((options.engine && options.engine.message) || "Torrent streaming is off") + "</span>";
+    }
+    var q = options.qualities.filter(function (o) { return o.quality === state.quality; })[0];
+    if (!q) return "";
+    if (!q.available) return dot("bad") + "<span>" + esc(q.reason) + "</span>";
+    if (!s) return dot("wait") + "<span>Preparing · " + esc(releaseLine(q.release)) + "</span>" + rel(q.release);
+    var r = s.release || q.release, peers = s.peers ? plural(s.peers, "peer") : "";
+    if (s.state === "failed") return dot("bad") + "<span>" + esc(s.message) + "</span>";
+    if (s.duration) {
+      return dot("ok") + "<span>Ready to play" + (peers ? " · " + peers : "") + (s.fallback ? " · switched to another release" : "") + "</span>" + rel(r);
+    }
+    if (s.state === "buffering") return dot("wait") + "<span>Getting ready · " + Math.round(100 * (s.ready_fraction || 0)) + "%" + (peers ? " · " + peers : "") + "</span>" + rel(r);
+    if (s.state === "connecting") return dot("wait") + "<span>Connecting · " + esc(peers) + "</span>" + rel(r);
+    return dot("wait") + "<span>Finding sources</span>" + rel(r);
+  }
+  function sourceMenu(anchor, state, sources, options, onPick) {
+    var html = "";
+    if (sources.torrent) {
+      html += '<div class="menu-h"><b>Torrent</b><span>Plays while it downloads, through the VPN</span></div>';
+      if (!options) html += '<p class="menu-note">Checking sources…</p>';
+      else if (options.error || !options.enabled) html += '<p class="menu-note">' + esc(options.error || (options.engine && options.engine.message) || "") + "</p>";
+      else options.qualities.forEach(function (o) {
+        var on = state.source === "torrent" && state.quality === o.quality;
+        html += '<button role="menuitemradio" data-q="' + o.quality + '" aria-checked="' + on + '"' + (o.available ? "" : " disabled") + ">" +
+          icon("check", "chk") + "<span>" + esc(o.label) + "<small>" + esc(o.available ? releaseLine(o.release) : o.reason) + "</small></span></button>";
+      });
+    }
+    if (sources.usenet) {
+      html += (sources.torrent ? "<hr>" : "") + '<div class="menu-h"><b>Usenet</b><span>The best version on the Usenet sidecar</span></div>' +
+        '<button role="menuitemradio" data-src="usenet" aria-checked="' + (state.source === "usenet") + '">' + icon("check", "chk") + "<span>Best version</span></button>";
+    }
+    popMenu(anchor, html, function (m) {
+      $$("[data-q]", m).forEach(function (b) { b.onclick = function () { closeMenu(true); onPick("torrent", +b.getAttribute("data-q")); }; });
+      $$("[data-src]", m).forEach(function (b) { b.onclick = function () { closeMenu(true); onPick("usenet"); }; });
+    });
+  }
+  // One prepared stream at a time: the server joins the swarm of what Play would start, so play
+  // usually starts warm. Polling keeps it alive and stops when the page is left.
+  var Warm = { key: null, stream: null, status: null, timer: null, draw: null };
+  function warmStop() { clearTimeout(Warm.timer); Warm.key = Warm.stream = Warm.status = Warm.draw = null; }
+  function warmStream(req, draw) {
+    var key = [req.kind, req.id, req.season, req.episode, req.quality].join("|");
+    Warm.draw = draw;
+    if (Warm.key === key) { if (Warm.status) draw(Warm.status); return; }
+    clearTimeout(Warm.timer);
+    Warm.key = key; Warm.stream = null; Warm.status = null;
+    function show(s) { if (Warm.key !== key) return false; Warm.status = s; if (Warm.draw) Warm.draw(s); return true; }
+    function poll(delay) {
+      Warm.timer = setTimeout(function () {
+        if (Warm.key !== key) return;
+        if (!$("#source-line")) { warmStop(); return; } // the page was left
+        api("/api/torrent/streams/" + Warm.stream).then(function (s) {
+          if (show(s) && s.state !== "failed") poll(s.duration ? 5000 : 1000);
+        }).catch(function () { // expired or stopped (the player closed it): prepare again
+          if (Warm.key === key && $("#source-line")) { Warm.key = null; warmStream(req, Warm.draw); }
+        });
+      }, delay);
+    }
+    api("/api/torrent/prepare", { method: "POST", body: { kind: req.kind, id: req.id, season: req.season, episode: req.episode, quality: req.quality, player: CLIENT } })
+      .then(function (s) { if (!show(s)) return; Warm.stream = s.id; if (s.state !== "failed") poll(700); })
+      .catch(function (err) { show({ state: "failed", message: err.message }); });
+  }
+
+  // ---- online movies and TV (Cinemeta details; torrent and Usenet streams) ----------------
   function viewWatch(path, query, view) {
     document.body.classList.add("over-art");
     var played = false;
@@ -1308,7 +1405,17 @@
     var show = t.kind === "show", next = t.next, seasons = [];
     t.episodes.forEach(function (e) { if (seasons.indexOf(e.season) < 0) seasons.push(e.season); });
     if (state.season === undefined) state.season = next.season || seasons[0];
-    var playable = t.ready && (!show || t.episodes.length);
+    // Two online sources play from this page: torrents (with a quality choice) and Usenet.
+    // Play uses the one last used for this title, else torrents when the engine is set up.
+    var sources = t.sources || { usenet: t.ready, torrent: false };
+    var played = (t.source || "") + ":" + (t.quality || 0); // what played last (changes after the player closes)
+    if (state.played !== played && t.source && sources[t.source]) {
+      state.source = t.source;
+      if (t.source === "torrent" && t.quality) state.quality = t.quality;
+    }
+    state.played = played;
+    if (!state.source || !sources[state.source]) state.source = sources.torrent ? "torrent" : sources.usenet ? "usenet" : null;
+    var playable = !!state.source && (!show || t.episodes.length);
     var resume = next.position > 5;
     var playLabel = (resume ? "Resume" : "Play") + (show ? " " + watchLabel({ kind: "show", season: next.season, episode: next.episode }) : "");
     var meta = [show && t.release_info ? esc(t.release_info) : t.year ? esc(t.year) : "", t.runtime ? esc(t.runtime) : "",
@@ -1316,6 +1423,7 @@
       show && seasons.length ? plural(seasons.length, "season") : "",
       show && t.status ? esc(t.status) : ""].filter(Boolean);
     var actions = !playable ? "" : '<button class="primary" id="play" data-autofocus>' + icon("play") + esc(playLabel) + "</button>" +
+      '<button class="dd" id="source" aria-haspopup="menu">' + sourceLabel(state, sources, null) + icon("down") + "</button>" +
       (resume ? iconButton("restart", "restart", "Play from the start") : "") + '<button id="versions">' + icon("sliders") + "Versions</button>";
     var body = '<div id="versions-box"></div>';
     if (show && t.episodes.length) {
@@ -1327,20 +1435,72 @@
     body += peopleRow("Cast &amp; crew", cast.map(function (n) { return { name: n }; })
       .concat(director.map(function (n) { return { name: n, role: "Director" }; }))
       .concat(writer.filter(function (n) { return director.indexOf(n) < 0; }).map(function (n) { return { name: n, role: "Writer" }; })));
+    var note = show && !t.episodes.length ? "Not out yet."
+      : sources.torrent && sources.usenet ? "Streams over BitTorrent through the VPN, or from Usenet, through this server."
+      : sources.torrent ? "Streams over BitTorrent through the VPN while it downloads."
+      : sources.usenet ? "Streams from Usenet through this server."
+      : "Playing this needs the torrent engine (TORRENT_URL) or a Usenet indexer and sidecar (NEWZNAB_INDEXERS and USENET_DAV_URL).";
     if (!paint(view, detailHtml({ name: t.name, poster: t.poster, background: t.background || t.poster, meta: meta,
-      genres: (t.genres || []).slice(0, 6), description: t.description, actions: actions, body: body,
+      genres: (t.genres || []).slice(0, 6), description: t.description, actions: actions,
+      resume: playable ? '<div class="source-line" id="source-line" aria-live="polite"></div>' : "", body: body,
       facts: [["Directed by", director.join(", ")], ["Written by", writer.join(", ")], ["Starring", cast.slice(0, 5).join(", ")],
         ["Country", t.country], ["Released", fmtDate(t.released)], ["Awards", t.awards]],
-      note: t.ready ? "Streams from Usenet through this server." : show && !t.episodes.length ? "Not out yet."
-        : "Playing this needs a Usenet indexer and sidecar (NEWZNAB_INDEXERS and USENET_DAV_URL)." }))) return null;
+      note: note }))) return null;
     bindDetail();
 
     function play(season, episode, extra) {
-      if (!t.ready) return;
+      if (!state.source) return;
       var u = { kind: t.kind, id: t.id, season: season, episode: episode };
       if (extra && extra.release) u.release = extra.release;
-      Player.open({ usenet: u, start: extra && extra.start });
+      if (state.source === "torrent") {
+        u.quality = state.quality || 0;
+        Player.open({ torrent: u, start: extra && extra.start, usenetOk: sources.usenet, title: t.name,
+          subtitle: show ? watchLabel({ kind: "show", season: season, episode: episode }) : "" });
+      } else Player.open({ usenet: u, start: extra && extra.start });
     }
+    // Torrent qualities for what Play would start, and a prepared stream so play starts warm.
+    var options = null;
+    function target() { return { kind: t.kind, id: t.id, season: next.season, episode: next.episode }; }
+    function optionsPath(e) { return "/api/torrent/options/" + path + "?season=" + e.season + "&episode=" + e.episode; }
+    function drawSource(status) {
+      var line = $("#source-line");
+      if ($("#source")) $("#source").innerHTML = sourceLabel(state, sources, options) + icon("down");
+      if (line) line.innerHTML = sourceStatus(state, options, status);
+    }
+    function warmUp(e) {
+      if (state.source !== "torrent" || !options || !options.enabled) { warmStop(); drawSource(null); return; }
+      var q = options.qualities.filter(function (o) { return o.quality === state.quality; })[0];
+      if (!q || !q.available) { warmStop(); drawSource(null); return; }
+      warmStream({ kind: t.kind, id: t.id, season: e.season, episode: e.episode, quality: state.quality }, drawSource);
+    }
+    function loadOptions() {
+      if (state.source !== "torrent") { warmStop(); drawSource(null); return; }
+      drawSource(null);
+      var p = optionsPath(target());
+      var use = function (data) {
+        if (view !== VIEW) return;
+        options = data;
+        if (!state.quality || !data.qualities.some(function (o) { return o.quality === state.quality && o.available; })) state.quality = defaultQuality(data);
+        drawSource(null);
+        warmUp(target());
+      };
+      if (CACHE[p]) use(CACHE[p].data);
+      api(p).then(function (data) { remember(p, data); use(data); }).catch(function (err) {
+        if (view !== VIEW) return;
+        options = { enabled: true, error: err.message, qualities: [] };
+        drawSource(null);
+      });
+    }
+    if (playable) loadOptions();
+    if ($("#source")) $("#source").onclick = function () {
+      var anchor = this;
+      sourceMenu(anchor, state, sources, options, function (source, quality) {
+        state.source = source;
+        if (quality) state.quality = quality;
+        $("#versions-box").innerHTML = "";
+        if (source === "torrent" && !options) loadOptions(); else { drawSource(null); warmUp(target()); }
+      });
+    };
     function find(card) {
       var at = card.getAttribute("data-ep").split(".");
       return t.episodes.filter(function (e) { return e.season === +at[0] && e.episode === +at[1]; })[0];
@@ -1372,6 +1532,23 @@
     if ($("#versions")) $("#versions").onclick = function () {
       var box = $("#versions-box");
       box.innerHTML = '<div class="box"><h3 style="margin-top:0">Versions</h3><div class="sk sk-line" style="width:70%"></div><div class="sk sk-line" style="width:60%"></div><div class="sk sk-line" style="width:65%"></div></div>';
+      if (state.source === "torrent") { // the ranked releases at the chosen quality, best first
+        var label = QUALITY_NAMES[state.quality] || "";
+        api("/api/torrent/releases/" + path + "?season=" + next.season + "&episode=" + next.episode + "&quality=" + (state.quality || 0)).then(function (data) {
+          if (!box.isConnected) return;
+          box.innerHTML = '<div class="box"><h3 style="margin-top:0">Versions · ' + esc(label) + " torrents</h3>" + (data.releases.length
+            ? '<div class="versions">' + data.releases.map(function (r, i) {
+              var tags = r.tags.map(function (x) { return '<span class="tag">' + esc(x) + "</span>"; }).join("");
+              return '<button data-i="' + i + '" title="' + esc(r.why.join("\n")) + '">' + tags + "<span>" + esc(r.name) + "</span><span>" +
+                [r.size ? size(r.size) : "", r.seeders != null ? plural(r.seeders, "seeder") : ""].filter(Boolean).join(" · ") + "</span></button>";
+            }).join("") + "</div>" : '<p class="empty small">No ' + esc(label) + " release passes the checks.</p>") + "</div>";
+          $$("button", box).forEach(function (b) {
+            b.onclick = function () { play(next.season, next.episode, { release: data.releases[+b.getAttribute("data-i")].hash }); };
+          });
+          if ($("button", box)) focusEl($("button", box));
+        }).catch(function (err) { box.innerHTML = ""; fail(err); });
+        return;
+      }
       api("/api/usenet/releases/" + path + "?season=" + next.season + "&episode=" + next.episode).then(function (data) {
         if (!box.isConnected) return;
         box.innerHTML = '<div class="box"><h3 style="margin-top:0">Versions</h3>' + (data.releases.length
@@ -2173,6 +2350,7 @@
     function modeText(info) {
       var text = MODES[info.mode] || info.mode || "";
       if (info.mode === "transcode" && info.hwaccel && info.hwaccel !== "none") text += " · " + info.hwaccel;
+      if (info.torrent) text = "Torrent " + info.torrent.label + " · " + text;
       if (state.maxHeight) text += " · up to " + state.maxHeight + "p";
       return text;
     }
@@ -2184,16 +2362,20 @@
       root.hidden = false;
       layers.push(root);
       document.body.style.overflow = "hidden";
-      $("#p-title").textContent = "";
-      $("#p-sub").textContent = "";
+      $("#p-title").textContent = request.title || ""; // known at once for online titles
+      $("#p-sub").textContent = request.subtitle || "";
       $("#p-mode").textContent = "";
+      $("#p-time").textContent = "0:00"; // nothing left over from the last playback
+      $("#p-duration").textContent = "";
+      $("#p-progress").style.width = $("#p-buffer").style.width = "0";
       showUi();
-      load({ item_id: request.item_id, online: request.online, usenet: request.usenet, live: request.live, start: request.start });
+      load({ item_id: request.item_id, online: request.online, usenet: request.usenet, torrent: request.torrent, live: request.live, start: request.start });
     }
 
     // The same episode or film again, at another point or with other options.
     function again(extra) {
-      var info = state.info, opts = info.live ? { live: { channel_id: info.live.channel.id } }
+      var info = state.info, t = info.torrent, opts = info.live ? { live: { channel_id: info.live.channel.id } }
+        : t ? { torrent: { kind: t.kind, id: t.id, season: t.season, episode: t.episode, quality: t.quality, stream: t.stream }, audio: state.audio }
         : info.usenet ? { usenet: info.usenet, audio: state.audio } : info.online
         ? { online: { anilist_id: info.online.anilist_id, episode: info.online.episode, lang: info.online.lang } }
         : { item_id: info.item.id, audio: state.audio, file_id: info.file_id };
@@ -2205,10 +2387,14 @@
       $("#spinner").hidden = false;
       $("#p-skip").hidden = true;
       root.classList.add("paused");
+      root.classList.remove("failed");
+      hideStatus();
       cancelSeek();
       stopStream(true);
       var request;
-      if (opts.live) {
+      if (opts.torrent) {
+        request = torrentPlay(opts);
+      } else if (opts.live) {
         request = api("/api/live/watch", { method: "POST", body: { channel_id: opts.live.channel_id, client: CLIENT, tv: TV } });
       } else if (opts.online) {
         var o = { anilist_id: opts.online.anilist_id, episode: opts.online.episode, lang: opts.online.lang };
@@ -2229,7 +2415,21 @@
         request = api("/api/play", { method: "POST", body: body });
       }
       return request.then(function (info) {
-        if (root.hidden) { if (info.session) api("/api/sessions/" + info.session, { method: "DELETE" }); return; }
+        if (root.hidden) {
+          if (info.session) api("/api/sessions/" + info.session, { method: "DELETE" });
+          if (info.torrent) api("/api/torrent/streams/" + info.torrent.stream, { method: "DELETE" }).catch(function () {});
+          return;
+        }
+        hideStatus();
+        // A new torrent stream (another quality, the next episode) replaces the old one.
+        if (state.torrentStream && (!info.torrent || info.torrent.stream !== state.torrentStream)) {
+          api("/api/torrent/streams/" + state.torrentStream, { method: "DELETE" }).catch(function () {});
+        }
+        state.torrentStream = info.torrent ? info.torrent.stream : null;
+        if (info.torrent && info.status && info.status.fallback && !state.fallbackShown) {
+          state.fallbackShown = true;
+          toast("The first choice did not work (" + info.status.fallback.reason + "), so another release is playing.", $("#p-toast"));
+        }
         state.info = info;
         state.offset = info.start;
         state.audio = info.audio_index;
@@ -2253,9 +2453,137 @@
         showUi();
         setTimeout(function () { focusEl($("#p-play")); }, 50);
       }).catch(function (err) {
+        if (err.cancelled || root.hidden) return;
         $("#spinner").hidden = true;
-        toast(err.message, $("#p-toast"));
+        if (opts.torrent) showFailure(err, opts); else toast(err.message, $("#p-toast"));
       });
+    }
+
+    // ---- torrent streams: prepare (or claim the warm one), show progress, then play ------
+    var CANCELLED = { cancelled: true, message: "" };
+    function torrentPlay(opts) {
+      var t = opts.torrent, token = state.loadToken = {};
+      state.qualities = state.qualities || null;
+      if (!state.qualities || state.qualitiesFor !== t.id + t.season + "." + t.episode) {
+        state.qualitiesFor = t.id + t.season + "." + t.episode;
+        var p = "/api/torrent/options/" + t.kind + "/" + t.id + "?season=" + t.season + "&episode=" + t.episode;
+        (CACHE[p] ? Promise.resolve(CACHE[p].data) : api(p)).then(function (d) { if (state.loadToken === token || state.info) state.qualities = d.qualities; }).catch(function () {});
+      }
+      function body(stream) {
+        var b = { stream: stream, caps: caps(), client: CLIENT };
+        if (opts.start !== undefined && opts.start !== null) b.start = opts.start;
+        if (opts.audio !== undefined) b.audio = opts.audio;
+        if (opts.escalate) b.escalate = opts.escalate;
+        return b;
+      }
+      function play(stream) {
+        if (state.loadToken !== token) return Promise.reject(CANCELLED);
+        return api("/api/torrent/play", { method: "POST", body: body(stream) });
+      }
+      function wait(s) {
+        return new Promise(function (resolve, reject) {
+          (function step(s) {
+            if (state.loadToken !== token || root.hidden) { reject(CANCELLED); return; }
+            showStatus(s);
+            if (s.state === "failed") {
+              var e = new Error(s.error ? s.error.message : s.message);
+              e.reason = s.error && s.error.reason;
+              e.stream = s;
+              reject(e);
+              return;
+            }
+            if (s.duration) { resolve(s); return; } // probed: playback can start
+            setTimeout(function () { api("/api/torrent/streams/" + s.id).then(step, reject); }, 400);
+          })(s);
+        });
+      }
+      function prepare() {
+        var b = { kind: t.kind, id: t.id, season: t.season, episode: t.episode, quality: t.quality || 0, player: CLIENT, intent: "play" };
+        if (t.release) b.release = t.release;
+        return api("/api/torrent/prepare", { method: "POST", body: b }).then(wait).then(function (s) {
+          showStatus(s, true);
+          return play(s.id);
+        });
+      }
+      if (t.stream) { // the same stream again (a seek, an audio change, a step up)
+        state.bufferTimer = setTimeout(bufferStatus, 600); // a seek into data not here yet says so
+        return play(t.stream).catch(function (err) {
+          if (err.reason === "gone" || err.reason === "not-ready") return prepare();
+          throw err;
+        });
+      }
+      showStatus({ state: "finding", quality: t.quality, peers: 0 });
+      return prepare();
+    }
+    function statusText(s, starting) {
+      var peers = s.peers ? plural(s.peers, "peer") : "", speed = s.download_rate ? rate(s.download_rate) : "";
+      var tries = (s.attempts || []).length;
+      if (starting || s.duration) return { title: "Starting playback", detail: [peers, speed].filter(Boolean).join(" · ") };
+      if (s.state === "buffering") {
+        return { title: "Buffering", detail: [peers, speed].filter(Boolean).join(" · "), pct: Math.round(100 * (s.ready_fraction || 0)) };
+      }
+      if (s.state === "connecting") return { title: "Connecting", detail: peers + (tries > 1 ? " · trying release " + tries : "") };
+      return { title: "Finding sources", detail: tries > 1 ? "The first choice is slow; also trying release " + tries : "Looking for people sharing it" };
+    }
+    function showStatus(s, starting) {
+      var el = $("#p-status"), x = statusText(s, starting), r = s.release;
+      var what = [QUALITY_NAMES[s.quality] || "", r ? r.name : ""].filter(Boolean).join(" · ");
+      el.innerHTML = '<div class="ps-title">' + esc(x.title) + (x.pct != null ? " · " + x.pct + "%" : "") + "</div>" +
+        (x.pct != null ? '<div class="ps-bar"><i style="width:' + x.pct + '%"></i></div>' : "") +
+        (x.detail ? '<div class="ps-detail">' + esc(x.detail) + "</div>" : "") +
+        (what ? '<div class="ps-release">' + esc(what) + "</div>" : "") +
+        (s.fallback ? '<div class="ps-detail">' + esc("Switched release: " + s.fallback.reason) + "</div>" : "");
+      el.classList.remove("fail");
+      el.hidden = false;
+    }
+    function hideStatus() {
+      var el = $("#p-status");
+      el.hidden = true;
+      el.innerHTML = "";
+      el.classList.remove("fail");
+      clearTimeout(state.bufferTimer);
+    }
+    var FAILURES = {
+      "no-peers": "Nobody is sharing this right now", "no-release": "None of the releases worked", vpn: "The VPN is not connected",
+      engine: "The torrent engine is not reachable", unavailable: "Not available at this quality", "wrong-film": "Only lookalike releases were found",
+      disk: "Not enough disk space", limit: "Too many streams at once", probe: "The video could not be read", gone: "The stream ended", off: "Torrent streaming is off",
+    };
+    // Every failure is a screen with a next step: try again, another quality, Usenet, or back.
+    function showFailure(err, opts) {
+      var t = opts.torrent, el = $("#p-status"), request = state.request || {};
+      var buttons = '<button class="primary" id="ps-retry">' + icon("refresh") + "Try again</button>";
+      (state.qualities || []).forEach(function (q) {
+        if (q.available && q.quality !== t.quality) buttons += '<button data-q="' + q.quality + '">Play ' + esc(q.label) + "</button>";
+      });
+      if (request.usenetOk) buttons += '<button id="ps-usenet">Play from Usenet</button>';
+      buttons += '<button class="ghost" id="ps-back">Back</button>';
+      el.innerHTML = '<div class="state-icon">' + icon("alert") + "</div><h2>" + esc(FAILURES[err.reason] || "This could not be played") + "</h2>" +
+        "<p>" + esc(err.message) + '</p><div class="actions" data-row>' + buttons + "</div>";
+      el.classList.add("fail");
+      el.hidden = false;
+      root.classList.add("failed");
+      var fresh = { kind: t.kind, id: t.id, season: t.season, episode: t.episode, quality: t.quality };
+      $("#ps-retry").onclick = function () { load({ torrent: fresh, start: opts.start }); };
+      $$("[data-q]", el).forEach(function (b) {
+        b.onclick = function () { fresh.quality = +b.getAttribute("data-q"); load({ torrent: fresh, start: opts.start }); };
+      });
+      if ($("#ps-usenet")) $("#ps-usenet").onclick = function () { load({ usenet: { kind: t.kind, id: t.id, season: t.season, episode: t.episode }, start: opts.start }); };
+      $("#ps-back").onclick = close;
+      setTimeout(function () { focusEl($("#ps-retry")); }, 30);
+    }
+    // While a torrent stream waits for data, say why and how it is going.
+    function bufferStatus() {
+      var info = state.info;
+      clearTimeout(state.bufferTimer);
+      if (!info || !info.torrent || $("#spinner").hidden) { if (!$("#p-status").classList.contains("fail")) $("#p-status").hidden = true; return; }
+      api("/api/torrent/streams/" + info.torrent.stream).then(function (s) {
+        if (state.info !== info || $("#spinner").hidden) return;
+        var el = $("#p-status"), peers = s.peers ? plural(s.peers, "peer") : "no peers yet";
+        el.innerHTML = '<div class="ps-title">Buffering</div><div class="ps-detail">' + esc([peers, s.download_rate ? rate(s.download_rate) : ""].filter(Boolean).join(" · ")) + "</div>";
+        el.classList.remove("fail");
+        el.hidden = false;
+      }).catch(function () {});
+      state.bufferTimer = setTimeout(bufferStatus, 1200);
     }
 
     function attach(url, isHls, seekTo) {
@@ -2336,6 +2664,17 @@
         for (var k in info.usenet) body[k] = info.usenet[k];
         return api("/api/usenet/progress", { method: "POST", body: body }).catch(function () {});
       }
+      if (info.torrent) {
+        var t = info.torrent, tb = { position: absolute(), duration: state.duration, session: info.session };
+        for (var key in t) tb[key] = t[key];
+        // Most of an episode watched: start the next one's stream, so Next Up starts warm.
+        if (info.next && !state.nextWarm && state.duration && absolute() / state.duration > 0.8) {
+          state.nextWarm = true;
+          api("/api/torrent/prepare", { method: "POST", body: { kind: t.kind, id: t.id, season: t.next_season, episode: t.next_episode,
+            quality: t.quality, player: CLIENT } }).catch(function () {});
+        }
+        return api("/api/torrent/progress", { method: "POST", body: tb }).catch(function () {});
+      }
       return api("/api/progress", { method: "POST", body: { item_id: info.item.id, position: absolute(), duration: state.duration, session: info.session } })
         .catch(function () {});
     }
@@ -2345,6 +2684,9 @@
       var done = report();
       clearInterval(reportTimer); clearInterval(cueTimer); clearInterval(pingTimer);
       stopStream();
+      hideStatus();
+      root.classList.remove("failed");
+      if (state.torrentStream) api("/api/torrent/streams/" + state.torrentStream, { method: "DELETE" }).catch(function () {});
       state = {};
       panel.hidden = true;
       panel.removeAttribute("data-kind");
@@ -2375,6 +2717,11 @@
       if (state.info && state.info.online) {
         var o = state.info.online;
         if (state.info.next) load({ online: { anilist_id: o.anilist_id, episode: state.info.next.episode, lang: o.lang }, start: 0 });
+        else close();
+      } else if (state.info && state.info.torrent) {
+        var t = state.info.torrent;
+        state.nextWarm = false;
+        if (state.info.next) load({ torrent: { kind: t.kind, id: t.id, season: t.next_season, episode: t.next_episode, quality: t.quality }, start: 0 });
         else close();
       } else if (state.info && state.info.usenet) {
         var u = state.info.usenet;
@@ -2439,7 +2786,7 @@
             return r.json().then(function (p) {
               if (state.subKey !== sub.key) return null;
               var pct = p.total ? Math.round((100 * p.done) / p.total) : 0;
-              toast("Translating " + sub.title.replace(/\s*\(translated\)/, "") + " subtitles… " + pct + "%", $("#p-toast"));
+              toast(p.message || "Translating " + sub.title.replace(/\s*\(translated\)/, "") + " subtitles… " + pct + "%", $("#p-toast"));
               return new Promise(function (done) { setTimeout(done, 1500); }).then(function () {
                 return state.subKey === sub.key ? fetchVtt() : null;
               });
@@ -2588,6 +2935,12 @@
       } else if (info.online) {
         html += "<p>This stream comes in one quality.</p>";
       } else {
+        if (info.torrent) { // which release is downloaded, then how it is converted for this screen
+          html += "<h4>Download</h4>" + (state.qualities || [{ quality: info.torrent.quality, label: info.torrent.label, available: true }]).map(function (q) {
+            var detail = q.available ? releaseLine(q.release) : q.reason;
+            return option('data-tq="' + q.quality + '"', q.quality === info.torrent.quality, esc(q.label) + (detail ? '<small class="sub">' + esc(detail) + "</small>" : ""), !q.available);
+          }).join("") + "<h4>Convert for this screen</h4>";
+        }
         html += [[0, "Original (best for this device)"], [1080, "1080p"], [720, "720p"], [480, "480p"]].map(function (q) {
           return option('data-height="' + q[0] + '"', (state.maxHeight || 0) === q[0], q[1]);
         }).join("") + "<p>Lower settings are converted on the server, which helps on a slow connection.</p>";
@@ -2595,6 +2948,13 @@
       openPanel("quality", html, function () {
         $$("[data-level]", panel).forEach(function (b) {
           b.onclick = function () { hls.currentLevel = +b.getAttribute("data-level"); closePanel(); };
+        });
+        $$("[data-tq]", panel).forEach(function (b) {
+          b.onclick = function () {
+            var q = +b.getAttribute("data-tq");
+            closePanel();
+            if (q !== info.torrent.quality) switchQuality(q);
+          };
         });
         $$("[data-height]", panel).forEach(function (b) {
           b.onclick = function () {
@@ -2607,6 +2967,28 @@
         });
       });
     }
+    // Another torrent quality: the current one keeps playing while the new one connects and
+    // buffers (progress in a toast), then playback continues from the same point.
+    function switchQuality(q) {
+      var info = state.info, t = info.torrent, token = state.switchToken = {}, name = QUALITY_NAMES[q];
+      var say = function (text) { toast(text, $("#p-toast")); };
+      say("Preparing " + name + "… " + t.label + " keeps playing meanwhile.");
+      function step(s) {
+        if (state.switchToken !== token || state.info !== info || root.hidden) return;
+        if (s.state === "failed") { say(name + " could not start: " + (s.error ? s.error.message : s.message) + " Still playing " + t.label + "."); return; }
+        if (s.duration) {
+          state.fallbackShown = false;
+          $("#p-toast").hidden = true;
+          again({ torrent: { kind: t.kind, id: t.id, season: t.season, episode: t.episode, quality: q, stream: s.id }, start: absolute() });
+          return;
+        }
+        var x = statusText(s);
+        say(name + ": " + x.title + (x.pct != null ? " " + x.pct + "%" : "") + (x.detail ? " · " + x.detail : ""));
+        setTimeout(function () { api("/api/torrent/streams/" + s.id).then(step).catch(function (err) { say(name + " could not start: " + err.message); }); }, 700);
+      }
+      api("/api/torrent/prepare", { method: "POST", body: { kind: t.kind, id: t.id, season: t.season, episode: t.episode, quality: q, player: CLIENT, intent: "play" } })
+        .then(step).catch(function (err) { say(name + " could not start: " + err.message + " Still playing " + t.label + "."); });
+    }
     // While the style sheet is open, an empty screen shows a sample line to judge the look by.
     function drawCaptions(html) {
       if (!html && !panel.hidden && panel.getAttribute("data-kind") === "style") {
@@ -2617,9 +2999,16 @@
     function infoPanel() {
       var info = state.info;
       openPanel("info", "<h3>Playback</h3><p><span class=\"pill " + info.mode + '">' + esc(MODES[info.mode] || info.mode) + "</span>" + (info.hwaccel && info.hwaccel !== "none" ? " " + esc(info.hwaccel) : "") + "</p>" +
-        (info.reasons || []).map(function (r) { return "<p>• " + esc(r) + "</p>"; }).join("") + '<button style="margin-top:16px">' + icon("close") + "<span>Close</span></button>", function () {
+        (info.reasons || []).map(function (r) { return "<p>• " + esc(r) + "</p>"; }).join("") +
+        (info.torrent ? '<p id="p-torrent-live"></p>' : "") + '<button style="margin-top:16px">' + icon("close") + "<span>Close</span></button>", function () {
         $("button", panel).onclick = closePanel;
       });
+      if (info.torrent) api("/api/torrent/streams/" + info.torrent.stream).then(function (s) {
+        var el = $("#p-torrent-live");
+        if (!el) return;
+        el.textContent = "• " + [plural(s.peers, "peer"), rate(s.download_rate || 0), s.size ? Math.round((100 * s.downloaded) / s.size) + "% downloaded" : "",
+          s.buffered_ahead ? size(s.buffered_ahead) + " ahead of the playhead" : ""].filter(Boolean).join(" · ");
+      }).catch(function () {});
     }
 
     function showUi() {
@@ -2686,6 +3075,10 @@
     }
 
     function key(name) {
+      if (root.classList.contains("failed")) { // the failure screen: its buttons take the remote
+        if (name === "back" || name === "stop") { close(); return true; }
+        return false;
+      }
       if (name === "back") {
         if (pending !== null) cancelSeek();
         else if (!panel.hidden && panel.getAttribute("data-kind") === "style") subsPanel(true);
@@ -2764,10 +3157,13 @@
       $("#p-buffer").style.left = d ? (100 * state.offset) / d + "%" : "0";
       $("#p-buffer").style.width = d ? Math.min(100, (100 * end) / d) + "%" : "0";
     });
-    video.addEventListener("playing", function () { $("#spinner").hidden = true; root.classList.remove("paused"); showUi(); });
+    video.addEventListener("playing", function () { $("#spinner").hidden = true; root.classList.remove("paused"); showUi(); if (state.info && state.info.torrent) hideStatus(); });
     video.addEventListener("pause", function () { root.classList.add("paused"); showUi(); report(); });
-    video.addEventListener("waiting", function () { $("#spinner").hidden = false; });
-    video.addEventListener("canplay", function () { $("#spinner").hidden = true; });
+    video.addEventListener("waiting", function () {
+      $("#spinner").hidden = false;
+      if (state.info && state.info.torrent) { clearTimeout(state.bufferTimer); state.bufferTimer = setTimeout(bufferStatus, 700); }
+    });
+    video.addEventListener("canplay", function () { $("#spinner").hidden = true; if (state.info && state.info.torrent) hideStatus(); });
     video.addEventListener("ended", function () {
       report().then(function () {
         var auto = state.info && state.info.preferences && state.info.preferences.autoplay_next;

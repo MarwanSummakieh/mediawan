@@ -397,6 +397,15 @@ button.card:hover { background: transparent; }
 .resume-line { display: flex; align-items: center; margin: -2px 0 14px; color: var(--muted); font-size: 0.86rem; font-weight: 600; }
 .resume-line .track { width: 160px; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.18); margin-right: 10px; overflow: hidden; }
 .resume-line .track i { display: block; height: 100%; background: var(--accent); }
+/* Online titles: what Play will start and whether it is ready (torrent streams) */
+.source-line { display: flex; align-items: center; min-height: 1.4em; margin: -2px 0 14px; color: var(--muted); font-size: 0.86rem; font-weight: 600; max-width: 780px; }
+.source-line:empty { display: none; }
+.source-line > span { flex: none; white-space: nowrap; }
+.source-line .sl-rel { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--faint); font-weight: 500; margin-left: 10px; }
+.sl-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; margin-right: 9px; background: var(--faint); }
+.sl-dot.ok { background: var(--good); }
+.sl-dot.wait { background: var(--accent); -webkit-animation: pulse 1.4s ease-in-out infinite; animation: pulse 1.4s ease-in-out infinite; }
+.sl-dot.bad { background: var(--warn); }
 .desc { color: #d6d9de; line-height: 1.6; max-width: 780px; margin: 4px 0 6px; white-space: pre-line; }
 .desc.clamp { max-height: 6.4em; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; }
 .more-btn { background: transparent; padding: 2px 0; color: var(--accent); font-size: 0.86rem; margin-bottom: 10px; }
@@ -576,6 +585,11 @@ label.check input { width: auto; margin: 0 8px 0 0; }
 .menu .menu-h b { display: block; }
 .menu .menu-h span { color: var(--muted); font-size: 0.84rem; }
 .menu hr { border: 0; border-top: 1px solid var(--line); margin: 6px 0; }
+.menu button > span { min-width: 0; white-space: normal; }
+.menu button small { display: block; color: var(--muted); font-size: 0.78rem; font-weight: 500; margin-top: 1px; }
+.menu button:disabled small { color: var(--faint); }
+.menu .menu-note { color: var(--muted); font-size: 0.84rem; margin: 6px 12px 10px; }
+html.tv .menu button:focus small { color: #333; }
 html.tv .menu button:focus, html.tv .menu a:focus { background: #fff; color: #000; box-shadow: none; -webkit-transform: none; transform: none; }
 html.tv .menu button:focus .i, html.tv .menu a:focus .i { color: #000; }
 .menu button:focus-visible { background: rgba(255, 255, 255, 0.1); box-shadow: inset 0 0 0 2px #fff; }
@@ -700,6 +714,25 @@ html.tv .panel button:focus .i { color: #000; }
   background: rgba(20, 22, 26, 0.85); color: #fff; box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.8);
 }
 #p-skip:hover, #p-skip:focus { background: #fff; color: #000; }
+/* Torrent status under the spinner, and the failure screen with its next steps */
+#p-status { position: absolute; z-index: 2; top: 50%; left: 50%; width: 560px; max-width: 86vw; margin-top: 46px; text-align: center;
+  -webkit-transform: translateX(-50%); transform: translateX(-50%); color: #fff; text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8); pointer-events: none; }
+.ps-title { font-size: 1.15rem; font-weight: 750; }
+.ps-detail { color: rgba(255, 255, 255, 0.78); font-weight: 600; font-size: 0.9rem; margin-top: 4px; }
+.ps-release { color: rgba(255, 255, 255, 0.55); font-size: 0.82rem; margin-top: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ps-bar { width: 220px; height: 4px; margin: 10px auto 2px; border-radius: 2px; background: rgba(255, 255, 255, 0.22); overflow: hidden; }
+.ps-bar i { display: block; height: 100%; background: var(--accent); transition: width 0.3s; }
+#p-status.fail { margin: 0; -webkit-transform: translate(-50%, -50%); transform: translate(-50%, -50%); pointer-events: auto; text-shadow: none;
+  background: rgba(20, 22, 26, 0.97); border: 1px solid var(--line-2); border-radius: 16px; padding: 30px 26px 20px; box-shadow: 0 24px 70px rgba(0, 0, 0, 0.7); }
+#p-status.fail .state-icon { display: inline-flex; align-items: center; justify-content: center; width: 64px; height: 64px; border-radius: 50%; background: var(--surface-2); color: var(--warn); margin-bottom: 14px; }
+#p-status.fail .state-icon .i { width: 28px; height: 28px; }
+#p-status.fail h2 { margin: 0 0 8px; }
+#p-status.fail p { color: var(--muted); line-height: 1.5; margin: 0 0 18px; }
+#p-status.fail .actions { justify-content: center; }
+#player.failed #player-ui, #player.failed #spinner, #player.failed #captions { visibility: hidden; }
+.panel button small.sub { display: block; color: var(--muted); font-size: 0.78rem; font-weight: 500; margin-top: 2px; }
+.panel button > span { min-width: 0; }
+html.tv .panel button:focus small.sub { color: #333; }
 #spinner { position: absolute; top: 50%; left: 50%; width: 56px; height: 56px; margin: -28px; border: 4px solid rgba(255, 255, 255, 0.18); border-top-color: var(--accent); border-radius: 50%; -webkit-animation: spin 0.9s linear infinite; animation: spin 0.9s linear infinite; }
 @-webkit-keyframes spin { to { -webkit-transform: rotate(360deg); } }
 @keyframes spin { to { transform: rotate(360deg); } }

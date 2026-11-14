@@ -396,17 +396,19 @@ class Usenet:
             or duration - position <= COMPLETE_REMAINING
             and duration > 600
         )
+        # Shared by both online sources (Usenet and torrents): `source` and `quality` say what
+        # played, so resuming reopens the same.
         self.db.run(
             "INSERT INTO usenet_history(user_id, imdb_id, season, episode, kind, name, poster, "
             "background, release, next_season, next_episode, position, duration, completed, "
-            "played_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
+            "played_at, source, quality) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
             "ON CONFLICT(user_id, imdb_id, season, episode) DO UPDATE SET "
             "name=excluded.name, poster=excluded.poster, background=excluded.background, "
             "release=excluded.release, next_season=excluded.next_season, "
             "next_episode=excluded.next_episode, position=excluded.position, "
             "duration=excluded.duration, "
             "completed=MAX(usenet_history.completed, excluded.completed), "
-            "played_at=excluded.played_at",
+            "played_at=excluded.played_at, source=excluded.source, quality=excluded.quality",
             user_id,
             str(body["id"]),
             int(body.get("season") or 0),
@@ -422,6 +424,8 @@ class Usenet:
             duration,
             int(done),
             int(time.time()),
+            "torrent" if body.get("source") == "torrent" else "usenet",
+            int(body.get("quality") or 0),
         )
         return {"completed": done}
 
@@ -457,7 +461,7 @@ class Usenet:
             if r["imdb_id"] in seen:
                 continue
             seen.add(r["imdb_id"])
-            card = {k: r[k] for k in ("kind", "name", "poster", "background")}
+            card = {k: r[k] for k in ("kind", "name", "poster", "background", "source", "quality")}
             card.update(id=r["imdb_id"], season=r["season"], episode=r["episode"])
             card.update(position=r["position"], duration=r["duration"])
             if r["completed"]:
