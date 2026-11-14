@@ -19,6 +19,9 @@ __pycache__/
 /transcode/
 /.runtime/
 /.recovery/
+/vpn-secrets/
+/releases/
+/library/
 data.sqlite*
 *.log
 
@@ -30,3 +33,12 @@ node_modules/
 
 # Editor and agent tooling
 .serena/
+
+# Local design and trial runs
+/data-design/
+/.runtime-design/
+/design-review/
+
+# NAS-specific helpers and notes: they name the machine and the account
+/connect-nas.cmd
+/crontab.before-*.txt

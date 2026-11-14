@@ -64,5 +64,28 @@ services:
       TUNNEL_TOKEN: ${TUNNEL_TOKEN}
     depends_on: [mediawan]
 
+  # Optional NordVPN tunnel. It is off unless started with --profile vpn, and nothing is
+  # routed through it yet: a service that should use it joins it with
+  # network_mode: "service:vpn". Credentials are never written in this file or in .env;
+  # run ./vpn-credentials.sh, which saves them in VPN_SECRETS_DIR, readable by root only.
+  vpn:
+    profiles: [vpn]
+    image: qmcgaw/gluetun:v3.40.0
+    restart: unless-stopped
+    cap_add: [NET_ADMIN]
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    environment:
+      VPN_SERVICE_PROVIDER: nordvpn
+      # openvpn = NordVPN service credentials; wireguard = a NordLynx private key
+      VPN_TYPE: ${NORDVPN_TYPE:-openvpn}
+      SERVER_COUNTRIES: ${NORDVPN_COUNTRY:-Netherlands}
+      OPENVPN_USER_SECRETFILE: /run/secrets/vpn/openvpn_user
+      OPENVPN_PASSWORD_SECRETFILE: /run/secrets/vpn/openvpn_password
+      WIREGUARD_PRIVATE_KEY_SECRETFILE: /run/secrets/vpn/wireguard_private_key
+      TZ: ${TZ:-Europe/Copenhagen}
+    volumes:
+      - ${VPN_SECRETS_DIR:-./vpn-secrets}:/run/secrets/vpn:ro
+
 volumes:
   libretranslate-models:

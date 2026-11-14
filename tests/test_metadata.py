@@ -159,3 +159,48 @@ def test_network_failure_stops_the_batch_quietly(tmp_path):
     meta = Metadata(db, "https://cinemeta.test", True, tmp_path, client=failing)
     assert meta.refresh_pending() == 0
     assert db.one("SELECT matched FROM titles")["matched"] == 0  # retried next run
+
+
+def test_cast_and_crew_are_stored_and_shown_with_related_titles(setup):
+    from mediawan.library import Library
+
+    db, meta, _ = setup
+    HEAT.update(cast=["Al Pacino", "Robert De Niro"], director=["Michael Mann"], writer=["Michael Mann"],
+                country="United States", awards="15 nominations total", released="1995-12-15T00:00:00.000Z")
+    try:
+        meta.refresh(1)
+    finally:
+        for key in ("cast", "director", "writer", "country", "awards", "released"):
+            HEAT.pop(key)
+    now = int(time.time())
+    db.run(
+        "INSERT INTO titles(id, kind, key, name, genres, rating, added_at) "
+        "VALUES(3,'movie','movie:thief:1981','Thief','[\"Crime\"]','7.4',?)",
+        now,
+    )
+    for title_id in (1, 3):
+        item = db.run("INSERT INTO items(title_id, season, episode) VALUES(?,0,0)", title_id)
+        db.run(
+            "INSERT INTO files(item_id, path, size, mtime, added_at) VALUES(?,?,1,0,?)",
+            item, f"/m/{title_id}.mkv", now,
+        )
+    db.run("INSERT INTO users(id, email, name, pw_hash) VALUES(1,'a@b.c','A','x')")
+    library = Library(db)
+    heat = library.title(1, 1)
+    assert heat["cast"] == ["Al Pacino", "Robert De Niro"] and heat["director"] == ["Michael Mann"]
+    assert heat["country"] == "United States" and heat["released"] == "1995-12-15"
+    assert "extra" not in heat
+    assert [t["name"] for t in heat["related"]] == ["Thief"]  # shares the Crime genre
+    assert library.title(1, 3)["cast"] == []  # never fetched: empty, not missing
+    library.tag(1, 3, "watchlist", True)
+    assert [t["id"] for t in library.titles(1, tag="watchlist")] == [3]
+
+
+def test_titles_matched_before_cast_was_stored_are_fetched_again(setup):
+    db, meta, _ = setup
+    meta.refresh(1)
+    assert json.loads(db.one("SELECT extra FROM titles WHERE id=1")["extra"])["v"] == 1
+    db.run("UPDATE titles SET extra='{}' WHERE id=1")  # as after the upgrade
+    assert meta.refresh_pending() == 2  # Heat again, and Frieren (never tried)
+    assert meta.refresh_pending() == 0  # both done: no endless refetching
+    assert db.one("SELECT extra FROM titles WHERE id=1")["extra"] != "{}"

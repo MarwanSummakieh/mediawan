@@ -44,6 +44,27 @@ def _year(meta: dict) -> int | None:
     return None
 
 
+def extra_fields(meta: dict) -> dict:
+    """The details title pages show beyond the basics: people, country, awards, dates."""
+
+    def names(value) -> list[str]:
+        if isinstance(value, str):
+            value = [v.strip() for v in value.split(",")]
+        return [str(v) for v in (value or []) if v][:12]
+
+    found = {
+        "cast": names(meta.get("cast")),
+        "director": names(meta.get("director")),
+        "writer": names(meta.get("writer")),
+        "country": str(meta.get("country") or ""),
+        "awards": str(meta.get("awards") or ""),
+        "released": str(meta.get("released") or "")[:10],
+        "status": str(meta.get("status") or ""),
+        "release_info": str(meta.get("releaseInfo") or ""),
+    }
+    return {k: v for k, v in found.items() if v}
+
+
 def score(name: str, year: int | None, candidate: dict) -> float:
     """How well a search result fits: name similarity, nudged by the year."""
     a, b = normalise(name), normalise(candidate.get("name", ""))
@@ -150,6 +171,8 @@ class Metadata:
             "rating": str(meta.get("imdbRating") or "") or None,
         }
         values = {k: v for k, v in values.items() if k not in locked}
+        # Never empty once fetched ("v" marks it), so refresh_pending can tell it apart.
+        values["extra"] = json.dumps({"v": 1, **extra_fields(meta)})
         sets = ", ".join(f"{k}=?" for k in values)
         self.db.run(
             f"UPDATE titles SET {sets}, matched=1, refreshed_at=? WHERE id=?",
@@ -196,6 +219,7 @@ class Metadata:
             "SELECT id FROM titles WHERE matched=0 "
             "OR (matched=-1 AND COALESCE(refreshed_at,0) < ?) "
             "OR (matched=1 AND COALESCE(refreshed_at,0) < ?) "
+            "OR (matched=1 AND extra='{}') "  # matched before cast and crew were stored
             "ORDER BY matched=0 DESC, added_at DESC LIMIT ?",
             now - STALE_MISSED,
             now - STALE_MATCHED,

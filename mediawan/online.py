@@ -250,7 +250,10 @@ class Online:
         self._need()
         query = (
             "query($id:Int){Media(id:$id,type:ANIME){" + MEDIA_FIELDS + " description(asHtml:false)"
-            " streamingEpisodes { title thumbnail } }}"
+            " streamingEpisodes { title thumbnail } season title { native }"
+            " studios(isMain:true) { nodes { name } }"
+            " characters(sort:[ROLE,RELEVANCE],perPage:12) { edges { role node { name { full }"
+            " image { medium } } } } }}"
         )
         media = self._graphql(query, {"id": int(anilist_id)}, 3 * 3600).get("Media")
         if not media:
@@ -258,6 +261,20 @@ class Online:
         names = episode_names(media.get("streamingEpisodes"))
         result = card(media)
         result["description"] = _clean(media.get("description"))
+        result["native"] = (media.get("title") or {}).get("native") or ""
+        result["season"] = (media.get("season") or "").title()
+        result["studios"] = [
+            n["name"] for n in ((media.get("studios") or {}).get("nodes") or []) if n.get("name")
+        ]
+        result["characters"] = [
+            {
+                "name": ((e.get("node") or {}).get("name") or {}).get("full") or "",
+                "role": (e.get("role") or "").title(),
+                "image": ((e.get("node") or {}).get("image") or {}).get("medium"),
+            }
+            for e in ((media.get("characters") or {}).get("edges") or [])
+            if (e.get("node") or {}).get("name")
+        ]
         result["episodes"] = [
             {"number": n, **names.get(n, {"name": "", "thumbnail": None})}
             for n in range(1, result["available"] + 1)

@@ -1,0 +1,2 @@
+# Shell scripts run on the NAS and must keep Unix line endings.
+*.sh text eol=lf

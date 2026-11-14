@@ -315,11 +315,14 @@ def create_app(
         sort: str = "name",
         limit: int = 200,
         offset: int = 0,
+        tag: str = "",
         user=Depends(current_user),
     ):
         lib = st(request).library
         return {
-            "titles": lib.titles(user["id"], kind, q.strip(), genre, sort, min(limit, 500), offset),
+            "titles": lib.titles(
+                user["id"], kind, q.strip(), genre, sort, min(limit, 500), offset, tag
+            ),
             "genres": lib.genres(),
         }
 

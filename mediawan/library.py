@@ -46,10 +46,23 @@ def card(row: dict) -> dict:
     row = dict(row)
     if isinstance(row.get("genres"), str):
         row["genres"] = json.loads(row["genres"])
-    for key in ("poster", "background"):
+    for key in ("poster", "background", "logo"):
         if row.get(key):
             row[key] = f"/api/art/{row['id']}/{key}"
     return row
+
+
+# Cinemeta details stored in titles.extra, shown on title pages ("" or [] when unknown).
+EXTRA_FIELDS = {
+    "cast": [],
+    "director": [],
+    "writer": [],
+    "country": "",
+    "awards": "",
+    "released": "",
+    "status": "",
+    "release_info": "",
+}
 
 
 def episode_label(item: dict) -> str:
@@ -77,11 +90,17 @@ class Library:
         sort: str = "name",
         limit: int = 200,
         offset: int = 0,
+        tag: str = "",
     ) -> list[dict]:
         where, args = [AVAILABLE], []
         if kind in ("movie", "show"):
             where.append("t.kind=?")
             args.append(kind)
+        if tag in ("favorite", "watchlist"):
+            where.append(
+                "EXISTS (SELECT 1 FROM tags g WHERE g.title_id=t.id AND g.user_id=? AND g.tag=?)"
+            )
+            args += [user_id, tag]
         if query:
             where.append("(t.name LIKE ? OR t.description LIKE ?)")
             args += [f"%{query}%", f"%{query}%"]
@@ -144,6 +163,10 @@ class Library:
             return None
         out = card(row)
         out["locked_fields"] = json.loads(row["locked_fields"])
+        extra = json.loads(out.pop("extra", None) or "{}")
+        for key, empty in EXTRA_FIELDS.items():
+            out[key] = extra.get(key) or empty
+        out["related"] = self.related(user_id, row)
         items = self.db.all(
             "SELECT i.*, h.position, h.duration, h.completed, h.played_at FROM items i "
             "LEFT JOIN history h ON h.item_id=i.id AND h.user_id=? "
@@ -176,6 +199,28 @@ class Library:
         out["next"] = self.next_for_title(user_id, title_id)
         out["collections"] = [c["id"] for c in self.collections(user_id) if title_id in c["titles"]]
         return out
+
+    def related(self, user_id: int, title: dict, limit: int = 12) -> list[dict]:
+        """Titles of the same kind sharing the most genres, best rated first."""
+        genres = set(json.loads(title["genres"] or "[]"))
+        if not genres:
+            return []
+        rows = self.db.all(
+            f"SELECT {TITLE_COLUMNS} FROM titles t WHERE t.kind=? AND t.id<>? AND {AVAILABLE}",
+            title["kind"],
+            title["id"],
+        )
+        scored = []
+        for r in rows:
+            shared = len(genres & set(json.loads(r["genres"] or "[]")))
+            if shared:
+                try:
+                    rating = float(r["rating"] or 0)
+                except ValueError:
+                    rating = 0.0
+                scored.append((shared, rating, r))
+        scored.sort(key=lambda s: (-s[0], -s[1]))
+        return self._with_state(user_id, [card(r) for _, _, r in scored[:limit]])
 
     def item(self, item_id: int) -> dict | None:
         row = self.db.one(

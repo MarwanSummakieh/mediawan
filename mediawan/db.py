@@ -100,6 +100,11 @@ MIGRATIONS = [
       PRIMARY KEY(user_id, imdb_id, season, episode));
     CREATE INDEX usenet_recent ON usenet_history(user_id, played_at DESC);
     """,
+    # 4: more Cinemeta details for title pages (cast, director, writer, country, awards,
+    # release date, status) as JSON. '{}' means not fetched yet; the next refresh fills it.
+    """
+    ALTER TABLE titles ADD COLUMN extra TEXT NOT NULL DEFAULT '{}';
+    """,
 ]
 
 

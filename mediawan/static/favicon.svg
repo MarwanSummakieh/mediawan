@@ -1,8 +1,1 @@
-<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Mediawan">
-  <rect width="64" height="64" fill="#0f0f0f"/>
-  <rect x="1.75" y="1.75" width="60.5" height="60.5" fill="none" stroke="#28bbe4" stroke-opacity=".22" stroke-width="1.5"/>
-  <!-- play triangle -->
-  <path d="M26 21 L46 32 L26 43 Z" fill="#28bbe4"/>
-  <!-- anime sparkle -->
-  <path d="M46.5 12.5 l1.25 3.25 3.25 1.25 -3.25 1.25 -1.25 3.25 -1.25 -3.25 -3.25 -1.25 3.25 -1.25 z" fill="#7fd8f0"/>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><rect x="1" y="1" width="22" height="22" rx="7" fill="#2bc8b2"/><path d="M6 16.6V8.3c0-.6.7-.9 1.1-.4L12 13l4.9-5.1c.4-.5 1.1-.2 1.1.4v8.3" fill="none" stroke="#06231e" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>

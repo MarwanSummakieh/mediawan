@@ -21,7 +21,7 @@ import httpx
 from . import media
 from .db import Database
 from .library import COMPLETE_RATIO, COMPLETE_REMAINING
-from .metadata import Metadata, _year
+from .metadata import Metadata, _year, extra_fields
 from .online import Online, OnlineError, _Cache
 from .parse import VIDEO_EXTENSIONS
 
@@ -193,6 +193,7 @@ class Usenet:
             "runtime": meta.get("runtime"),
             "rating": str(meta.get("imdbRating") or ""),
             "episodes": episodes,
+            **extra_fields(meta),
         }
         return self.cache.put(("title", kind, imdb_id), found, 3 * 3600)
 

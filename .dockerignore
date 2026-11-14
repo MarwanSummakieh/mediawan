@@ -17,3 +17,8 @@ node_modules
 tests
 docs
 *.sqlite*
+vpn-secrets
+vpn-credentials.sh
+releases
+library
+design-review

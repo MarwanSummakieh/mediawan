@@ -2,17 +2,20 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="color-scheme" content="dark">
-  <meta name="theme-color" content="#0e0f11">
+  <meta name="theme-color" content="#0c0d0f">
   <title>Mediawan</title>
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
-  <!-- Icon set: 24px grid, 2px rounded strokes. Used as <svg class="i"><use href="#i-name"/></svg>. -->
+  <!-- Icon set, drawn for Mediawan: 24px grid, 2px rounded strokes.
+       Used as <svg class="i"><use href="#i-name"/></svg>. -->
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
-    <symbol id="i-logo" viewBox="0 0 24 24"><rect x="1" y="1" width="22" height="22" rx="6.5" fill="currentColor"/><path d="M9.6 7.2v9.6l7.4-4.8z" fill="#15171a"/></symbol>
+    <!-- The Mediawan mark: a rounded tile with a wave-shaped M -->
+    <symbol id="i-logo" viewBox="0 0 24 24"><rect x="1" y="1" width="22" height="22" rx="7" fill="currentColor"/><path d="M6 16.6V8.3c0-.6.7-.9 1.1-.4L12 13l4.9-5.1c.4-.5 1.1-.2 1.1.4v8.3" fill="none" stroke="#06231e" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6.5h16M4 12h16M4 17.5h16"/></symbol>
     <symbol id="i-home" viewBox="0 0 24 24"><path d="M3.5 10.5 12 3.5l8.5 7"/><path d="M5.5 9v10.5a1 1 0 0 0 1 1H10v-6h4v6h3.5a1 1 0 0 0 1-1V9"/></symbol>
     <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m20.5 20.5-4.9-4.9"/></symbol>
     <symbol id="i-film" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2.5"/><path d="M7.5 3v18M16.5 3v18M3 8h4.5M3 12h18M3 16h4.5M16.5 8H21M16.5 16H21"/></symbol>
@@ -24,11 +27,15 @@
     <symbol id="i-pause" viewBox="0 0 24 24"><rect x="5.5" y="4" width="4.5" height="16" rx="1.2" fill="currentColor" stroke="none"/><rect x="14" y="4" width="4.5" height="16" rx="1.2" fill="currentColor" stroke="none"/></symbol>
     <symbol id="i-back" viewBox="0 0 24 24"><path d="M19.5 12h-15M11 18.5 4.5 12 11 5.5"/></symbol>
     <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m9 5.5 6.5 6.5L9 18.5"/></symbol>
+    <symbol id="i-chevron-left" viewBox="0 0 24 24"><path d="M15 5.5 8.5 12l6.5 6.5"/></symbol>
+    <symbol id="i-down" viewBox="0 0 24 24"><path d="m6 9.5 6 6 6-6"/></symbol>
     <symbol id="i-replay10" viewBox="0 0 24 24"><path d="M4.4 13.2A7.8 7.8 0 1 0 6.6 6.4"/><path d="M4.6 2.8v4.4H9"/><text x="12.4" y="16.1" font-size="7.4" font-weight="800" text-anchor="middle" fill="currentColor" stroke="none" font-family="Arial, sans-serif">10</text></symbol>
     <symbol id="i-forward30" viewBox="0 0 24 24"><path d="M19.6 13.2a7.8 7.8 0 1 1-2.2-6.8"/><path d="M19.4 2.8v4.4H15"/><text x="11.6" y="16.1" font-size="7.4" font-weight="800" text-anchor="middle" fill="currentColor" stroke="none" font-family="Arial, sans-serif">30</text></symbol>
     <symbol id="i-next" viewBox="0 0 24 24"><path d="M5 5v14l10.5-7z" fill="currentColor" stroke="none"/><path d="M19 5v14"/></symbol>
     <symbol id="i-cc" viewBox="0 0 24 24"><rect x="2.5" y="5" width="19" height="14" rx="2.8"/><path d="M10.4 10a2.6 2.6 0 1 0 0 4M17.2 10a2.6 2.6 0 1 0 0 4"/></symbol>
     <symbol id="i-audio" viewBox="0 0 24 24"><path d="M3.5 9.5H7l4.5-4v13L7 14.5H3.5z"/><path d="M15.3 9.2a4 4 0 0 1 0 5.6M18.2 6.4a8 8 0 0 1 0 11.2"/></symbol>
+    <symbol id="i-hd" viewBox="0 0 24 24"><rect x="2.5" y="5" width="19" height="14" rx="2.8"/><path d="M7 9v6M7 12h3.5M10.5 9v6M14 9v6h1.6a3 3 0 0 0 0-6z"/></symbol>
+    <symbol id="i-expand" viewBox="0 0 24 24"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/></symbol>
     <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.7v.1"/></symbol>
     <symbol id="i-check" viewBox="0 0 24 24"><path d="m4.5 12.5 5 5 10-11"/></symbol>
     <symbol id="i-seen" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8 12.3 2.8 2.8 5.4-5.6"/></symbol>
@@ -39,31 +46,56 @@
     <symbol id="i-restart" viewBox="0 0 24 24"><path d="M3.8 12.5A8.3 8.3 0 1 0 6.4 6"/><path d="M4 2.8V8h5.2"/></symbol>
     <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4.2L19.4 8.8a2.2 2.2 0 0 0-3.2-3.2L5 16.8z"/><path d="m14.6 7.4 3 3"/></symbol>
     <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 3.5h4M6.5 7l.8 12.2a1.5 1.5 0 0 0 1.5 1.3h6.4a1.5 1.5 0 0 0 1.5-1.3L17.5 7M10 11v6M14 11v6"/></symbol>
     <symbol id="i-star" viewBox="0 0 24 24"><path d="m12 2.8 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.1 6.4 20l1.1-6.2L3 9.4l6.2-.9z"/></symbol>
     <symbol id="i-logout" viewBox="0 0 24 24"><path d="M14.5 4h3.5a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3.5M10 16.5l4.5-4.5L10 7.5M14.5 12H3.5"/></symbol>
     <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11A8 8 0 0 0 5.4 6.5M4 3v4.5h4.5M4 13a8 8 0 0 0 14.6 4.5M20 21v-4.5h-4.5"/></symbol>
     <symbol id="i-sparkle" viewBox="0 0 24 24"><path d="M11 3c.6 4.3 2.6 6.4 7 7-4.4.6-6.4 2.7-7 7-.6-4.3-2.6-6.4-7-7 4.4-.6 6.4-2.7 7-7z"/><path d="M18.5 14.5c.3 1.7 1 2.5 2.6 2.8-1.6.3-2.3 1.1-2.6 2.8-.3-1.7-1-2.5-2.6-2.8 1.6-.3 2.3-1.1 2.6-2.8z"/></symbol>
     <symbol id="i-lang" viewBox="0 0 24 24"><path d="M3.5 5.5h9M8 3.5v2M5.5 5.5c.6 3.4 2.9 6 5.9 7.3M10.5 5.5C9.7 9.3 7.1 12.4 3.8 13.6"/><path d="m12.5 20.5 4-9.5 4 9.5M14 17h5"/></symbol>
     <symbol id="i-sort" viewBox="0 0 24 24"><path d="M7 4v16M3.5 16.5 7 20l3.5-3.5M17 20V4M13.5 7.5 17 4l3.5 3.5"/></symbol>
+    <symbol id="i-filter" viewBox="0 0 24 24"><path d="M3.5 5h17l-6.5 8v5.5l-4 2V13z"/></symbol>
     <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="4"/><path d="M4.5 20.5c1.2-3.8 4.2-5.8 7.5-5.8s6.3 2 7.5 5.8"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8.5" r="3.5"/><path d="M2.5 19.5c.9-3.3 3.5-5 6.5-5s5.6 1.7 6.5 5M15.5 5.3a3.5 3.5 0 0 1 0 6.4M17.6 14.8c2 .7 3.3 2.3 3.9 4.7"/></symbol>
     <symbol id="i-live" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.4" fill="currentColor"/><path d="M7.8 7.8a6 6 0 0 0 0 8.4M16.2 7.8a6 6 0 0 1 0 8.4M4.9 4.9a10 10 0 0 0 0 14.2M19.1 4.9a10 10 0 0 1 0 14.2"/></symbol>
     <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4.2l2 2.5H19a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+    <symbol id="i-pulse" viewBox="0 0 24 24"><path d="M3 12h4l2.5-6 5 12 2.5-6h4"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.7 5.6 3.7 9s-1.2 6.4-3.7 9c-2.5-2.6-3.7-5.6-3.7-9S9.5 5.6 12 3z"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 4 2.8 19.5h18.4z"/><path d="M12 10v4.5M12 17.3v.1"/></symbol>
   </svg>
 
+  <header id="topbar">
+    <button id="menu-btn" class="icon-btn bare-btn" aria-label="Menu" aria-controls="rail"><svg class="i"><use href="#i-menu"/></svg></button>
+    <a class="brand" href="#/" aria-label="Mediawan home"><svg class="i"><use href="#i-logo"/></svg><b>Mediawan</b></a>
+    <label class="top-search" for="top-q"><svg class="i"><use href="#i-search"/></svg><input id="top-q" type="search" placeholder="Search movies, shows, anime" autocomplete="off" aria-label="Search"></label>
+    <span class="grow"></span>
+    <a id="top-search-btn" class="icon-btn bare-btn" href="#/search" aria-label="Search"><svg class="i"><use href="#i-search"/></svg></a>
+    <button id="account-btn" class="avatar-btn" aria-label="Account" aria-haspopup="menu"><span class="avatar" id="account-initial"></span></button>
+  </header>
+
   <nav id="rail" aria-label="Main">
-    <div class="brand"><svg class="i"><use href="#i-logo"/></svg><b>MEDIAWAN</b></div>
-    <a href="#/search" data-route="search"><svg class="i"><use href="#i-search"/></svg><span>Search</span></a>
+    <div class="rail-brand"><svg class="i"><use href="#i-logo"/></svg><b>Mediawan</b></div>
+    <a href="#/search" data-route="search" class="rail-search"><svg class="i"><use href="#i-search"/></svg><span>Search</span></a>
     <a href="#/" data-route="home"><svg class="i"><use href="#i-home"/></svg><span>Home</span></a>
+    <div class="rail-h"><span>Libraries</span></div>
     <a href="#/movies" data-route="movies"><svg class="i"><use href="#i-film"/></svg><span>Movies</span></a>
     <a href="#/shows" data-route="shows"><svg class="i"><use href="#i-tv"/></svg><span>TV Shows</span></a>
     <a href="#/sports" data-route="sports" id="sports-link"><svg class="i"><use href="#i-live"/></svg><span>Live sports</span></a>
-    <a href="#/collections" data-route="collections" class="list-only"><svg class="i"><use href="#i-stack"/></svg><span>Collections</span></a>
+    <div class="rail-h"><span>Your lists</span></div>
+    <a href="#/watchlist" data-route="watchlist"><svg class="i"><use href="#i-bookmark"/></svg><span>Watchlist</span></a>
+    <a href="#/favorites" data-route="favorites"><svg class="i"><use href="#i-heart"/></svg><span>Favorites</span></a>
+    <a href="#/collections" data-route="collections"><svg class="i"><use href="#i-stack"/></svg><span>Collections</span></a>
     <div class="rail-foot">
       <a href="#/admin" data-route="admin" id="admin-link" hidden><svg class="i"><use href="#i-shield"/></svg><span>Admin</span></a>
       <a href="#/settings" data-route="settings"><svg class="i"><use href="#i-sliders"/></svg><span>Settings</span></a>
     </div>
   </nav>
+  <div id="scrim" hidden></div>
   <main id="main" tabindex="-1"></main>
+
+  <!-- Pop-up menus (sort, filters, account) and dialogs. Both are D-pad layers: arrows stay
+       inside while open, Back closes them and returns focus to the button that opened them. -->
+  <div id="menu" class="menu" role="menu" hidden data-layer></div>
+  <div id="modal" hidden data-layer><div class="modal-box" role="dialog" aria-modal="true"></div></div>
 
   <section id="player" hidden aria-label="Player">
     <video id="video" playsinline></video>
@@ -72,27 +104,35 @@
     <button id="p-skip" hidden>Skip intro</button>
     <div id="player-ui">
       <div class="player-top">
-        <button id="p-close" class="icon-btn" aria-label="Back"><svg class="i"><use href="#i-back"/></svg></button>
-        <div><div id="p-title"></div><div id="p-sub"></div></div>
+        <button id="p-close" class="icon-btn" aria-label="Back" data-tip="Back"><svg class="i"><use href="#i-back"/></svg></button>
+        <div class="p-titles"><div id="p-title"></div><div id="p-sub"></div></div>
       </div>
       <div class="player-bottom">
-        <div id="p-seek" tabindex="0" role="slider" aria-label="Seek" aria-valuemin="0">
-          <div class="track"><div id="p-buffer"></div><div id="p-progress"></div></div>
-          <div id="p-thumb"></div>
-          <div id="p-bubble" hidden></div>
+        <div class="scrub-row">
+          <span id="p-time">0:00</span>
+          <div id="p-seek" tabindex="0" role="slider" aria-label="Seek" aria-valuemin="0">
+            <div class="track"><div id="p-buffer"></div><div id="p-progress"></div></div>
+            <div id="p-thumb"></div>
+            <div id="p-bubble" hidden></div>
+          </div>
+          <span id="p-duration">0:00</span>
         </div>
-        <div class="time-row"><span id="p-time">0:00</span><span id="p-duration">0:00</span></div>
         <div class="controls">
-          <button id="p-back10" class="icon-btn" aria-label="Back 10 seconds" data-tip="Back 10s"><svg class="i"><use href="#i-replay10"/></svg></button>
-          <button id="p-play" class="icon-btn" aria-label="Play or pause">
-            <svg class="i when-playing"><use href="#i-pause"/></svg><svg class="i when-paused"><use href="#i-play"/></svg>
-          </button>
-          <button id="p-fwd30" class="icon-btn" aria-label="Forward 30 seconds" data-tip="Forward 30s"><svg class="i"><use href="#i-forward30"/></svg></button>
-          <button id="p-next" class="icon-btn" aria-label="Next" data-tip="Next" hidden><svg class="i"><use href="#i-next"/></svg></button>
-          <div class="side">
+          <div class="c-left"><span id="p-mode"></span></div>
+          <div class="c-mid">
+            <button id="p-back10" class="icon-btn" aria-label="Back 10 seconds" data-tip="Back 10s"><svg class="i"><use href="#i-replay10"/></svg></button>
+            <button id="p-play" class="icon-btn" aria-label="Play or pause">
+              <svg class="i when-playing"><use href="#i-pause"/></svg><svg class="i when-paused"><use href="#i-play"/></svg>
+            </button>
+            <button id="p-fwd30" class="icon-btn" aria-label="Forward 30 seconds" data-tip="Forward 30s"><svg class="i"><use href="#i-forward30"/></svg></button>
+            <button id="p-next" class="icon-btn" aria-label="Next" data-tip="Next" hidden><svg class="i"><use href="#i-next"/></svg></button>
+          </div>
+          <div class="c-right side">
             <button id="p-subs" class="icon-btn" aria-label="Subtitles" data-tip="Subtitles" data-panel="subs style"><svg class="i"><use href="#i-cc"/></svg></button>
             <button id="p-audio" class="icon-btn" aria-label="Audio" data-tip="Audio" data-panel="audio"><svg class="i"><use href="#i-audio"/></svg></button>
+            <button id="p-quality" class="icon-btn" aria-label="Quality" data-tip="Quality" data-panel="quality"><svg class="i"><use href="#i-hd"/></svg></button>
             <button id="p-info" class="icon-btn" aria-label="Playback info" data-tip="Info" data-panel="info"><svg class="i"><use href="#i-info"/></svg></button>
+            <button id="p-full" class="icon-btn" aria-label="Full screen" data-tip="Full screen"><svg class="i"><use href="#i-expand"/></svg></button>
           </div>
         </div>
       </div>

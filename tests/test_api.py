@@ -288,7 +288,7 @@ def test_artwork_routes(server):
 def test_static_ui_is_served(tmp_path):
     config = Config(database=tmp_path / "db.sqlite", runtime=tmp_path / "rt", metadata_online=False)
     with TestClient(create_app(config, background=False)) as client:
-        assert "MEDIAWAN" in client.get("/").text
+        assert "<b>Mediawan</b>" in client.get("/").text
         assert client.get("/static/app.js").status_code == 200
         assert client.get("/static/vendor/hls.min.js").status_code == 200
 
