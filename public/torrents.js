@@ -176,7 +176,12 @@ export function torrentRulesForm(admin) {
     ['seedMinutes', 'Or after seeding (minutes)', 0, 1440, 1],
   ];
   return `<section class="section"><form id="torrent-rules" class="form"><h2>Torrent rules</h2><p class="meta">qBittorrent: ${admin.torrentConfigured ? 'Configured' : 'Not configured'}. Rules apply to new jobs and retries. Existing jobs keep their saved rules. CAM / TS / screeners are always excluded.</p><p class="meta">Required quality for both providers: 1080p WEB-DL for anime and TV shows · 2160p WEB-DL for movies. This rule cannot be changed.</p>${fields.map(([key, label, min, max, step]) => `<label>${label}<input type="number" name="${key}" min="${min}" max="${max}" step="${step}" required value="${r[key]}"></label>`).join('')}
-    <label class="check"><input type="checkbox" name="rejectUnknown" ${r.rejectUnknown ? 'checked' : ''}>Reject unknown seed count or size</label><p class="meta">Timeouts stop the selected torrent and retain partial data. They never choose another release automatically. Uploads can continue until the ratio or time limit is reached.</p><button class="primary">Save torrent rules</button><button type="button" id="torrent-health">Test connection</button><p id="torrent-status" role="status"></p></form></section>`;
+    <label class="check"><input type="checkbox" name="rejectUnknown" ${r.rejectUnknown ? 'checked' : ''}>Reject unknown seed count or size</label><p class="meta">Timeouts stop the selected torrent and retain partial data. They never choose another release automatically. Uploads can continue until the ratio or time limit is reached.</p>
+    <h3>Streaming filter</h3>
+    <label class="check"><input type="checkbox" name="trustedOnly" ${r.trustedOnly ? 'checked' : ''}>Trusted releases only</label>
+    <label class="check"><input type="checkbox" name="requireSubtitles" ${r.requireSubtitles ? 'checked' : ''}>Require confirmed subtitles in the preferred subtitle language (English when none is set)</label>
+    <label>Trusted release groups<textarea name="trustedGroups" rows="3" spellcheck="false">${esc((r.trustedGroups || []).join(', '))}</textarea></label>
+    <p class="meta">A stream tries releases from these groups first, then reads each file's subtitle tracks before playback and moves on when the language is missing. When nothing passes, the best release still plays with a warning.</p><button class="primary">Save torrent rules</button><button type="button" id="torrent-health">Test connection</button><p id="torrent-status" role="status"></p></form></section>`;
 }
 export function bindTorrentRules() {
   const form = $('#torrent-rules');
@@ -185,9 +190,13 @@ export function bindTorrentRules() {
     e.preventDefault();
     const data = new FormData(form),
       payload = {};
+    const flags = ['rejectUnknown', 'trustedOnly', 'requireSubtitles'];
     for (const [key, value] of data)
-      if (!['resolutions', 'rejectUnknown'].includes(key)) payload[key] = Number(value);
-    payload.rejectUnknown = data.has('rejectUnknown');
+      if (!['resolutions', 'trustedGroups', ...flags].includes(key)) payload[key] = Number(value);
+    for (const flag of flags) payload[flag] = data.has(flag);
+    payload.trustedGroups = String(data.get('trustedGroups') || '')
+      .split(/[\s,]+/)
+      .filter(Boolean);
     try {
       await api('/api/admin/torrent-rules', payload, 'PUT');
       toast('Torrent rules saved');

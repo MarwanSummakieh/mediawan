@@ -961,7 +961,12 @@
       ["seedMinutes", "Or after seeding (minutes)", 0, 1440, 1]
     ];
     return `<section class="section"><form id="torrent-rules" class="form"><h2>Torrent rules</h2><p class="meta">qBittorrent: ${admin.torrentConfigured ? "Configured" : "Not configured"}. Rules apply to new jobs and retries. Existing jobs keep their saved rules. CAM / TS / screeners are always excluded.</p><p class="meta">Required quality for both providers: 1080p WEB-DL for anime and TV shows \xB7 2160p WEB-DL for movies. This rule cannot be changed.</p>${fields.map(([key, label, min, max, step]) => `<label>${label}<input type="number" name="${key}" min="${min}" max="${max}" step="${step}" required value="${r[key]}"></label>`).join("")}
-    <label class="check"><input type="checkbox" name="rejectUnknown" ${r.rejectUnknown ? "checked" : ""}>Reject unknown seed count or size</label><p class="meta">Timeouts stop the selected torrent and retain partial data. They never choose another release automatically. Uploads can continue until the ratio or time limit is reached.</p><button class="primary">Save torrent rules</button><button type="button" id="torrent-health">Test connection</button><p id="torrent-status" role="status"></p></form></section>`;
+    <label class="check"><input type="checkbox" name="rejectUnknown" ${r.rejectUnknown ? "checked" : ""}>Reject unknown seed count or size</label><p class="meta">Timeouts stop the selected torrent and retain partial data. They never choose another release automatically. Uploads can continue until the ratio or time limit is reached.</p>
+    <h3>Streaming filter</h3>
+    <label class="check"><input type="checkbox" name="trustedOnly" ${r.trustedOnly ? "checked" : ""}>Trusted releases only</label>
+    <label class="check"><input type="checkbox" name="requireSubtitles" ${r.requireSubtitles ? "checked" : ""}>Require confirmed subtitles in the preferred subtitle language (English when none is set)</label>
+    <label>Trusted release groups<textarea name="trustedGroups" rows="3" spellcheck="false">${esc((r.trustedGroups || []).join(", "))}</textarea></label>
+    <p class="meta">A stream tries releases from these groups first, then reads each file's subtitle tracks before playback and moves on when the language is missing. When nothing passes, the best release still plays with a warning.</p><button class="primary">Save torrent rules</button><button type="button" id="torrent-health">Test connection</button><p id="torrent-status" role="status"></p></form></section>`;
   }
   function bindTorrentRules() {
     const form = $("#torrent-rules");
@@ -969,9 +974,11 @@
     form.onsubmit = async (e) => {
       e.preventDefault();
       const data = new FormData(form), payload = {};
+      const flags = ["rejectUnknown", "trustedOnly", "requireSubtitles"];
       for (const [key, value] of data)
-        if (!["resolutions", "rejectUnknown"].includes(key)) payload[key] = Number(value);
-      payload.rejectUnknown = data.has("rejectUnknown");
+        if (!["resolutions", "trustedGroups", ...flags].includes(key)) payload[key] = Number(value);
+      for (const flag of flags) payload[flag] = data.has(flag);
+      payload.trustedGroups = String(data.get("trustedGroups") || "").split(/[\s,]+/).filter(Boolean);
       try {
         await api("/api/admin/torrent-rules", payload, "PUT");
         toast("Torrent rules saved");
@@ -1356,6 +1363,10 @@
     if (release.group) parts.push(release.group);
     if (release.seeders != null) parts.push(plural(release.seeders, "seeder"));
     if (release.seasonPack) parts.push("season pack");
+    if (release.trusted === true) parts.push("trusted group");
+    if (release.trusted === false) parts.push("untrusted group");
+    if (release.subtitles === true) parts.push("subtitles confirmed");
+    if (release.subtitles === false) parts.push("no subtitles in your language");
     return parts.join(" \xB7 ");
   }
   function chooseResolution(options, remembered, capabilities2) {
@@ -1446,7 +1457,12 @@
     if (!fallback || !fallback.to) return "";
     const to = fallback.to;
     const name = [to.service, to.group].filter(Boolean).join(" \xB7 ") || formatBytes(to.sizeBytes);
+    if (fallback.kind === "subtitles")
+      return `${fallback.reason} This plays a different copy that has them (${name}).`;
     return `The first choice was slow to answer, so this plays a different copy (${name}).`;
+  }
+  function filterWarnings(status) {
+    return status && Array.isArray(status.warnings) && status.warnings || [];
   }
   function failureView(reason, message, context = {}) {
     const other = context.other && context.other.available ? context.other.resolution : null;
@@ -2328,7 +2344,10 @@
       resolution ? resolutionLabel(resolution) : "",
       ...releaseFacts(status == null ? void 0 : status.release)
     ].filter(Boolean).join(" \xB7 ");
-    $("#stream-start-note").textContent = fallbackNote(status) || (owner.stream.forceTranscode ? "This device cannot play the original video, so the server is converting it." : "");
+    $("#stream-start-note").textContent = [
+      fallbackNote(status) || (owner.stream.forceTranscode ? "This device cannot play the original video, so the server is converting it." : ""),
+      ...filterWarnings(status)
+    ].filter(Boolean).join(" ");
     $("#stream-start-actions").innerHTML = "";
   }
   function showStreamFailure(owner, reason, message) {
@@ -2588,6 +2607,11 @@
       return showStreamFailure(owner, failureReason(status), ((_b = status.error) == null ? void 0 : _b.message) || status.message);
     if (status.state === "stopped") return showStreamFailure(owner, "stopped", status.message);
     if (stream.failed) return;
+    const warnings = filterWarnings(status).filter((w) => !(stream.warned || (stream.warned = /* @__PURE__ */ new Set())).has(w));
+    if (warnings.length && status.playback) {
+      warnings.forEach((w) => stream.warned.add(w));
+      toast(warnings.join(" "));
+    }
     stream.stale = ((_c = status.conversion) == null ? void 0 : _c.state) === "stopped";
     if (!stream.sourced) {
       if ((fresh == null ? void 0 : fresh.requested) != null) owner.pendingPosition = fresh.requested;

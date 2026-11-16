@@ -103,7 +103,7 @@ class FakeTorrent extends EventEmitter {
         const length = spec.length || 3 * GiB;
         this.files = [
           { name: 'sample.txt', length: 100, offset: 0 },
-          { name: 'Show.S01E01.mkv', length, offset: 100, downloaded: 0, progress: 0 },
+          { name: spec.name || 'Show.S01E01.mkv', length, offset: 100, downloaded: 0, progress: 0 },
         ];
         this.pieces = new Array(Math.ceil((length + 100) / MiB));
         this.ready = true;
@@ -188,7 +188,7 @@ function fixture(t, overrides = {}) {
       if (typeof overrides.listing === 'function') return overrides.listing(itemId);
       return overrides.listing || listing;
     },
-    rules: () => ({ ...defaultRules }),
+    rules: () => ({ ...defaultRules, ...overrides.rules }),
     media,
     probe: overrides.probe || (async () => info),
     keyframeBefore: async (input, seek) => Math.max(0, seek - 1.5),
@@ -998,4 +998,154 @@ test('an older series with nothing sound at 1080p is offered its best lower qual
     [1080, 2160],
   );
   await assert.rejects(streaming.prepare(user, item.id, { resolution: 360 }), /Choose 480, 720/);
+});
+
+// ---- Streaming filter: trusted groups and confirmed subtitles --------------------------
+const filterHashes = { grp: '1'.repeat(40), ntb: '2'.repeat(40), flux: '3'.repeat(40) };
+const filterRelease = (hash, name, seeders) => ({
+  hash,
+  fileIndex: null,
+  label: `${name}\n👤 ${seeders} 💾 3.0 GB`,
+  filename: `${name}.mkv`,
+  seeders,
+  sizeBytes: 3 * GiB,
+  resolution: 1080,
+  trackers: [],
+});
+const filterListing = [
+  // Far better seeded, so it scores highest, but its group is not trusted.
+  filterRelease(filterHashes.grp, 'Show.S01E01.1080p.AMZN.WEB-DL.DDP5.1.H.264-GRP', 500),
+  filterRelease(filterHashes.ntb, 'Show.S01E01.1080p.NF.WEB-DL.DDP5.1.H.264-NTb', 40),
+  filterRelease(filterHashes.flux, 'Show.S01E01.1080p.AMZN.WEB-DL.DDP5.1.H.264-FLUX', 20),
+];
+const filterSwarms = {
+  [filterHashes.grp]: { metadataMs: 10, name: 'grp.mkv' },
+  [filterHashes.ntb]: { metadataMs: 10, name: 'ntb.mkv' },
+  [filterHashes.flux]: { metadataMs: 10, name: 'flux.mkv' },
+};
+// Subtitle tracks per file: NTb has Arabic text, English only as an image and as forced.
+const filterTracks = {
+  'grp.mkv': [{ index: 3, codec: 'subrip', language: 'eng', forced: false }],
+  'ntb.mkv': [
+    { index: 3, codec: 'subrip', language: 'ara', forced: false },
+    { index: 4, codec: 'hdmv_pgs_subtitle', language: 'eng', forced: false },
+    { index: 5, codec: 'subrip', language: 'eng', forced: true },
+  ],
+  'flux.mkv': [{ index: 3, codec: 'subrip', language: 'eng', forced: false }],
+};
+const probeTracks =
+  (tracks = filterTracks, probed = []) =>
+  async (url) => {
+    const name = url.split('/').pop();
+    probed.push(name);
+    return { ...info, subtitles: (tracks[name] || []).map((t) => ({ title: '', ...t })) };
+  };
+
+test('the streaming filter offers trusted releases first, and can be turned off', async (t) => {
+  const on = fixture(t, { listing: filterListing, swarms: filterSwarms });
+  const first = (await on.streaming.options(on.user, on.item.id)).resolutions[0];
+  assert.equal(first.release.hash, filterHashes.ntb);
+  assert.equal(first.release.trusted, true);
+  assert.equal(first.release.subtitles, null);
+  const off = fixture(t, {
+    listing: filterListing,
+    swarms: filterSwarms,
+    rules: { trustedOnly: false, requireSubtitles: false },
+  });
+  const plain = (await off.streaming.options(off.user, off.item.id)).resolutions[0];
+  assert.equal(plain.release.hash, filterHashes.grp);
+  assert.equal(plain.release.trusted, null);
+});
+
+test('a file without subtitles in the viewer language is skipped for the next trusted one', async (t) => {
+  const probed = [];
+  const { streaming, user, item } = fixture(t, {
+    listing: filterListing,
+    swarms: filterSwarms,
+    probe: probeTracks(filterTracks, probed),
+  });
+  const prepared = await streaming.prepare(user, item.id, { resolution: 1080 });
+  await until(() => streaming.status(user, prepared.id).state === 'ready');
+  const ready = streaming.status(user, prepared.id);
+  assert.equal(ready.release.hash, filterHashes.flux);
+  assert.equal(ready.release.subtitles, true);
+  assert.equal(ready.fallback.kind, 'subtitles');
+  assert.equal(ready.fallback.from.hash, filterHashes.ntb);
+  assert.match(ready.fallback.reason, /no English subtitles/);
+  assert.deepEqual(ready.warnings, []);
+  assert.deepEqual(
+    ready.attempts.map((a) => [a.hash, a.state]),
+    [
+      [filterHashes.ntb, 'no-subtitles'],
+      [filterHashes.flux, 'won'],
+    ],
+  );
+  // The untrusted release was never opened, and what was read is remembered: next time
+  // the file known to lack subtitles comes after the one known to have them.
+  assert.deepEqual(probed, ['ntb.mkv', 'flux.mkv']);
+  const again = (await streaming.options(user, item.id)).resolutions[0];
+  assert.equal(again.release.hash, filterHashes.flux);
+  assert.equal(again.release.subtitles, true);
+});
+
+test('the preferred subtitle language decides which file has confirmed subtitles', async (t) => {
+  const { streaming, store, user, item } = fixture(t, {
+    listing: filterListing,
+    swarms: filterSwarms,
+    probe: probeTracks(),
+  });
+  store.run(
+    'INSERT INTO preferences VALUES(?,?)',
+    user.id,
+    JSON.stringify({ subtitleLanguage: 'ar' }),
+  );
+  const prepared = await streaming.prepare(user, item.id, { resolution: 1080 });
+  await until(() => streaming.status(user, prepared.id).state === 'ready');
+  const ready = streaming.status(user, prepared.id);
+  assert.equal(ready.release.hash, filterHashes.ntb);
+  assert.equal(ready.fallback, null);
+  assert.deepEqual(ready.warnings, []);
+});
+
+test('when no trusted file has the subtitles, the best one plays with a warning', async (t) => {
+  const probed = [];
+  const { streaming, user, item } = fixture(t, {
+    listing: filterListing,
+    swarms: filterSwarms,
+    probe: probeTracks({}, probed),
+  });
+  const prepared = await streaming.prepare(user, item.id, { resolution: 1080 });
+  await until(() => streaming.status(user, prepared.id).state === 'ready');
+  const ready = streaming.status(user, prepared.id);
+  // Both trusted files were read; the better of them is opened again and plays.
+  assert.equal(ready.release.hash, filterHashes.ntb);
+  assert.equal(ready.release.subtitles, false);
+  assert.deepEqual(probed, ['ntb.mkv', 'flux.mkv', 'ntb.mkv']);
+  assert.deepEqual(
+    ready.attempts.map((a) => [a.hash, a.state]),
+    [
+      [filterHashes.ntb, 'no-subtitles'],
+      [filterHashes.flux, 'no-subtitles'],
+      [filterHashes.ntb, 'won'],
+    ],
+  );
+  assert.equal(ready.warnings.length, 1);
+  assert.match(ready.warnings[0], /No English subtitles in this file/);
+});
+
+test('with no trusted release listed, an untrusted one plays and says so', async (t) => {
+  const { streaming, user, item } = fixture(t, {
+    listing: [filterListing[0]],
+    swarms: filterSwarms,
+    probe: probeTracks(),
+  });
+  const option = (await streaming.options(user, item.id)).resolutions[0];
+  assert.equal(option.release.trusted, false);
+  const prepared = await streaming.prepare(user, item.id, { resolution: 1080 });
+  await until(() => streaming.status(user, prepared.id).state === 'ready');
+  const ready = streaming.status(user, prepared.id);
+  assert.equal(ready.release.hash, filterHashes.grp);
+  assert.deepEqual(ready.warnings, [
+    'Not from a trusted release group (GRP): no trusted release of this quality is listed.',
+  ]);
 });

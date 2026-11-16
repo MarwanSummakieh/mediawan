@@ -1,5 +1,49 @@
 import { fail } from './store.mjs';
 
+// Release groups whose streaming releases are taken as trustworthy: untouched service
+// WEB-DLs, careful Blu-ray encodes, and the main anime release groups. Editable in the
+// torrent rules; compared without case or punctuation, so "Erai-raws" matches ERAIRAWS.
+export const DEFAULT_TRUSTED_GROUPS = Object.freeze([
+  // WEB-DL
+  'NTb',
+  'FLUX',
+  'CMRG',
+  'playWEB',
+  'KiNGS',
+  'SMURF',
+  'EDITH',
+  'APEX',
+  'SiGMA',
+  'TEPES',
+  'HONE',
+  'GNOME',
+  'MZABI',
+  'CAKES',
+  'GLHF',
+  'ETHEL',
+  'BYNDR',
+  'XEBEC',
+  'NOSiViD',
+  'DEFLATE',
+  // Blu-ray
+  'FraMeSToR',
+  'CtrlHD',
+  'DON',
+  'EbP',
+  'HiFi',
+  'ZQ',
+  'W4NK3R',
+  'BHDStudio',
+  'decibeL',
+  'TayTO',
+  'CRiSC',
+  // Anime
+  'SubsPlease',
+  'Erai-raws',
+  'VARYG',
+  'ToonsHub',
+]);
+
 export const defaultRules = Object.freeze({
   minSeeders: 5,
   movieMaxGB: 100,
@@ -12,6 +56,12 @@ export const defaultRules = Object.freeze({
   uploadKBps: 1024,
   seedRatio: 1,
   seedMinutes: 60,
+  // Streaming only: prefer a release from `trustedGroups`, and a file whose embedded
+  // subtitles include the viewer's subtitle language. When none qualifies, the best
+  // release still plays, with a warning.
+  trustedOnly: true,
+  requireSubtitles: true,
+  trustedGroups: DEFAULT_TRUSTED_GROUPS,
 });
 
 export function releaseFacts(stream) {
@@ -137,6 +187,17 @@ export function createTorrentPolicy(store) {
         ].every(Number.isInteger)
       )
         fail(400, 'Counts and minutes must be whole numbers');
+      if (typeof rules.trustedOnly !== 'boolean' || typeof rules.requireSubtitles !== 'boolean')
+        fail(400, 'Invalid streaming filter');
+      if (
+        !Array.isArray(rules.trustedGroups) ||
+        rules.trustedGroups.length > 200 ||
+        !rules.trustedGroups.every(
+          (g) => typeof g === 'string' && /^[A-Za-z0-9][A-Za-z0-9._-]{0,29}$/.test(g.trim()),
+        )
+      )
+        fail(400, 'Release groups are names of up to 30 letters, digits, dots or dashes');
+      rules.trustedGroups = [...new Set(rules.trustedGroups.map((g) => g.trim()))];
       if (
         typeof rules.rejectUnknown !== 'boolean' ||
         !Array.isArray(rules.resolutions) ||

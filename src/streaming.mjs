@@ -19,7 +19,13 @@ import {
   textSubtitleCodecs,
   vttRelative,
 } from './media.mjs';
-import { assessStream, rankReleases, lockFrom, STREAM_RESOLUTIONS } from './release-score.mjs';
+import {
+  assessStream,
+  rankReleases,
+  lockFrom,
+  trustedGroup,
+  STREAM_RESOLUTIONS,
+} from './release-score.mjs';
 
 // Trackerless discovery (DHT) does not bootstrap on every network, and many listings carry
 // no tracker list, so every stream also announces to these open trackers.
@@ -199,6 +205,38 @@ export const languageKey = (code) => {
     .split(/[-_]/)[0];
   return languageAliases[value] || value;
 };
+const languageNames = new Intl.DisplayNames(['en'], { type: 'language' });
+export const languageName = (code) => {
+  try {
+    return languageNames.of(code);
+  } catch {
+    return code;
+  }
+};
+// "English or Arabic"
+const languageList = (codes) =>
+  codes
+    .map(languageName)
+    .reduce((text, name, i, all) =>
+      i === all.length - 1 ? `${text} or ${name}` : `${text}, ${name}`,
+    );
+
+// Languages of the full text-subtitle tracks in a probed file. Forced tracks only cover
+// foreign dialogue and image tracks (PGS, VobSub) cannot be shown, so neither counts.
+export const subtitleLanguages = (info) => [
+  ...new Set(
+    (info?.subtitles || [])
+      .filter((t) => textSubtitleCodecs.includes(t.codec) && !t.forced && t.language)
+      .map((t) => languageKey(t.language))
+      .filter((code) => code && code !== 'und'),
+  ),
+];
+const hasSubtitles = (languages, wanted) => languages.some((code) => wanted.includes(code));
+// One file of a release: a season pack holds many episodes under one hash.
+const fileKey = (release) => `${release.hash}:${release.fileIndex ?? ''}`;
+// At most this many releases are opened only to look for subtitles before settling for
+// the best one without them; each costs a few seconds of start-up.
+const SUBTITLE_CHECKS = 3;
 
 const releaseSummary = (entry) =>
   entry && {
@@ -217,6 +255,11 @@ const releaseSummary = (entry) =>
     dolbyVisionOnly: entry.traits.dolbyVisionOnly,
     hevc: entry.traits.hevc,
     seasonPack: entry.traits.seasonPack,
+    // Null when the streaming filter is off.
+    trusted: entry.trusted ?? null,
+    // Embedded subtitles in the viewer's language: true or false once the file has been
+    // read, null before.
+    subtitles: entry.subtitles ?? null,
     score: entry.score,
     why: entry.parts.map((p) => `${p.points > 0 ? '+' : ''}${p.points} ${p.reason}`),
   };
@@ -468,6 +511,23 @@ export function createStreaming(store, config, dependencies = {}) {
       JSON.stringify({ ...rejected(titleId), [hash]: reason }),
     );
   }
+  // Subtitle languages found in each file read for this title, so a file known to lack
+  // the viewer's subtitles is tried last next time, without opening it again.
+  const subtitleKey = (titleId) => `streamSubtitles:${titleId}`;
+  function knownSubtitles(titleId) {
+    const row = store.one('SELECT json FROM settings WHERE key=?', subtitleKey(titleId));
+    return row ? JSON.parse(row.json) : {};
+  }
+  function rememberSubtitles(titleId, release, languages) {
+    const known = knownSubtitles(titleId);
+    const key = fileKey(release);
+    if (JSON.stringify(known[key]) === JSON.stringify(languages)) return;
+    store.run(
+      'INSERT INTO settings VALUES(?,?) ON CONFLICT(key) DO UPDATE SET json=excluded.json',
+      subtitleKey(titleId),
+      JSON.stringify({ ...known, [key]: languages }),
+    );
+  }
   function wrongFilm(session, info) {
     if (session.kind !== 'movie') return null;
     const title = store.title(session.titleId);
@@ -480,7 +540,31 @@ export function createStreaming(store, config, dependencies = {}) {
   // "2001-2010" in the catalog: the last year a series ran. Open-ended while it airs.
   const endYearOf = (title) =>
     Number(/\d{4}\D+(\d{4})/.exec(String(title.releaseInfo || ''))?.[1]) || null;
-  function rank(list, { item, title, kind }, resolution) {
+  // With the streaming filter on, releases are tried in four bands, each in score order:
+  // trusted, trusted known to lack the subtitles, untrusted, untrusted known to lack them.
+  // Nothing is removed, so a stream still starts (with a warning) when no release passes.
+  function filtered(ranked, rules, title, wanted) {
+    if (!rules.trustedOnly && !rules.requireSubtitles) return ranked;
+    const known = knownSubtitles(title.id);
+    const marked = ranked.map((entry) => {
+      const languages = known[fileKey(entry.release)];
+      const group = trustedGroup(entry.release, rules.trustedGroups);
+      return {
+        ...entry,
+        trusted: rules.trustedOnly ? !!group : null,
+        trustedGroup: group,
+        subtitles: languages ? hasSubtitles(languages, wanted) : null,
+      };
+    });
+    const band = (entry) =>
+      (rules.trustedOnly && !entry.trusted ? 2 : 0) +
+      (rules.requireSubtitles && entry.subtitles === false ? 1 : 0);
+    return marked
+      .map((entry, index) => ({ entry, index }))
+      .sort((a, b) => band(a.entry) - band(b.entry) || a.index - b.index)
+      .map(({ entry }) => entry);
+  }
+  function rank(list, { item, title, kind }, resolution, wanted = ['eng']) {
     const rules = rulesFor();
     const wrong = rejected(title.id);
     const assess = (relaxed) =>
@@ -503,10 +587,15 @@ export function createStreaming(store, config, dependencies = {}) {
     }
     const eligible = assessed.filter((a) => a.accepted).map((a) => a.release);
     const lock = readLock(title, item, resolution);
-    const ranked = rankReleases(eligible, kind, lock, {
-      runtimeSeconds: item.runtimeSeconds || title.runtimeSeconds,
-      streaming: true,
-    });
+    const ranked = filtered(
+      rankReleases(eligible, kind, lock, {
+        runtimeSeconds: item.runtimeSeconds || title.runtimeSeconds,
+        streaming: true,
+      }),
+      rules,
+      title,
+      wanted,
+    );
     if (ranked.length) return { ranked, lock };
     // Explain the best near miss, so the interface can say why a resolution is missing.
     const atResolution = assessed.filter((a) => a.release.resolution === resolution);
@@ -523,10 +612,13 @@ export function createStreaming(store, config, dependencies = {}) {
   async function choices(user, itemId, { refresh = false } = {}) {
     const ctx = context(user, itemId);
     const result = await listing(itemId, refresh);
+    const wanted = wantedSubtitles(user.id);
     // Ranking is cheap but not free; repeat requests reuse it until the listing, the
-    // rules or a season lock change.
+    // rules, a season lock or what is known about subtitles change.
     const key = JSON.stringify([
       rulesFor(),
+      wanted,
+      knownSubtitles(ctx.title.id),
       STREAM_RESOLUTIONS.map((r) => readLock(ctx.title, ctx.item, r)),
       ctx.item.runtimeSeconds || ctx.title.runtimeSeconds,
       ctx.title.year,
@@ -538,7 +630,7 @@ export function createStreaming(store, config, dependencies = {}) {
       return { ctx, resolutions: memo.resolutions, cached: result.cached, ageMs: result.ageMs };
     const resolutions = {};
     for (const resolution of STREAM_RESOLUTIONS) {
-      const { ranked, lock, reason } = rank(result.value, ctx, resolution);
+      const { ranked, lock, reason } = rank(result.value, ctx, resolution, wanted);
       resolutions[resolution] = { resolution, ranked, lock, reason };
     }
     rankings.set(result.value, { key, resolutions });
@@ -867,6 +959,13 @@ export function createStreaming(store, config, dependencies = {}) {
       intent,
       ranked,
       candidates: ranked.slice(0, 4),
+      // The streaming filter as it was when the session began, and the subtitle languages
+      // that satisfy it for this viewer.
+      filter: (({ trustedOnly, requireSubtitles }) => ({ trustedOnly, requireSubtitles }))(
+        rulesFor(),
+      ),
+      wanted: wantedSubtitles(user.id),
+      subtitles: null,
       attempts: [],
       created: now(),
       touched: now(),
@@ -1050,9 +1149,31 @@ export function createStreaming(store, config, dependencies = {}) {
     });
     session.source = served;
   }
+  // Releases still worth opening for subtitles after `current` turned out to have none:
+  // not failed, not a different film, not already read or known to lack them, and (with
+  // trusted releases preferred) in the same trust band as `current`.
+  function subtitleCandidates(session, current, checked) {
+    const failed = new Set(
+      session.attempts.filter((a) => a.state === 'failed').map((a) => a.candidate),
+    );
+    const wrong = rejected(session.titleId);
+    const known = knownSubtitles(session.titleId);
+    return session.ranked
+      .filter((c) => {
+        if (failed.has(c) || checked.includes(c) || wrong[c.release.hash]) return false;
+        if (session.filter.trustedOnly && !!c.trusted !== !!current.trusted) return false;
+        const languages = known[fileKey(c.release)];
+        return !languages || hasSubtitles(languages, session.wanted);
+      })
+      .slice(0, 4);
+  }
   async function run(session) {
     let info,
       wrong = null;
+    // Releases read and found to lack the viewer's subtitles, best first; once the search
+    // is over, the first of them to connect is accepted without the check.
+    const bare = [];
+    let settled = false;
     for (;;) {
       await connect(session);
       if (session.closed) return;
@@ -1068,7 +1189,35 @@ export function createStreaming(store, config, dependencies = {}) {
       info = await probes.get(session.file.path);
       if (session.closed) return;
       const mismatch = wrongFilm(session, info);
-      if (!mismatch) break;
+      if (!mismatch) {
+        const current = session.chosen.candidate;
+        const languages = subtitleLanguages(info);
+        rememberSubtitles(session.titleId, current.release, languages);
+        session.subtitles = hasSubtitles(languages, session.wanted);
+        if (session.subtitles || !session.filter.requireSubtitles || settled) break;
+        // No subtitles in the viewer's language: look at the next releases, then settle
+        // for the best one read.
+        bare.push(current);
+        const next =
+          bare.length < SUBTITLE_CHECKS ? subtitleCandidates(session, current, bare) : [];
+        if (!next.length && bare[0] === current) break;
+        const attempt = session.chosen;
+        session.source?.remove();
+        session.source = session.entry = session.file = session.chosen = session.fallback = null;
+        await abandon(
+          session,
+          attempt,
+          'no-subtitles',
+          `No ${languageList(session.wanted)} subtitles in this file`,
+        );
+        if (next.length) session.candidates = next;
+        else {
+          session.candidates = [...bare];
+          settled = true;
+        }
+        changed(session);
+        continue;
+      }
       // Drop the wrong film and try the next release that has not failed.
       const bad = session.chosen;
       reject(session.titleId, bad.candidate.release.hash, mismatch);
@@ -1081,8 +1230,13 @@ export function createStreaming(store, config, dependencies = {}) {
       );
       const known = rejected(session.titleId);
       session.candidates = session.ranked
-        .filter((c) => !failed.has(c) && !known[c.release.hash])
+        .filter((c) => !failed.has(c) && !known[c.release.hash] && !bare.includes(c))
         .slice(0, 4);
+      // Only releases without subtitles are left: settle for the best of them.
+      if (!session.candidates.length && bare.length) {
+        session.candidates = [...bare];
+        settled = true;
+      }
       if (!session.candidates.length)
         refuse(
           404,
@@ -1096,6 +1250,14 @@ export function createStreaming(store, config, dependencies = {}) {
         from: releaseSummary(wrong.candidate),
         to: releaseSummary(session.chosen.candidate),
         reason: `The first choice was a different film with the same name. ${wrong.reason}`,
+        at: now(),
+      };
+    else if (bare.length && session.subtitles)
+      session.fallback = {
+        from: releaseSummary(bare[0]),
+        to: releaseSummary(session.chosen.candidate),
+        kind: 'subtitles',
+        reason: `The first choice has no ${languageList(session.wanted)} subtitles.`,
         at: now(),
       };
     session.info = info;
@@ -1138,6 +1300,11 @@ export function createStreaming(store, config, dependencies = {}) {
       .split(',')
       .map(languageKey)
       .filter(Boolean);
+  // The subtitle languages the streaming filter looks for: the preferred ones, else English.
+  const wantedSubtitles = (userId) => {
+    const preferred = preferredLanguages(userId);
+    return preferred.length ? preferred : ['eng'];
+  };
   function subtitleTracks(session) {
     const preferred = preferredLanguages(session.userId);
     return session.info.subtitles
@@ -1336,6 +1503,24 @@ export function createStreaming(store, config, dependencies = {}) {
     buffering: 'Buffering…',
     stopped: 'Stopped',
   };
+  // What the streaming filter could not satisfy for the release being played.
+  function warnings(session, chosen) {
+    const list = [];
+    if (!chosen) return list;
+    if (session.filter.trustedOnly && !chosen.trusted) {
+      const group = chosen.traits.group ? ` (${chosen.traits.group})` : '';
+      list.push(
+        session.ranked.some((c) => c.trusted)
+          ? `Not from a trusted release group${group}: the trusted releases did not answer.`
+          : `Not from a trusted release group${group}: no trusted release of this quality is listed.`,
+      );
+    }
+    if (session.filter.requireSubtitles && session.info && !session.subtitles)
+      list.push(
+        `No ${languageList(session.wanted)} subtitles in this file. Online subtitles may still have them.`,
+      );
+    return list;
+  }
   function status(session) {
     const torrent = session.entry?.torrent;
     const buffer = bufferState(session);
@@ -1367,8 +1552,12 @@ export function createStreaming(store, config, dependencies = {}) {
         (conversion?.state === 'failed'
           ? { reason: 'conversion', message: conversion.error }
           : null),
-      release: releaseSummary(chosen),
+      release: chosen && {
+        ...releaseSummary(chosen),
+        subtitles: session.info ? session.subtitles : (chosen.subtitles ?? null),
+      },
       fallback: session.fallback || null,
+      warnings: warnings(session, chosen),
       attempts: session.attempts.map((a) => ({
         name: String(a.candidate.release.label || '').split('\n')[0],
         hash: a.candidate.release.hash,

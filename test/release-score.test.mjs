@@ -10,8 +10,10 @@ import {
   scoreRelease,
   rankReleases,
   lockFrom,
+  trustedGroup,
 } from '../src/release-score.mjs';
-import { assessQuality, defaultRules } from '../src/torrent-policy.mjs';
+import { assessQuality, defaultRules, createTorrentPolicy } from '../src/torrent-policy.mjs';
+import { createStore } from '../src/store.mjs';
 
 const GiB = 1073741824;
 const release = (name, extra = {}) => ({
@@ -323,4 +325,39 @@ test('a revival or remake labelled outside the years a series ran is a different
   assert.match(yearMismatch(r('Show 1987 S01E01 DVDRip'), '2018', { series: true }), /1987/);
   // A pixel size is not a year.
   assert.equal(yearMismatch(r('Show S01E01 1920x1080 WEB-DL'), '2001', original), null);
+});
+
+test('trusted releases are recognised by their group, at the end or in brackets', () => {
+  const groups = defaultRules.trustedGroups;
+  const named = (name, filename = `${name}.mkv`) => ({ label: `${name}\n👤 50`, filename });
+  assert.equal(trustedGroup(named('Show.S01E01.1080p.NF.WEB-DL.DDP5.1.H.264-NTb'), groups), 'NTb');
+  assert.equal(trustedGroup(named('Show.S01E01.1080p.WEB-DL.H.264-ntb'), groups), 'ntb');
+  assert.equal(
+    trustedGroup(named('[Erai-raws] Show - 01 [1080p][Multiple Subtitle]'), groups),
+    'Erai-raws',
+  );
+  assert.equal(
+    trustedGroup(named('[SubsPlease] Show - 01 (1080p) [ABCD1234]'), groups),
+    'SubsPlease',
+  );
+  // The file inside decides as much as the label: a trusted label with a stranger's file
+  // still counts, but an unknown group, or no group, does not.
+  assert.equal(trustedGroup(named('Show.S01E01.1080p.WEB-DL.H.264-GRP'), groups), null);
+  assert.equal(trustedGroup(named('Show S01E01 1080p WEB-DL'), groups), null);
+  assert.equal(trustedGroup(named('Show.S01E01.1080p.WEB-DL.H.264-NTb'), []), null);
+});
+
+test('streaming filter rules are validated and saved with the other torrent rules', () => {
+  const store = createStore(':memory:');
+  const policy = createTorrentPolicy(store);
+  assert.equal(policy.get().trustedOnly, true);
+  assert.equal(policy.get().requireSubtitles, true);
+  assert(policy.get().trustedGroups.includes('FLUX'));
+  const saved = policy.set({ trustedOnly: false, trustedGroups: ['NTb', ' FLUX ', 'NTb'] });
+  assert.equal(saved.trustedOnly, false);
+  assert.deepEqual(saved.trustedGroups, ['NTb', 'FLUX']);
+  assert.deepEqual(policy.get().trustedGroups, ['NTb', 'FLUX']);
+  assert.throws(() => policy.set({ requireSubtitles: 'yes' }), /Invalid streaming filter/);
+  assert.throws(() => policy.set({ trustedGroups: ['bad group!'] }), /Release groups/);
+  store.close();
 });

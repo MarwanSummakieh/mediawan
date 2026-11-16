@@ -635,6 +635,28 @@ Stored in `stream_locks(title_id, season, resolution)`. The lock is written when
 first stream of a season becomes ready, and replaced when a later stream had to fall back
 (the locked choice no longer answers). Movies have no lock.
 
+## Streaming filter: trusted groups and confirmed subtitles
+
+Two torrent rules, both on by default: `trustedOnly` and `requireSubtitles`, with the
+editable `trustedGroups` list (Settings → Torrent rules). They affect streaming only.
+
+- **Trusted** means the release group (the `-GROUP` at the end of the name, or `[Group]`
+  at the start for anime) is on the list. Torrentio reports no uploader trust, so the
+  group is the only signal available.
+- **Confirmed subtitles** means the file, read with ffprobe before playback, has a full
+  text-subtitle track (not forced, not PGS/VobSub) in the viewer's preferred subtitle
+  language, or English when none is set. The listing cannot tell this; the file must be
+  opened. The languages found are remembered per file in
+  `settings['streamSubtitles:<titleId>']`.
+- Releases are tried in four bands, each in score order: trusted; trusted known to lack
+  the subtitles; untrusted; untrusted known to lack them. A file without the subtitles is
+  dropped for the next one in the same band, up to 3 files read; the attempt is listed
+  with state `no-subtitles`, and `fallback.kind` is `subtitles` when another file had
+  them. When none do, the best file read is opened again and plays.
+- Nothing is refused for these reasons. Status `warnings[]` says what was not met, and
+  `release.trusted` / `release.subtitles` (`true`, `false`, or `null` when unknown or the
+  filter is off) appear in stream options and status.
+
 ## Measured timings
 
 On the development PC (Windows 11, NordLynx VPN, Sintel test torrent, FFmpeg 8.1),

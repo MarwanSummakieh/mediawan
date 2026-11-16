@@ -193,6 +193,10 @@ export function releaseDetail(release) {
   if (release.group) parts.push(release.group);
   if (release.seeders != null) parts.push(plural(release.seeders, 'seeder'));
   if (release.seasonPack) parts.push('season pack');
+  if (release.trusted === true) parts.push('trusted group');
+  if (release.trusted === false) parts.push('untrusted group');
+  if (release.subtitles === true) parts.push('subtitles confirmed');
+  if (release.subtitles === false) parts.push('no subtitles in your language');
   return parts.join(' · ');
 }
 
@@ -302,7 +306,14 @@ export function fallbackNote(status) {
   if (!fallback || !fallback.to) return '';
   const to = fallback.to;
   const name = [to.service, to.group].filter(Boolean).join(' · ') || formatBytes(to.sizeBytes);
+  if (fallback.kind === 'subtitles')
+    return `${fallback.reason} This plays a different copy that has them (${name}).`;
   return `The first choice was slow to answer, so this plays a different copy (${name}).`;
+}
+
+// What the streaming filter could not satisfy: untrusted group, no subtitles.
+export function filterWarnings(status) {
+  return (status && Array.isArray(status.warnings) && status.warnings) || [];
 }
 
 // A plain-words explanation and the next steps for a failure. `context`:

@@ -155,6 +155,26 @@ export function releaseTraits(release) {
   };
 }
 
+// Trust comes from the release group: the "-GROUP" at the end of a scene-style name, or
+// the "[Group]" at the start of an anime release. Returns the matching group or null.
+const groupKey = (name) =>
+  String(name || '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '');
+export function trustedGroup(release, groups) {
+  const wanted = new Set((groups || []).map(groupKey).filter(Boolean));
+  if (!wanted.size) return null;
+  const names = [release.filename, String(release.label || '').split('\n')[0]]
+    .map((n) => String(n || '').trim())
+    .filter(Boolean);
+  for (const name of names) {
+    const trailing = /-([A-Za-z0-9]{2,20})(?:\[[^\]]*\])?(?:\.(?:mkv|mp4))?$/.exec(name);
+    const leading = /^\[([^\]]{2,30})\]/.exec(name);
+    for (const hit of [trailing, leading]) if (hit && wanted.has(groupKey(hit[1]))) return hit[1];
+  }
+  return null;
+}
+
 function sizeFloor(release, kind, runtimeSeconds) {
   if (runtimeSeconds > 0 && minBitrate[release.resolution])
     return (runtimeSeconds * minBitrate[release.resolution]) / 8;

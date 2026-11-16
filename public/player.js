@@ -32,6 +32,7 @@ import {
   failureView,
   failureReason,
   fallbackNote,
+  filterWarnings,
   resolutionLabel,
   releaseFacts,
   streamPlan,
@@ -520,11 +521,15 @@ function renderStartup(owner, status) {
   ]
     .filter(Boolean)
     .join(' · ');
-  $('#stream-start-note').textContent =
+  $('#stream-start-note').textContent = [
     fallbackNote(status) ||
-    (owner.stream.forceTranscode
-      ? 'This device cannot play the original video, so the server is converting it.'
-      : '');
+      (owner.stream.forceTranscode
+        ? 'This device cannot play the original video, so the server is converting it.'
+        : ''),
+    ...filterWarnings(status),
+  ]
+    .filter(Boolean)
+    .join(' ');
   $('#stream-start-actions').innerHTML = '';
 }
 // A plain explanation and next steps in place of the start-up progress. Never a dead end.
@@ -819,6 +824,12 @@ function onStreamStatus(owner, status) {
     return showStreamFailure(owner, failureReason(status), status.error?.message || status.message);
   if (status.state === 'stopped') return showStreamFailure(owner, 'stopped', status.message);
   if (stream.failed) return;
+  // The start-up note disappears once playback begins; say it once where it stays seen.
+  const warnings = filterWarnings(status).filter((w) => !(stream.warned ||= new Set()).has(w));
+  if (warnings.length && status.playback) {
+    warnings.forEach((w) => stream.warned.add(w));
+    toast(warnings.join(' '));
+  }
   stream.stale = status.conversion?.state === 'stopped';
   if (!stream.sourced) {
     // This player's own start point: its session's resume point, which is the position
