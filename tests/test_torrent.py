@@ -81,14 +81,18 @@ SHOW = {"kind": "show", "id": "tt0000002", "name": "Show", "year": 2018, "runtim
         "episodes": [{"season": 1, "episode": e, "name": f"E{e}"} for e in (1, 2, 3)]}  # fmt: skip
 
 
-def make(tmp_path, listing, swarms=None, durations=None, refuse=None, **kw):
+ENGLISH = [{"index": 3, "codec": "subrip", "lang": "en", "text": True, "forced": False}]
+
+
+def make(tmp_path, listing, swarms=None, durations=None, refuse=None, subtitles=None, **kw):
+    """subtitles: tracks per info hash; every file has an English text track otherwise."""
     db = Database(tmp_path / "db.sqlite")
     sidecar = FakeSidecar(swarms, refuse, kw.pop("file_url", None))
     torrents = Torrents(
         db, "ffprobe", "ffmpeg", tmp_path / "rt", sidecar=sidecar, background=False,
         timings=Timings(fallback=0.3, connect=3, poll=0.02),
         probe=lambda url: {"duration": (durations or {}).get(url.split("/")[4], 7200.0), "video": [{"codec": "h264"}],
-                           "audio": [], "subtitles": []},
+                           "audio": [], "subtitles": (subtitles or {}).get(url.split("/")[4], ENGLISH)},
         **kw,
     )  # fmt: skip
     torrents._fetch = lambda title, season, episode: listing(title, season, episode)
@@ -284,7 +288,7 @@ def server(tmp_path, clips):
     with TestClient(app) as client:
         torrents.db = app.state.db  # share the app's database
         film = {**FILM, "runtime": None}
-        app.state.usenet.cache.put(("title", "movie", FILM["id"]), film, 3600)
+        app.state.catalog.cache.put(("title", "movie", FILM["id"]), film, 3600)
         client.post("/api/login", json={"email": "admin@example.test", "password": "correct horse battery"})
         yield client, app, db_holder["sidecar"]
 
@@ -292,8 +296,8 @@ def server(tmp_path, clips):
 @needs_ffmpeg
 def test_prepare_play_progress_and_resume_through_the_api(server):
     client, _app, sidecar = server
-    title = client.get(f"/api/usenet/title/movie/{FILM['id']}").json()
-    assert title["sources"] == {"usenet": False, "torrent": True} and title["source"] is None
+    title = client.get(f"/api/watch/title/movie/{FILM['id']}").json()
+    assert title["playable"] and title["quality"] == 0
     options = client.get(f"/api/torrent/options/movie/{FILM['id']}").json()
     assert options["qualities"][0]["available"] and options["engine"]["ok"]
     status = client.post("/api/torrent/prepare", json={"kind": "movie", "id": FILM["id"], "quality": 1080,
@@ -309,10 +313,10 @@ def test_prepare_play_progress_and_resume_through_the_api(server):
     assert playlist.status_code == 200 and "#EXTINF" in playlist.text
     body = {**info["torrent"], "position": 5.0, "duration": info["duration"], "session": info["session"]}
     assert client.post("/api/torrent/progress", json=body).status_code == 200
-    title = client.get(f"/api/usenet/title/movie/{FILM['id']}").json()
-    assert (title["source"], title["quality"], title["next"]["position"]) == ("torrent", 1080, 5.0)
-    rail = next(r for r in client.get("/api/home").json()["rails"] if r["id"] == "usenet")
-    assert rail["items"][0]["source"] == "torrent" and rail["items"][0]["quality"] == 1080
+    title = client.get(f"/api/watch/title/movie/{FILM['id']}").json()
+    assert (title["quality"], title["next"]["position"]) == (1080, 5.0)
+    rail = next(r for r in client.get("/api/home").json()["rails"] if r["id"] == "watch")
+    assert rail["items"][0]["quality"] == 1080
     # Resume: with no start given, play picks up where it stopped.
     again = client.post("/api/torrent/play", json={"stream": status["id"], "caps": caps, "client": "web"}).json()
     assert again["position"] == 5.0
@@ -351,7 +355,115 @@ def test_a_prepared_stream_also_fetches_the_viewers_resume_point(tmp_path):
     a = release("a", "Film.2026.1080p.NF.WEB-DL.H.264-A")
     torrents, sidecar, db = make(tmp_path, lambda *x: [a], {a["hash"]: {"metadata": 0, "size": 1000}})
     db.run("INSERT INTO users(id, email, name, pw_hash) VALUES(1, 'a@b.c', 'A', 'x')")
-    db.run("INSERT INTO usenet_history(user_id, imdb_id, season, episode, position, duration, played_at, source) "
+    db.run("INSERT INTO watch_history(user_id, imdb_id, season, episode, position, duration, played_at, source) "
            "VALUES(1, ?, 0, 0, 3600, 7200, 0, 'torrent')", FILM["id"])  # fmt: skip
     wait_done(torrents, torrents.open(1, FILM, 0, 0, 1080, "web"))
     assert (a["hash"], "hint", 495) in sidecar.modes  # 30 s before halfway = just before halfway into the file
+
+
+def test_history_from_before_torrents_were_the_only_source_is_kept(tmp_path):
+    import sqlite3
+
+    from mediawan.db import MIGRATIONS, Database
+
+    path = tmp_path / "old.sqlite"
+    old = sqlite3.connect(path)
+    for sql in MIGRATIONS[:5]:
+        old.executescript(sql)
+    old.execute("PRAGMA user_version=5")
+    old.execute("INSERT INTO users(id, email, name, pw_hash) VALUES(1, 'a@b.c', 'A', 'x')")
+    add = ("INSERT INTO usenet_history(user_id, imdb_id, name, release, position, duration, played_at, source, quality) "
+           "VALUES(1, ?, ?, ?, 600, 7200, 5, ?, ?)")  # fmt: skip
+    old.execute(add, ("tt1", "Old", "a-release-of-the-old-source", "usenet", 0))
+    old.execute(add, ("tt2", "New", "a" * 40, "torrent", 2160))
+    old.commit()
+    old.close()
+    rows = {r["imdb_id"]: r for r in Database(path).all("SELECT * FROM watch_history")}
+    assert (rows["tt1"]["release"], rows["tt1"]["source"], rows["tt1"]["position"]) == (None, "torrent", 600)
+    assert (rows["tt2"]["release"], rows["tt2"]["quality"]) == ("a" * 40, 2160)
+
+
+# ---- the streaming filter: trusted groups and confirmed subtitles -----------------------------
+
+FILTER = [
+    # Far better seeded, so it scores highest, but its group is not trusted.
+    release("g", "Show.S01E01.1080p.AMZN.WEB-DL.DDP5.1.H.264-GRP", seeders=500),
+    release("n", "Show.S01E01.1080p.NF.WEB-DL.DDP5.1.H.264-NTb", seeders=40),
+    release("f", "Show.S01E01.1080p.AMZN.WEB-DL.DDP5.1.H.264-FLUX", seeders=20),
+]
+FILTER_SWARMS = {r["hash"]: {"metadata": 0.05} for r in FILTER}
+ARABIC_ONLY = [
+    {"index": 3, "codec": "subrip", "lang": "ar", "text": True, "forced": False},
+    {"index": 4, "codec": "hdmv_pgs_subtitle", "lang": "en", "text": False, "forced": False},
+    {"index": 5, "codec": "subrip", "lang": "en", "text": True, "forced": True},
+]
+
+
+def prefs(db, user_id=1, **values):
+    import json
+
+    db.run("INSERT OR IGNORE INTO users(id, email, name, pw_hash) VALUES(?,?,?,?)", user_id, f"u{user_id}@test", "U", "x")
+    db.run("INSERT OR REPLACE INTO preferences(user_id, json) VALUES(?,?)", user_id, json.dumps(values))
+
+
+def attempts(status):
+    return [(a["name"].rsplit("-", 1)[1], a["state"]) for a in status["attempts"]]
+
+
+def test_trusted_releases_are_offered_first_and_the_filter_can_be_switched_off(tmp_path):
+    torrents, _, db = make(tmp_path, lambda *x: FILTER, FILTER_SWARMS)
+    first = torrents.options(1, SHOW, 1, 1)["qualities"][0]["release"]
+    assert (first["hash"], first["trusted"], first["subtitles"]) == ("n" * 40, True, None)
+    prefs(db, trusted_only=False, require_subtitles=False)
+    plain = torrents.options(1, SHOW, 1, 1)["qualities"][0]["release"]
+    assert (plain["hash"], plain["trusted"]) == ("g" * 40, None)
+
+
+def test_a_file_without_the_viewers_subtitles_is_skipped_for_the_next_trusted_one(tmp_path):
+    torrents, sidecar, _ = make(tmp_path, lambda *x: FILTER, FILTER_SWARMS, subtitles={"n" * 40: ARABIC_ONLY})
+    status = wait_done(torrents, torrents.open(1, SHOW, 1, 1, 1080, "web"))
+    assert status["state"] == "ready" and status["release"]["hash"] == "f" * 40
+    assert status["release"]["subtitles"] is True and status["warnings"] == []
+    assert status["fallback"]["kind"] == "subtitles" and "no English subtitles" in status["fallback"]["reason"]
+    assert attempts(status) == [("NTb", "no-subtitles"), ("FLUX", "won")]
+    assert "g" * 40 not in sidecar.added  # the untrusted release was never joined
+    # Remembered: next time the file known to lack them comes after the one known to have them.
+    again = torrents.options(1, SHOW, 1, 1)["qualities"][0]["release"]
+    assert (again["hash"], again["subtitles"]) == ("f" * 40, True)
+
+
+def test_the_subtitle_language_preference_decides_and_translation_counts(tmp_path):
+    torrents, _, db = make(tmp_path, lambda *x: FILTER, FILTER_SWARMS, subtitles={"n" * 40: ARABIC_ONLY})
+    prefs(db, subtitle_language="ar")
+    status = wait_done(torrents, torrents.open(1, SHOW, 1, 1, 1080, "web"))
+    assert status["release"]["hash"] == "n" * 40 and status["fallback"] is None
+    # Danish is wanted and only English is there, but the server translates English to Danish.
+    torrents2, _, db2 = make(tmp_path / "2", lambda *x: FILTER, FILTER_SWARMS, translate_to=["da"])
+    prefs(db2, subtitle_language="da")
+    status = wait_done(torrents2, torrents2.open(1, SHOW, 1, 1, 1080, "web"))
+    assert status["release"]["hash"] == "n" * 40 and status["warnings"] == []
+
+
+def test_when_no_trusted_file_has_the_subtitles_the_best_one_plays_with_a_warning(tmp_path):
+    none = {r["hash"]: [] for r in FILTER}
+    torrents, _, _ = make(tmp_path, lambda *x: FILTER, FILTER_SWARMS, subtitles=none)
+    status = wait_done(torrents, torrents.open(1, SHOW, 1, 1, 1080, "web"))
+    assert status["state"] == "ready" and status["release"]["hash"] == "n" * 40
+    assert attempts(status) == [("NTb", "no-subtitles"), ("FLUX", "no-subtitles"), ("NTb", "won")]
+    assert status["release"]["subtitles"] is False
+    assert status["warnings"] == [
+        "No English subtitles in this file. Subtitles found online may still cover it."
+    ]
+
+
+def test_an_untrusted_release_plays_and_says_so_and_a_picked_one_is_never_swapped(tmp_path):
+    torrents, _, _ = make(tmp_path, lambda *x: FILTER[:1], FILTER_SWARMS)
+    status = wait_done(torrents, torrents.open(1, SHOW, 1, 1, 1080, "web"))
+    assert status["release"]["hash"] == "g" * 40
+    assert status["warnings"] == [
+        "Not from a trusted release group (GRP): no trusted release of this quality is listed."
+    ]
+    torrents2, _, _ = make(tmp_path / "2", lambda *x: FILTER, FILTER_SWARMS, subtitles={"n" * 40: []})
+    status = wait_done(torrents2, torrents2.open(1, SHOW, 1, 1, 1080, "web", pinned="n" * 40))
+    assert status["release"]["hash"] == "n" * 40 and attempts(status) == [("NTb", "won")]
+    assert len(status["warnings"]) == 1 and "No English subtitles" in status["warnings"][0]

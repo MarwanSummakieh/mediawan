@@ -7,8 +7,13 @@ starts a *stream*: the sidecar (torrentd.py, inside the VPN container's network)
 release's swarm; if no file list arrives within a few seconds the next release is raced against
 it. Once a file is chosen FFprobe reads its head and tail through the sidecar, a film whose real
 length is far from the catalog's runtime is rejected for good (it is a different film with the
-same name) and the next release is tried. A ready stream plays exactly like a Usenet one: the
+same name) and the next release is tried. A ready stream plays like a library file: the
 sidecar's URL goes to media.Sessions, which copies the video into HLS.
+
+The streaming filter (two Playback preferences, both on by default) tries releases from trusted
+groups first, and a file whose own text subtitles lack the viewer's language is dropped for the
+next one, up to SUBTITLE_CHECKS files. Nothing is refused for these reasons: when no release
+passes, the best one plays and the status carries warnings.
 
 Everything the interface asks for is answered from memory; the slow steps run on threads and
 the interface polls the stream's status.
@@ -40,6 +45,19 @@ LABELS = {480: "SD", 720: "720p", 1080: "1080p", 2160: "4K"}
 # clearly better: resolution is not given up on thin evidence.
 SOUND_SCORE, CLEAR_MARGIN = 20, 10
 SINTEL_HASH = "08ada5a7a6183aae1e09d831df6748d566095a10"
+# At most this many files are opened only to look for subtitles before settling for the best
+# one without them; each costs a few seconds of start-up.
+SUBTITLE_CHECKS = 3
+# The languages of the Settings menus (LANGS in app.js), for messages.
+LANGUAGE_NAMES = {"en": "English", "ar": "Arabic", "da": "Danish", "pt": "Portuguese", "fr": "French",
+                  "de": "German", "es": "Spanish", "it": "Italian", "ja": "Japanese", "nl": "Dutch",
+                  "ko": "Korean", "zh": "Chinese"}  # fmt: skip
+
+
+def language_list(codes: list[str]) -> str:
+    """["ar", "en"] -> "Arabic or English"."""
+    names = [LANGUAGE_NAMES.get(c, c) for c in codes]
+    return names[0] if len(names) == 1 else f"{', '.join(names[:-1])} or {names[-1]}"
 
 
 class TorrentError(OnlineError):
@@ -136,8 +154,8 @@ class Sidecar:
 
 @dataclass
 class Attempt:
-    entry: dict  # a ranked entry: {"release", "score", "parts", "traits"}
-    state: str = "trying"  # trying | won | abandoned | failed
+    entry: dict  # a ranked entry: {"release", "score", "parts", "traits"[, "trusted", "subtitles"]}
+    state: str = "trying"  # trying | won | abandoned | failed | no-subtitles
     reason: str | None = None
     started: float = field(default_factory=time.time)
     status: dict = field(default_factory=dict)  # the sidecar's last word on this torrent
@@ -172,6 +190,11 @@ class Stream:
     touched: float = field(default_factory=time.time)
     failed_at: float = 0.0
     timings: dict = field(default_factory=dict)
+    # The viewer's streaming filter when the stream began, the subtitle languages that satisfy
+    # it, and whether the chosen file has them (None until it has been read).
+    filter: dict = field(default_factory=dict)
+    wanted: list = field(default_factory=list)
+    subtitles: bool | None = None
     lock: threading.Lock = field(default_factory=threading.Lock)
 
     @property
@@ -201,6 +224,9 @@ def summary(entry: dict | None, quality: int | None = None) -> dict | None:
         "group": t["group"],
         "service": t["service"],
         "season_pack": t["season_pack"],
+        # The streaming filter: None when it is off, or (subtitles) before the file was read.
+        "trusted": entry.get("trusted"),
+        "subtitles": entry.get("subtitles"),
         "tags": [x for x in tags if x],
         "score": entry["score"],
         "why": [f"{'+' if p > 0 else ''}{p} {reason}" for p, reason in entry["parts"]],
@@ -246,8 +272,14 @@ class Torrents:
         timings: Timings | None = None,
         probe=None,
         background: bool = True,
+        trusted_groups=rr.TRUSTED_GROUPS,
+        translate_to=(),
     ):
         self.db, self.ffprobe, self.ffmpeg = db, ffprobe, ffmpeg
+        self.trusted_groups = tuple(trusted_groups or ())
+        # Languages the server can machine-translate English subtitles into (translate.py):
+        # for those, an English track in the file is as good as one in the language itself.
+        self.translate_to = set(translate_to or ())
         self.sidecar = sidecar or Sidecar(sidecar_url, sidecar_key)
         self.torrentio = torrentio.rstrip("/")
         self.dev_sintel = dev_sintel.strip()
@@ -379,6 +411,100 @@ class Torrents:
             imdb_id, info_hash, reason, int(time.time()),
         )  # fmt: skip
 
+    # ---- the streaming filter ---------------------------------------------------------------
+
+    def viewer_filter(self, user_id: int) -> tuple[dict, list[str]]:
+        """({"trusted_only", "require_subtitles"}, wanted subtitle languages) from the viewer's
+        Playback preferences. Wanted: the subtitle language, else the audio language, else
+        English; plus English when the server can translate it into the wanted one."""
+        row = self.db.one("SELECT json FROM preferences WHERE user_id=?", user_id)
+        prefs = json.loads(row["json"]) if row else {}
+        rules = {
+            "trusted_only": prefs.get("trusted_only", True) is not False,
+            "require_subtitles": prefs.get("require_subtitles", True) is not False,
+        }
+        lang = prefs.get("subtitle_language") or prefs.get("audio_language") or "en"
+        wanted = [lang] + (["en"] if lang != "en" and lang in self.translate_to else [])
+        return rules, wanted
+
+    @staticmethod
+    def _file_key(release: dict) -> int:
+        index = release.get("file_index")
+        return index if isinstance(index, int) else -1
+
+    def known_subtitles(self, imdb_id: str) -> dict[tuple, list[str]]:
+        rows = self.db.all("SELECT hash, file_index, languages FROM torrent_subtitles WHERE imdb_id=?", imdb_id)
+        return {(r["hash"], r["file_index"]): json.loads(r["languages"]) for r in rows}
+
+    def remember_subtitles(self, imdb_id: str, release: dict, languages: list[str]):
+        self.db.run(
+            "INSERT OR REPLACE INTO torrent_subtitles(imdb_id, hash, file_index, languages, at) VALUES(?,?,?,?,?)",
+            imdb_id, release["hash"], self._file_key(release), json.dumps(languages), int(time.time()),
+        )  # fmt: skip
+
+    def filtered(self, ranked: list[dict], imdb_id: str, rules: dict, wanted: list[str]) -> list[dict]:
+        """With the filter on, releases are tried in four bands, each in score order: trusted;
+        trusted known to lack the subtitles; untrusted; untrusted known to lack them. Nothing
+        is removed, so a stream still starts (with warnings) when no release passes."""
+        if not rules["trusted_only"] and not rules["require_subtitles"]:
+            return ranked
+        known = self.known_subtitles(imdb_id)
+        marked = []
+        for entry in ranked:
+            release = entry["release"]
+            languages = known.get((release["hash"], self._file_key(release)))
+            marked.append(
+                {
+                    **entry,
+                    "trusted": bool(rr.trusted_group(release, self.trusted_groups)) if rules["trusted_only"] else None,
+                    "subtitles": None if languages is None else any(lang in wanted for lang in languages),
+                }
+            )
+
+        def band(entry: dict) -> int:
+            return (2 if rules["trusted_only"] and not entry["trusted"] else 0) + (
+                1 if rules["require_subtitles"] and entry["subtitles"] is False else 0
+            )
+
+        return sorted(marked, key=band)  # stable: score order within a band
+
+    def _subtitle_candidates(self, stream: Stream, current: dict, checked: list[dict]) -> list[dict]:
+        """Releases still worth opening for subtitles after `current` had none: not failed, not
+        a different film, not read already or known to lack them, and (with trusted releases
+        preferred) in the same trust band as `current`."""
+        failed = {a.hash for a in stream.attempts if a.state == "failed"}
+        wrong = self.rejected(stream.title["id"])
+        known = self.known_subtitles(stream.title["id"])
+        out = []
+        for entry in stream.ranked:
+            release = entry["release"]
+            if release["hash"] in failed or release["hash"] in wrong or any(entry is c for c in checked):
+                continue
+            if stream.filter.get("trusted_only") and bool(entry.get("trusted")) != bool(current.get("trusted")):
+                continue
+            languages = known.get((release["hash"], self._file_key(release)))
+            if languages is None or any(lang in stream.wanted for lang in languages):
+                out.append(entry)
+        return out[:4]
+
+    def warnings(self, stream: Stream, entry: dict | None) -> list[str]:
+        """What the streaming filter could not satisfy for the release being played."""
+        out = []
+        if not entry:
+            return out
+        if stream.filter.get("trusted_only") and not entry.get("trusted"):
+            group = f" ({entry['traits']['group']})" if entry["traits"].get("group") else ""
+            out.append(
+                f"Not from a trusted release group{group}: the trusted releases did not answer."
+                if any(e.get("trusted") for e in stream.ranked)
+                else f"Not from a trusted release group{group}: no trusted release of this quality is listed."
+            )
+        if stream.filter.get("require_subtitles") and stream.info and not stream.subtitles:
+            out.append(
+                f"No {language_list(stream.wanted)} subtitles in this file. Subtitles found online may still cover it."
+            )
+        return out
+
     # ---- ranking ----------------------------------------------------------------------------
 
     def rank(self, title: dict, season: int, episode: int, releases: list[dict]) -> dict[int, dict]:
@@ -438,17 +564,23 @@ class Torrents:
         lower = max(rr.LOWER_RESOLUTIONS, key=top)
         return lower if top(lower) >= top(1080) + CLEAR_MARGIN else 1080
 
-    def choices(self, title: dict, season: int, episode: int, refresh: bool = False) -> dict:
+    def choices(self, title: dict, season: int, episode: int, refresh: bool = False,
+                user_id: int | None = None) -> dict:  # fmt: skip
+        """Ranked releases per quality; for a viewer, in the order of their streaming filter."""
         found = self.listing(title, season, episode, refresh)
         qualities = self.rank(title, season, episode, found["releases"])
         standard = self.standard(qualities)
         offered = [standard, 2160]
         order = [2160, standard] if title["kind"] == "movie" else [standard, 2160]
         default = next((q for q in order if qualities[q]["ranked"]), order[0])
+        if user_id is not None:
+            rules, wanted = self.viewer_filter(user_id)
+            for option in qualities.values():
+                option["ranked"] = self.filtered(option["ranked"], title["id"], rules, wanted)
         return {"qualities": qualities, "offered": offered, "default": default, **found}
 
     def options(self, user_id: int, title: dict, season: int, episode: int, refresh: bool = False) -> dict:
-        found = self.choices(title, season, episode, refresh)
+        found = self.choices(title, season, episode, refresh, user_id)
         pairs = [(e["season"], e["episode"]) for e in title.get("episodes") or []]
         if (season, episode) in pairs and pairs.index((season, episode)) < len(pairs) - 1:
             self.prefetch(title, *pairs[pairs.index((season, episode)) + 1])  # Next Up starts warm
@@ -480,8 +612,8 @@ class Torrents:
             "listing_age": round(time.time() - found["at"]),
         }
 
-    def releases(self, title: dict, season: int, episode: int, quality: int) -> list[dict]:
-        found = self.choices(title, season, episode)
+    def releases(self, title: dict, season: int, episode: int, quality: int, user_id: int | None = None) -> list[dict]:
+        found = self.choices(title, season, episode, user_id=user_id)
         q = quality if quality in QUALITIES else found["default"]
         return [summary(e, q) for e in found["qualities"][q]["ranked"][:25]]
 
@@ -521,7 +653,7 @@ class Torrents:
              intent: str = "prepare", pinned: str | None = None) -> Stream:  # fmt: skip
         if not self.enabled:
             raise TorrentError("Torrent streaming is off (TORRENT_URL is not set)", 409, "off")
-        found = self.choices(title, season, episode)
+        found = self.choices(title, season, episode, user_id=user_id)
         q = quality if quality in QUALITIES else found["default"]
         option = found["qualities"][q]
         ranked = option["ranked"]
@@ -539,6 +671,7 @@ class Torrents:
                 self._make_room(user_id)
                 stream = Stream(secrets.token_hex(8), user_id, player, title, season, episode, q, intent, ranked, pinned)
                 stream.candidates = ranked[:4]
+                stream.filter, stream.wanted = self.viewer_filter(user_id)
                 stream.timings["created"] = time.time()
                 self.streams[stream.id] = stream
                 threading.Thread(target=self._run_safely, args=(stream,), name=f"stream-{stream.id}", daemon=True).start()
@@ -595,6 +728,11 @@ class Torrents:
 
     def _run(self, stream: Stream):
         wrong = None
+        # Files read and found to lack the viewer's subtitles, best first; once the search is
+        # over the first of them to answer is accepted without the check. A release the viewer
+        # picked by hand is never swapped for subtitles.
+        bare: list[dict] = []
+        settled = bool(stream.pinned)
         while not stream.closed:
             self._connect(stream)
             if stream.closed:
@@ -615,7 +753,27 @@ class Torrents:
                 if stream.kind == "movie" else None
             )  # fmt: skip
             if not mismatch:
-                break
+                current = stream.chosen.entry
+                languages = rr.subtitle_languages(info)
+                self.remember_subtitles(stream.title["id"], current["release"], languages)
+                stream.subtitles = any(lang in stream.wanted for lang in languages)
+                if stream.subtitles or not stream.filter.get("require_subtitles") or settled:
+                    break
+                # No subtitles in the viewer's language: look at the next files, then settle
+                # for the best one read.
+                bare.append(current)
+                after = self._subtitle_candidates(stream, current, bare) if len(bare) < SUBTITLE_CHECKS else []
+                if not after and bare[0] is current:
+                    break
+                stream.chosen.state = "no-subtitles"
+                stream.chosen.reason = f"No {language_list(stream.wanted)} subtitles in this file"
+                stream.chosen, stream.file, stream.fallback, stream.subtitles = None, None, None, None
+                self._release_unused(stream)
+                if after:
+                    stream.candidates = after
+                else:
+                    stream.candidates, settled = list(bare), True
+                continue
             # A different film with the same name: never offer it again, try the next release.
             bad = stream.chosen
             self.reject(stream.title["id"], bad.hash, mismatch)
@@ -625,7 +783,12 @@ class Torrents:
             self._release_unused(stream)
             known = self.rejected(stream.title["id"])
             failed = {a.hash for a in stream.attempts if a.state == "failed"}
-            stream.candidates = [e for e in stream.ranked if e["release"]["hash"] not in failed | set(known)][:4]
+            stream.candidates = [
+                e for e in stream.ranked
+                if e["release"]["hash"] not in failed | set(known) and not any(e is b for b in bare)
+            ][:4]  # fmt: skip
+            if not stream.candidates and bare:  # only files without subtitles are left
+                stream.candidates, settled = list(bare), True
             if not stream.candidates:
                 raise TorrentError(
                     f"Every {LABELS[stream.quality]} release listed for this title turned out to be a different "
@@ -637,6 +800,11 @@ class Torrents:
             stream.fallback = {"from": summary(wrong["entry"], stream.quality),
                                "to": summary(stream.chosen.entry, stream.quality),
                                "reason": f"The first choice was a different film with the same name. {wrong['reason']}"}  # fmt: skip
+        elif bare and stream.subtitles and stream.chosen:
+            stream.fallback = {"from": summary(bare[0], stream.quality),
+                               "to": summary(stream.chosen.entry, stream.quality),
+                               "kind": "subtitles",
+                               "reason": f"The first choice has no {language_list(stream.wanted)} subtitles."}  # fmt: skip
         if stream.closed:
             return
         self._warm_resume_point(stream, info)
@@ -650,7 +818,7 @@ class Torrents:
         """A viewer coming back to this resumes mid-file: fetch the data there now, so pressing
         Resume starts as warm as pressing Play."""
         row = self.db.one(
-            "SELECT position, completed FROM usenet_history WHERE user_id=? AND imdb_id=? AND season=? AND episode=?",
+            "SELECT position, completed FROM watch_history WHERE user_id=? AND imdb_id=? AND season=? AND episode=?",
             stream.user_id, stream.title["id"], stream.season, stream.episode,
         )  # fmt: skip
         duration, size = info.get("duration") or 0, (stream.file or {}).get("size") or 0
@@ -863,6 +1031,9 @@ class Torrents:
         entry = attempt.entry if attempt else stream.candidates[0] if stream.candidates else None
         since = lambda key: round(stream.timings[key] - stream.timings["created"], 2) if key in stream.timings else None
         size = (stream.file or {}).get("size")
+        release = summary(entry, stream.quality)
+        if release and stream.info:  # what this file was found to have
+            release["subtitles"] = stream.subtitles
         return {
             "id": stream.id,
             "kind": stream.kind,
@@ -875,9 +1046,10 @@ class Torrents:
             "state": state,
             "message": message,
             "error": stream.error,
-            "release": summary(entry, stream.quality),
+            "release": release,
             "pinned": stream.pinned,
             "fallback": stream.fallback,
+            "warnings": self.warnings(stream, entry),
             "attempts": [{"name": (a.entry["release"].get("label") or "").split("\n")[0], "state": a.state,
                           "reason": a.reason, "peers": a.status.get("peers", 0)} for a in stream.attempts],
             "peers": peers,
@@ -935,7 +1107,7 @@ class SubtitleJobs:
         self.folder.mkdir(parents=True, exist_ok=True)
         partial = target.with_suffix(".part")
         cmd = [self.ffmpeg, "-hide_banner", "-nostdin", "-v", "error", "-y", "-progress", "pipe:1", "-nostats",
-               "-i", url, "-map", f"0:{index}", "-c:s", "webvtt", "-f", "webvtt", str(partial)]  # fmt: skip
+               "-i", url, "-map", f"0:{index}", "-c:s", "webvtt", "-flush_packets", "1", "-f", "webvtt", str(partial)]  # fmt: skip
         try:
             process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL)
             for line in process.stdout:
@@ -953,6 +1125,18 @@ class SubtitleJobs:
             partial.unlink(missing_ok=True)
             job.update(status="failed", error=str(error))
         job["finished"] = time.time()
+
+    def so_far(self, job: dict) -> str:
+        """The lines read so far while a track is still being read, cut at the last whole one."""
+        if job.get("status") != "working":
+            return ""
+        try:
+            text = job["path"].with_suffix(".part").read_text("utf-8", errors="replace")
+        except OSError:
+            return ""
+        text = text.replace("\r\n", "\n")
+        cut = text.rfind("\n\n")
+        return text[: cut + 2] if cut > 0 and "-->" in text[:cut] else ""
 
     def wait(self, key: str, url: str, index: int, duration: float, limit: float = 1800) -> Path:
         deadline = time.time() + limit

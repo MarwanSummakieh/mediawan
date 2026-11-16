@@ -10,14 +10,17 @@ from contextlib import asynccontextmanager
 from functools import partial
 from pathlib import Path
 
+import httpx
 from fastapi import Body, Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.background import BackgroundTask
 from starlette.concurrency import run_in_threadpool
 
-from . import __version__, live_api, media, translate
+from . import __version__, live_api, media, subsource, translate
+from . import release_rules as rr
 from .auth import COOKIE, SESSION_DAYS, Accounts, admin_user, current_user, hash_password, public
+from .catalog import Catalog
 from .config import Config
 from .db import Database
 from .library import Library
@@ -25,7 +28,6 @@ from .metadata import Metadata
 from .online import CDN_HEADERS, Online, OnlineError
 from .scanner import Scanner
 from .torrent import LABELS, Timings, TorrentError, Torrents
-from .usenet import Usenet
 
 log = logging.getLogger("mediawan")
 STATIC = Path(__file__).parent / "static"
@@ -82,6 +84,7 @@ def create_app(
     http_client=None,
     online_clients: tuple | None = None,
     translate_client=None,
+    subtitles_client=None,
     live_clients: tuple | None = None,
     background: bool = True,
     torrents: Torrents | None = None,
@@ -121,18 +124,7 @@ def create_app(
             async_client=async_client,
             enabled=config.online_anime,
         )
-        state.usenet = Usenet(
-            state.db,
-            state.metadata,
-            state.online,
-            config.ffprobe,
-            config.newznab_indexers,
-            config.usenet_dav_url,
-            config.usenet_dav_api_key,
-            config.usenet_dav_user,
-            config.usenet_dav_password,
-            config.usenet_dav_category,
-        )
+        state.catalog = Catalog(state.db, state.metadata)
         state.torrents = torrents or Torrents(
             state.db,
             config.ffprobe,
@@ -144,12 +136,19 @@ def create_app(
             config.torrent_dev_sintel,
             timings=Timings(fallback=config.torrent_fallback_seconds),
             background=background,
+            trusted_groups=config.torrent_trusted_groups or rr.TRUSTED_GROUPS,
+            translate_to=config.subtitle_languages if config.translate_url else (),
         )
         state.translator = translate.Translator(
             config.translate_url,
             config.database.parent / "subtitles-translated",
             config.translate_api_key,
             client=translate_client,
+        )
+        state.online_subs = subsource.OnlineSubtitles(
+            config.database.parent / "subtitles-online",
+            client=subtitles_client,
+            enabled=config.metadata_online and config.subtitles_online,
         )
         provider_client, fixtures_client = live_clients or (None, None)  # (for tests)
         live_api.start(state, config, background, provider_client, fixtures_client)
@@ -318,11 +317,11 @@ def create_app(
                 rails.insert(
                     at, {"id": "online", "name": "Continue Watching · Anime", "items": anime}
                 )
-        watching = s.usenet.continue_watching(user["id"])
+        watching = s.catalog.continue_watching(user["id"])
         if watching:
             at = sum(1 for r in rails if r["id"] in ("continue", "next"))
             rails.insert(
-                at, {"id": "usenet", "name": "Continue Watching · Online", "items": watching}
+                at, {"id": "watch", "name": "Continue Watching · Online", "items": watching}
             )
         return {"rails": rails}
 
@@ -552,7 +551,15 @@ def create_app(
                 s,
                 _subtitle_list(s, file, info),
                 lambda src: {"file": file["id"], "key": src["key"], "lang": src["lang"]},
-            ),
+                online=(
+                    item["kind"],
+                    (s.db.one("SELECT imdb_id FROM titles WHERE id=?", item["title_id"]) or {}).get("imdb_id"),
+                    int(item.get("season") or 0),
+                    int(item.get("episode") or 0),
+                    Path(file["path"]).name,
+                    prefs["subtitle_language"] or None,
+                ),
+            ),  # fmt: skip
             "next": None,
         }
         following = s.library.next_item(item["id"])
@@ -618,26 +625,74 @@ def create_app(
 
     # ---- subtitles in every wanted language (translate.py) ------------------------------
 
-    def _offer_languages(s, subs: list[dict], describe, prepare: bool = True) -> list[dict]:
-        """Offer every SUBTITLE_LANGUAGES language: real tracks first, translations to fill
-        the gaps. describe(source) says where the source track comes from; it travels signed
-        inside the URL, so the endpoint can only translate tracks this server offered."""
+    def _offer_languages(
+        s,
+        subs: list[dict],
+        describe,
+        prepare: bool = True,
+        online: tuple | None = None,
+        online_always: bool = False,
+    ) -> list[dict]:
+        """Offer every SUBTITLE_LANGUAGES language: real tracks first, then subtitles found
+        online, then translations to fill the gaps. describe(source) says where the source
+        track comes from; it travels signed inside the URL, so the endpoint can only translate
+        tracks this server offered. online: (kind, imdb id, season, episode, release name,
+        extra language) of what is playing, to look up subtitles the release lacks, which
+        is the only way to get text when its own are picture-based. online_always: look them
+        up even for languages the release has, because reading a track out of a remote file
+        takes as long as downloading it, while an online one is there at once."""
         wanted = config.subtitle_languages
+        if online and online[1]:
+            kind, imdb_id, season, episode, release, extra = online
+            have = (
+                set()
+                if online_always
+                else {x.get("lang") for x in subs if x.get("available") and not x.get("forced")}
+            )
+            missing = [
+                lang
+                for lang in dict.fromkeys(["en", *wanted, *([extra] if extra else [])])
+                if lang not in have
+            ]
+            found = s.online_subs.find(kind, imdb_id, season, episode, release or "", missing)
+            extra_subs = subsource.entries(
+                found, lambda url: f"/api/subtitles/online/{s.online.sign(url)}.vtt"
+            )
+            if online_always:
+                # The standard for remote files: online ones come first, so they are what
+                # gets picked; the file's own text tracks stay as a slower choice.
+                got = {x["lang"] for x in extra_subs}
+                for sub in subs:
+                    if sub.get("available") and sub.get("lang") in got and not sub.get("forced"):
+                        sub["slow"] = True
+                subs = extra_subs + subs
+            else:
+                subs = subs + extra_subs
         if wanted:
 
             def link(source: dict, lang: str) -> str:
-                token = s.online.sign(json.dumps(describe(source), separators=(",", ":")))
+                if source.get("online"):
+                    desc = {"sub": source["_remote"], "lang": source["lang"]}
+                else:
+                    desc = describe(source)
+                token = s.online.sign(json.dumps(desc, separators=(",", ":")))
                 return f"/api/subtitles/translated/{token}/{lang}.vtt"
 
             subs, source = translate.with_languages(
                 subs, wanted, link, can_translate=s.translator.enabled
             )
             if prepare and source and s.translator.enabled:  # so picking one is instant
+                desc = (
+                    {"sub": source["_remote"], "lang": source["lang"]}
+                    if source.get("online")
+                    else describe(source)
+                )
                 for sub in subs:
                     if sub.get("translated") and sub["available"]:
-                        _translation(s, describe(source), sub["lang"], urgent=False)
+                        _translation(s, desc, sub["lang"], urgent=False)
         for sub in subs:
             sub.pop("_src", None)
+            sub.pop("_remote", None)
         return subs
 
     def _translation(s, desc: dict, target: str, urgent: bool = True) -> translate.Job:
@@ -650,13 +705,11 @@ def create_app(
             def load() -> str:
                 return _subtitle_path(s, file, desc["key"]).read_text("utf-8", errors="replace")
 
-        elif "dav" in desc:
-            remote = s.usenet.file(str(desc["dav"]))
-            source_id = f"dav:{remote['id']}:{desc['key']}"
+        elif "sub" in desc:
+            source_id = "sub:" + str(desc["sub"])
 
             def load() -> str:
-                path = s.subtitles.embedded(remote, int(desc["key"][1:]))
-                return path.read_text("utf-8", errors="replace")
+                return s.online_subs.fetch(str(desc["sub"])).read_text("utf-8", errors="replace")
 
         elif "torrent" in desc:
             source_id = f"torrent:{desc['torrent']}"
@@ -694,6 +747,21 @@ def create_app(
         if job.status == "failed":
             return JSONResponse(job.public(), 502)
         return JSONResponse(job.public(), 202, headers={"Cache-Control": "no-store"})
+
+    @app.get("/api/subtitles/online/{token}.vtt")
+    def online_subtitle(token: str, request: Request, user=Depends(current_user)):
+        """A subtitle found online, as WebVTT. The address is signed, so only ones this
+        server offered can be read through it."""
+        s = st(request)
+        try:
+            path = s.online_subs.fetch(s.online.unsign(token))
+        except (httpx.HTTPError, ValueError, OSError) as error:
+            raise HTTPException(502, f"Those subtitles could not be downloaded: {error}")
+        return FileResponse(
+            path,
+            media_type="text/vtt; charset=utf-8",
+            headers={"Cache-Control": "private, max-age=86400"},
+        )
 
     def _session_for(s, sid: str, user: dict) -> media.Session:
         session = s.sessions.get(sid)
@@ -913,17 +981,17 @@ def create_app(
             background=BackgroundTask(upstream.aclose),
         )
 
-    # ---- online movies and TV (Cinemeta + Usenet) --------------------------------------
+    # ---- online movies and TV: search and title pages (catalog.py) ----------------------
 
-    @app.get("/api/usenet/search")
-    def usenet_search(request: Request, q: str = "", user=Depends(current_user)):
-        return {"results": st(request).usenet.search(q)}
+    @app.get("/api/watch/search")
+    def watch_search(request: Request, q: str = "", user=Depends(current_user)):
+        return {"results": st(request).catalog.search(q)}
 
-    @app.get("/api/usenet/title/{kind}/{imdb_id}")
-    def usenet_title(kind: str, imdb_id: str, request: Request, user=Depends(current_user)):
-        usenet = st(request).usenet
-        found = dict(usenet.title(kind, imdb_id))
-        watched = usenet.watched(user["id"], imdb_id)
+    @app.get("/api/watch/title/{kind}/{imdb_id}")
+    def watch_title(kind: str, imdb_id: str, request: Request, user=Depends(current_user)):
+        catalog = st(request).catalog
+        found = dict(catalog.title(kind, imdb_id))
+        watched = catalog.watched(user["id"], imdb_id)
 
         def seen(season: int, episode: int) -> dict:
             row = watched.get((season, episode))
@@ -934,159 +1002,12 @@ def create_app(
             }
 
         found["episodes"] = [{**e, **seen(e["season"], e["episode"])} for e in found["episodes"]]
-        found["next"] = usenet.next_up(found, watched)
-        found["ready"] = usenet.ready
-        # Both online sources play from this page; the last one used (and its quality) is
-        # what Play uses again.
-        torrents = st(request).torrents
-        found["sources"] = {"usenet": usenet.ready, "torrent": torrents.enabled}
+        found["next"] = catalog.next_up(found, watched)
+        found["playable"] = st(request).torrents.enabled
+        # The quality last played is what Play uses again.
         last = max(watched.values(), key=lambda r: r["played_at"], default=None)
-        found["source"] = last["source"] if last else None
         found["quality"] = last["quality"] if last else 0
         return found
-
-    @app.get("/api/usenet/releases/{kind}/{imdb_id}")
-    def usenet_releases(
-        kind: str,
-        imdb_id: str,
-        request: Request,
-        season: int = 0,
-        episode: int = 0,
-        user=Depends(current_user),
-    ):
-        usenet = st(request).usenet
-        return {"releases": usenet.releases(usenet.title(kind, imdb_id), season, episode)}
-
-    @app.post("/api/usenet/play")
-    def usenet_play(request: Request, body: dict = Body(...), user=Depends(current_user)):
-        """Open a release on the sidecar and start a stream that copies it to the player."""
-        s = st(request)
-        usenet = s.usenet
-        title = usenet.title(str(body["kind"]), str(body["id"]))
-        season, episode = int(body.get("season") or 0), int(body.get("episode") or 0)
-        prefs = s.library.preferences(user["id"])
-        caps = media.Caps.parse(body.get("caps"))
-        caps.max_height = min(caps.max_height, int(prefs["max_height"]))
-        if prefs["stereo"]:
-            caps.channels = 2
-        row = usenet.watched(user["id"], title["id"]).get((season, episode))
-        # Resume in the version that was being watched (when it was a Usenet one).
-        last = row and row.get("source", "usenet") == "usenet" and row["release"]
-        try:
-            found = usenet.open(title, season, episode, body.get("release") or last, caps)
-        except OnlineError:
-            if body.get("release") or not last:
-                raise
-            found = usenet.open(title, season, episode, None, caps)
-        info = found["info"]
-        audio = body.get("audio")
-        the_plan = media.plan(
-            info,
-            caps,
-            "",
-            int(audio) if audio is not None else None,
-            prefs["audio_language"] or None,
-        )
-        if the_plan.mode == "direct":  # the file is on the sidecar, so it is always repackaged
-            the_plan = media.escalate(the_plan, info, caps, "remux")
-            the_plan.reasons = [f"{info['video'][0]['codec']} video is copied without re-encoding"]
-        if body.get("escalate"):
-            the_plan = media.escalate(the_plan, info, caps, body["escalate"])
-        start = body.get("start")
-        if start is None:
-            start = row["position"] if row and not row["completed"] else 0.0
-        start = max(0.0, min(float(start), max(0.0, info["duration"] - 5)))
-        session = s.sessions.start(
-            user_id=user["id"],
-            client=str(body.get("client", "web")),
-            file=usenet.file(found["url"]),
-            item_id=0,
-            info=info,
-            the_plan=the_plan,
-            caps=caps,
-            start=start,
-        )
-        pairs = [(e["season"], e["episode"]) for e in title["episodes"]]
-        at = pairs.index((season, episode)) if (season, episode) in pairs else -1
-        following = pairs[at + 1] if 0 <= at < len(pairs) - 1 else (0, 0)
-        token = s.online.sign(found["url"])
-        return {
-            "mode": the_plan.mode,
-            "usenet": {
-                "kind": title["kind"],
-                "id": title["id"],
-                "season": season,
-                "episode": episode,
-                "name": title["name"],
-                "poster": title["poster"],
-                "background": title["background"],
-                "release": found["id"],
-                "next_season": following[0],
-                "next_episode": following[1],
-            },
-            "item": {
-                "id": None,
-                "title_name": title["name"],
-                "label": f"S{season} · E{episode}" if title["kind"] == "show" else "",
-                "name": title["episodes"][at]["name"] if at >= 0 else "",
-            },
-            "url": f"/api/stream/{session.id}/index.m3u8",
-            "session": session.id,
-            "hwaccel": session.public()["hwaccel"],
-            "start": session.start,
-            "position": start,
-            "duration": info["duration"],
-            "reasons": [f"Streamed from Usenet: {found['name']}", *the_plan.reasons],
-            "audio_index": the_plan.audio_index,
-            "audio": [
-                {k: a[k] for k in ("index", "codec", "lang", "title", "channels")}
-                for a in info["audio"]
-            ],
-            # Reading a subtitle track out of a remote file reads the whole file, so
-            # translations start when one is picked, not on every play.
-            "subtitles": _offer_languages(
-                s,
-                [
-                    {
-                        "key": f"s{sub['index']}",
-                        "lang": sub["lang"],
-                        "title": sub["title"],
-                        "forced": sub["forced"],
-                        "default": sub["default"],
-                        "codec": sub["codec"],
-                        "available": sub["text"],
-                        "external": False,
-                        "url": f"/api/usenet/subtitles/{token}/s{sub['index']}.vtt",
-                    }
-                    for sub in info["subtitles"]
-                ],
-                lambda src: {"dav": found["url"], "key": src["key"], "lang": src["lang"]},
-                prepare=False,
-            ),
-            "preferences": prefs,
-            "next": {"season": following[0], "episode": following[1]} if following[1] else None,
-        }
-
-    @app.post("/api/usenet/progress")
-    def usenet_progress(request: Request, body: dict = Body(...), user=Depends(current_user)):
-        s = st(request)
-        if body.get("session"):
-            s.sessions.get(str(body["session"]))  # keeps the stream alive while paused
-        return s.usenet.progress(user["id"], body)
-
-    @app.get("/api/usenet/subtitles/{token}/s{index}.vtt")
-    async def usenet_subtitle(token: str, index: int, request: Request, user=Depends(current_user)):
-        s = st(request)
-        remote = s.usenet.file(s.online.unsign(token))
-        try:
-            path = await run_in_threadpool(s.subtitles.embedded, remote, index)
-        except RuntimeError as error:
-            raise HTTPException(422, f"Could not convert subtitles: {media.no_logins(str(error))}")
-        return FileResponse(
-            path,
-            media_type="text/vtt; charset=utf-8",
-            headers={"Cache-Control": "private, max-age=3600"},
-        )
 
     # ---- online movies and TV over BitTorrent (torrent.py + the torrentd sidecar) -------
 
@@ -1107,7 +1028,7 @@ def create_app(
         s = st(request)
         if not s.torrents.enabled:
             return {"enabled": False, "engine": s.torrents.engine(), "qualities": [], "default": None}
-        title = s.usenet.title(kind, imdb_id)
+        title = s.catalog.title(kind, imdb_id)
         return s.torrents.options(user["id"], title, season, episode, refresh)
 
     @app.get("/api/torrent/releases/{kind}/{imdb_id}")
@@ -1121,16 +1042,17 @@ def create_app(
         user=Depends(current_user),
     ):
         s = st(request)
-        title = s.usenet.title(kind, imdb_id)
-        return {"releases": s.torrents.releases(title, season, episode, quality)}
+        title = s.catalog.title(kind, imdb_id)
+        return {"releases": s.torrents.releases(title, season, episode, quality, user["id"])}
 
     @app.post("/api/torrent/prepare")
     def torrent_prepare(request: Request, body: dict = Body(...), user=Depends(current_user)):
         """Join the swarm of what Play would start, so play starts warm. Also how the player
         starts a stream: it then polls the status until it is ready and calls /play."""
         s = st(request)
-        title = s.usenet.title(str(body["kind"]), str(body["id"]))
+        title = s.catalog.title(str(body["kind"]), str(body["id"]))
         season, episode = _episode(body)
+        s.online_subs.warm(title["kind"], title["id"], season, episode)
         quality = int(body.get("quality") or 0) or None
         stream = s.torrents.open(
             user["id"],
@@ -1157,7 +1079,7 @@ def create_app(
     @app.post("/api/torrent/play")
     def torrent_play(request: Request, body: dict = Body(...), user=Depends(current_user)):
         """Play a ready stream: the sidecar's file goes through the same copy-first HLS path as
-        a Usenet release."""
+        a library file."""
         s = st(request)
         torrents = s.torrents
         stream = torrents.get(user["id"], str(body["stream"]))
@@ -1186,7 +1108,7 @@ def create_app(
             the_plan = media.escalate(the_plan, info, caps, body["escalate"])
         start = body.get("start")
         if start is None:
-            row = s.usenet.watched(user["id"], title["id"]).get((season, episode))
+            row = s.catalog.watched(user["id"], title["id"]).get((season, episode))
             start = row["position"] if row and not row["completed"] else 0.0
         start = max(0.0, min(float(start), max(0.0, info["duration"] - 5)))
         file = torrents.remote_file(stream)
@@ -1225,7 +1147,6 @@ def create_app(
                 "stream": stream.id,
                 "next_season": following[0],
                 "next_episode": following[1],
-                "source": "torrent",
             },
             "status": status,
             "item": {
@@ -1272,7 +1193,12 @@ def create_app(
                     "d": info["duration"],
                 },
                 prepare=False,
-            ),
+                online=(
+                    title["kind"], title["id"], season, episode, release.get("name", ""),
+                    prefs["subtitle_language"] or None,
+                ),
+                online_always=True,
+            ),  # fmt: skip
             "preferences": prefs,
             "next": {"season": following[0], "episode": following[1]} if following[1] else None,
         }
@@ -1287,7 +1213,7 @@ def create_app(
                 s.torrents.get(user["id"], str(body["stream"]))  # and the torrent
             except TorrentError:
                 pass
-        return s.usenet.progress(user["id"], {**body, "source": "torrent"})
+        return s.catalog.progress(user["id"], body)
 
     @app.get("/api/torrent/subtitles/{stream_id}/s{index}.vtt")
     def torrent_subtitle(stream_id: str, index: int, request: Request, user=Depends(current_user)):
@@ -1310,6 +1236,13 @@ def create_app(
             return JSONResponse({"status": "failed", "detail": media.no_logins(job["error"])}, 502)
         total = job["total"] or 0
         pct = round(100 * job["done"] / total) if total else 0
+        so_far = torrents.subtitles.so_far(job)
+        if so_far:  # what has been read covers what is playing; the player asks again for more
+            return Response(
+                so_far,
+                media_type="text/vtt; charset=utf-8",
+                headers={"Cache-Control": "no-store", "X-Subtitles-Partial": str(pct)},
+            )
         return JSONResponse(
             {"status": "working", "done": round(job["done"]), "total": round(total),
              "message": f"Reading subtitles from the torrent… {pct}%"},

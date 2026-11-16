@@ -16,16 +16,12 @@ services:
       MAX_TRANSCODES: ${MAX_TRANSCODES:-2}
       SCAN_INTERVAL_SECONDS: ${SCAN_INTERVAL_SECONDS:-21600}
       METADATA_ONLINE: ${METADATA_ONLINE:-true}
-      NEWZNAB_INDEXERS: ${NEWZNAB_INDEXERS:-}
-      USENET_DAV_URL: ${USENET_DAV_URL:-}
-      USENET_DAV_API_KEY: ${USENET_DAV_API_KEY:-}
-      USENET_DAV_USER: ${USENET_DAV_USER:-}
-      USENET_DAV_PASSWORD: ${USENET_DAV_PASSWORD:-}
-      USENET_DAV_CATEGORY: ${USENET_DAV_CATEGORY:-movies}
       # Torrent streaming: the torrent service below, reached through the vpn container
       # (set TORRENT_URL=http://vpn:8792 to turn it on). Empty = off.
       TORRENT_URL: ${TORRENT_URL:-}
       TORRENT_KEY: ${TORRENT_KEY:-}
+      # Release groups the streaming filter trusts, comma-separated; empty = the built-in list.
+      TORRENT_TRUSTED_GROUPS: ${TORRENT_TRUSTED_GROUPS:-}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
       FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-127.0.0.1}
       # Offered on every title; missing ones are translated by the libretranslate service.

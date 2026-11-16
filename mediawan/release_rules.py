@@ -435,6 +435,54 @@ def rank(
     return scored
 
 
+# ---- the streaming filter: trusted groups, confirmed subtitles --------------------------------
+
+# Release groups whose releases are taken as trustworthy: untouched service WEB-DLs, careful
+# Blu-ray encodes and the main anime groups. TORRENT_TRUSTED_GROUPS replaces the list. Names
+# are compared without case or punctuation, so "Erai-raws" matches ERAIRAWS.
+TRUSTED_GROUPS = (
+    # WEB-DL
+    "NTb", "FLUX", "CMRG", "playWEB", "KiNGS", "SMURF", "EDITH", "APEX", "SiGMA", "TEPES",
+    "HONE", "GNOME", "MZABI", "CAKES", "GLHF", "ETHEL", "BYNDR", "XEBEC", "NOSiViD", "DEFLATE",
+    # Blu-ray
+    "FraMeSToR", "CtrlHD", "DON", "EbP", "HiFi", "ZQ", "W4NK3R", "BHDStudio", "decibeL", "TayTO",
+    "CRiSC",
+    # Anime
+    "SubsPlease", "Erai-raws", "VARYG", "ToonsHub",
+)  # fmt: skip
+_LEADING_GROUP = re.compile(r"^\[([^\]]{2,30})\]")
+
+
+def _group_key(name: str) -> str:
+    return re.sub(r"[^A-Z0-9]", "", (name or "").upper())
+
+
+def trusted_group(release: dict, groups=TRUSTED_GROUPS) -> str | None:
+    """The trusted group a release comes from: the "-GROUP" at the end of a scene-style name, or
+    the "[Group]" at the start of an anime release. Torrentio reports no uploader trust, so the
+    group is the only signal there is."""
+    wanted = {_group_key(g) for g in groups or ()} - {""}
+    if not wanted:
+        return None
+    names = [release.get("filename") or "", (release.get("label") or "").split("\n")[0]]
+    for name in (n.strip() for n in names if n and n.strip()):
+        for hit in (_GROUP.search(name), _LEADING_GROUP.search(name)):
+            if hit and _group_key(hit.group(1)) in wanted:
+                return hit.group(1)
+    return None
+
+
+def subtitle_languages(info: dict) -> list[str]:
+    """Languages of the full text-subtitle tracks of a probed file. Forced tracks only cover
+    foreign dialogue and picture tracks (PGS, VobSub) cannot be shown, so neither counts."""
+    found = []
+    for track in info.get("subtitles") or []:
+        lang = track.get("lang")
+        if track.get("text") and not track.get("forced") and lang and lang not in found:
+            found.append(lang)
+    return found
+
+
 def lock_from(entry: dict | None) -> dict | None:
     if not entry:
         return None

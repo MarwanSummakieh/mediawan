@@ -27,14 +27,6 @@ class Config:
     metadata_online: bool = True
     # Search and stream anime from AniList + MegaPlay (see online.py)
     online_anime: bool = True
-    # Online movies and TV from Usenet (see usenet.py): Newznab indexers as (url, api key),
-    # and the streaming sidecar's address, SABnzbd API key and WebDAV login.
-    newznab_indexers: list[tuple[str, str]] = field(default_factory=list)
-    usenet_dav_url: str = ""
-    usenet_dav_api_key: str = ""
-    usenet_dav_user: str = ""
-    usenet_dav_password: str = ""
-    usenet_dav_category: str = "movies"
     # Online movies and TV over BitTorrent (see torrent.py): the torrent sidecar's address
     # (torrentd.py, inside the VPN container's network; empty = off) and the key both share,
     # and where releases are listed.
@@ -44,9 +36,13 @@ class Config:
     torrent_fallback_seconds: float = 6
     # DEVELOPMENT ONLY: an IMDb id whose releases are replaced by the free film Sintel.
     torrent_dev_sintel: str = ""
+    # Release groups the streaming filter trusts; empty = release_rules.TRUSTED_GROUPS.
+    torrent_trusted_groups: list[str] = field(default_factory=list)
     # Subtitle languages offered on every title; missing ones are machine-translated by the
     # LibreTranslate server at translate_url (see translate.py). Empty url = no translation.
     subtitle_languages: list[str] = field(default_factory=lambda: ["ar", "da", "pt"])
+    # Look up text subtitles online for releases that lack them (see subsource.py).
+    subtitles_online: bool = True
     translate_url: str = ""
     translate_api_key: str = ""
     # Live sports from an IPTV provider (see live.py, sports.py). The folder holds the channel
@@ -74,26 +70,20 @@ class Config:
             catalog_url=env.get("CINEMETA_BASE", "https://v3-cinemeta.strem.io"),
             metadata_online=env.get("METADATA_ONLINE", "true") != "false",
             online_anime=env.get("ONLINE_ANIME", "true") != "false",
-            newznab_indexers=[
-                tuple(part.strip() for part in entry.split("|", 1))
-                for entry in env.get("NEWZNAB_INDEXERS", "").split(",")
-                if "|" in entry
-            ],
-            usenet_dav_url=env.get("USENET_DAV_URL", ""),
-            usenet_dav_api_key=env.get("USENET_DAV_API_KEY", ""),
-            usenet_dav_user=env.get("USENET_DAV_USER", ""),
-            usenet_dav_password=env.get("USENET_DAV_PASSWORD", ""),
-            usenet_dav_category=env.get("USENET_DAV_CATEGORY", "movies"),
             torrent_url=env.get("TORRENT_URL", "").strip(),
             torrent_key=env.get("TORRENT_KEY", ""),
             torrentio_url=env.get("TORRENTIO_URL", "https://torrentio.strem.fun"),
             torrent_fallback_seconds=min(60.0, max(2.0, float(env.get("TORRENT_FALLBACK_SECONDS", "6")))),
             torrent_dev_sintel=env.get("TORRENT_DEV_SINTEL", "").strip(),
+            torrent_trusted_groups=[
+                g.strip() for g in env.get("TORRENT_TRUSTED_GROUPS", "").split(",") if g.strip()
+            ],
             subtitle_languages=[
                 code.strip().lower()
                 for code in env.get("SUBTITLE_LANGUAGES", "ar,da,pt").split(",")
                 if code.strip()
             ],
+            subtitles_online=env.get("SUBTITLES_ONLINE", "true") != "false",
             translate_url=env.get("TRANSLATE_URL", ""),
             translate_api_key=env.get("TRANSLATE_API_KEY", ""),
             live_tv=env.get("LIVE_TV", "true") != "false",

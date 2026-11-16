@@ -21,6 +21,10 @@ DEFAULT_PREFERENCES = {
     "autoplay_next": True,
     "max_height": 2160,
     "stereo": False,  # downmix surround to stereo when audio must be converted
+    # The streaming filter (torrent.py): try releases from trusted groups first, and skip files
+    # whose own subtitles lack the subtitle language. When nothing passes, the best still plays.
+    "trusted_only": True,
+    "require_subtitles": True,
 }
 
 # Subtitle look: the allowed values of each style preference (mirrored by SUB_STYLE in app.js).

@@ -85,7 +85,7 @@ MIGRATIONS = [
       PRIMARY KEY(user_id, anilist_id, episode));
     CREATE INDEX online_recent ON online_history(user_id, played_at DESC);
     """,
-    # 3: progress in online movies and TV (usenet.py), by IMDb id. A film is season 0,
+    # 3: progress in online movies and TV, by IMDb id (renamed watch_history in 6). A film is season 0,
     # episode 0. release is the version that was played, so resuming opens the same one;
     # next_* is the episode after this one (0 = none), so the home rail needs no lookup.
     """
@@ -105,8 +105,8 @@ MIGRATIONS = [
     """
     ALTER TABLE titles ADD COLUMN extra TEXT NOT NULL DEFAULT '{}';
     """,
-    # 5: torrent streaming (torrent.py). Online history is shared by both sources, so each row
-    # says which one played it and at what quality, and resuming reopens the same. Season
+    # 5: torrent streaming (torrent.py). Each history row says at what quality it played, so
+    # resuming reopens the same. Season
     # locks keep a season on one release group or pack; rejects are releases that turned out
     # to be a different film with the same name, never offered again for that title.
     """
@@ -119,6 +119,37 @@ MIGRATIONS = [
     CREATE TABLE torrent_rejects(
       imdb_id TEXT NOT NULL, hash TEXT NOT NULL, reason TEXT NOT NULL, at INTEGER NOT NULL,
       PRIMARY KEY(imdb_id, hash));
+    """,
+    # 6: torrents are the only online source. The history table takes the name of what it
+    # holds; rows played from the old source keep their place and lose the release they
+    # pointed at.
+    """
+    CREATE TABLE watch_history(
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      imdb_id TEXT NOT NULL, season INTEGER NOT NULL DEFAULT 0,
+      episode INTEGER NOT NULL DEFAULT 0, kind TEXT NOT NULL DEFAULT 'movie',
+      name TEXT NOT NULL DEFAULT '', poster TEXT, background TEXT, release TEXT,
+      next_season INTEGER NOT NULL DEFAULT 0, next_episode INTEGER NOT NULL DEFAULT 0,
+      position REAL NOT NULL DEFAULT 0, duration REAL NOT NULL DEFAULT 0,
+      completed INTEGER NOT NULL DEFAULT 0, played_at INTEGER NOT NULL,
+      source TEXT NOT NULL DEFAULT 'torrent', quality INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY(user_id, imdb_id, season, episode));
+    INSERT INTO watch_history(user_id, imdb_id, season, episode, kind, name, poster, background,
+      release, next_season, next_episode, position, duration, completed, played_at, source, quality)
+      SELECT user_id, imdb_id, season, episode, kind, name, poster, background,
+        CASE WHEN source='torrent' THEN release END, next_season, next_episode, position,
+        duration, completed, played_at, 'torrent', quality FROM usenet_history;
+    DROP TABLE usenet_history;
+    CREATE INDEX watch_recent ON watch_history(user_id, played_at DESC);
+    """,
+    # 7: the text-subtitle languages found in each torrent file read for streaming (a season
+    # pack holds many files under one hash; file_index -1 = the largest video), so a file known
+    # to lack the viewer's subtitles is tried last without opening it again.
+    """
+    CREATE TABLE torrent_subtitles(
+      imdb_id TEXT NOT NULL, hash TEXT NOT NULL, file_index INTEGER NOT NULL,
+      languages TEXT NOT NULL, at INTEGER NOT NULL,
+      PRIMARY KEY(imdb_id, hash, file_index));
     """,
 ]
 

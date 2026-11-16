@@ -265,3 +265,25 @@ def test_runtime_end_year_and_wrong_film():
     assert rr.wrong_film(7200, 7000) is None
     assert "runs 40 min" in rr.wrong_film(2400, 7200)
     assert rr.wrong_film(900, 900) is None  # too short to judge (Sintel runs 15 min)
+
+
+def test_trusted_releases_are_recognised_by_their_group_at_the_end_or_in_brackets():
+    named = lambda name: {"label": f"{name}\n👤 50", "filename": f"{name}.mkv"}
+    assert rr.trusted_group(named("Show.S01E01.1080p.NF.WEB-DL.DDP5.1.H.264-NTb")) == "NTb"
+    assert rr.trusted_group(named("Show.S01E01.1080p.WEB-DL.H.264-ntb")) == "ntb"
+    assert rr.trusted_group(named("[Erai-raws] Show - 01 [1080p][Multiple Subtitle]")) == "Erai-raws"
+    assert rr.trusted_group(named("[SubsPlease] Show - 01 (1080p) [ABCD1234]")) == "SubsPlease"
+    assert rr.trusted_group(named("Show.S01E01.1080p.WEB-DL.H.264-GRP")) is None
+    assert rr.trusted_group(named("Show S01E01 1080p WEB-DL")) is None
+    assert rr.trusted_group(named("Show.S01E01.1080p.WEB-DL.H.264-NTb"), ()) is None
+
+
+def test_only_full_text_subtitle_tracks_with_a_language_count():
+    info = {"subtitles": [
+        {"lang": "ar", "text": True, "forced": False},
+        {"lang": "en", "text": False, "forced": False},  # PGS
+        {"lang": "en", "text": True, "forced": True},  # forced: foreign dialogue only
+        {"lang": None, "text": True, "forced": False},  # untagged
+        {"lang": "ar", "text": True, "forced": False},
+    ]}  # fmt: skip
+    assert rr.subtitle_languages(info) == ["ar"]

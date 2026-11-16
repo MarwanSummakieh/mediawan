@@ -42,13 +42,17 @@ kept on the `backup/v2-before-rebuild` branch.
   Proxied links are signed, so the server cannot be used to fetch anything else.
 - **Online films and series over BitTorrent**, through the VPN. Title pages from search offer
   one Play with the quality beside it (1080p and 4K; 720p or SD instead of 1080p for older
-  series that have nothing sound at 1080p), and Usenet as the other source when it is set up.
+  series that have nothing sound at 1080p).
   Releases come from Torrentio by IMDb id and are checked and ranked (`release_rules.py`):
   untouched service WEB-DLs first, a season kept on one group or pack, re-encodes, dubs,
   other-language releases, upscales, Dolby-Vision-only and sign-language versions last; films
   may also come from Blu-ray, series only when no WEB-DL of that episode exists. A release
   labelled with a year outside the title's own is never offered, and a film file whose real
   length is far from the catalog runtime is rejected for good and the next release played.
+  A streaming filter (Settings > Streaming, on by default) tries releases from trusted groups
+  first (`TORRENT_TRUSTED_GROUPS`, or the list in `release_rules.py`) and reads each file's
+  subtitle tracks before playing, moving on when the viewer's subtitle language is missing;
+  when nothing passes, the best release still plays with a warning.
   Opening a title page prepares the stream, so play usually starts at once; while it connects
   the player says what is happening (finding sources, connecting to N peers, buffering N%),
   a slow release is raced against the next one, and every failure is a screen with a next

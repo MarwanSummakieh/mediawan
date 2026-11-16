@@ -40,5 +40,5 @@ node_modules/
 /design-review/
 
 # NAS-specific helpers and notes: they name the machine and the account
-/*-nas.cmd
+/*-nas.*
 /crontab.before-*.txt
