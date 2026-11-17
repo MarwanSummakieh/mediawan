@@ -282,3 +282,12 @@ def test_online_can_be_turned_off(tmp_path):
             "results": [],
         }
         assert client.get("/api/online/anime/1").status_code == 409
+
+def test_a_cinemeta_title_that_is_anime_maps_to_its_anilist_entry(source):
+    # English or romaji name, a year within one, and a series format: Frieren (TV, 2023).
+    assert source.match("Frieren", 2023, "show") == 154587
+    assert source.match("Sousou no Frieren", 2024, "show") == 154587
+    # A film of the same name, another year (a live-action remake), or another name: not anime.
+    assert source.match("Frieren", 2023, "movie") is None
+    assert source.match("Frieren", 2031, "show") is None
+    assert source.match("Frieren Live", 2023, "show") is None

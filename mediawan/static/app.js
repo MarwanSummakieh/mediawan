@@ -1382,6 +1382,8 @@
           '<div class="sk" style="width:60%;height:2.6rem"></div><div class="sk sk-line" style="width:40%;margin:16px 0"></div>' + skActions() + "</div></div></div>");
       },
       render: function (t) {
+        // Anime plays through the anime flow (AniList + MegaPlay), not torrents.
+        if (t.anime_id) return void location.replace("#/anime/" + t.anime_id + (query.play && query.play.split(".")[0] === "1" ? "?play=" + query.play.split(".")[1] : ""));
         var play = renderWatch(t, path, view);
         if (query.play && !played && play) { // from a Continue Watching card
           played = true;
@@ -1414,7 +1416,8 @@
     if (show && t.episodes.length) {
       body += '<div class="section-h"><h2>Episodes</h2></div><div class="season-bar"><div class="tabs" id="seasons" data-row>' + seasons.map(function (s) {
         return '<button data-season="' + s + '" aria-pressed="' + (s === state.season) + '">Season ' + s + "</button>";
-      }).join("") + '</div></div><div class="episodes" id="episodes"></div>';
+      }).join("") + "</div>" + (t.can_download ? '<button id="dl-season">' + icon("download") + '<span>Download season ' + state.season + "</span></button>" : "") +
+        '</div><div class="episodes" id="episodes"></div>';
     }
     var cast = t.cast || [], director = t.director || [], writer = t.writer || [];
     body += peopleRow("Cast &amp; crew", cast.map(function (n) { return { name: n }; })
@@ -1499,9 +1502,20 @@
         b.onclick = function () {
           state.season = +b.getAttribute("data-season");
           $$("#seasons button").forEach(function (x) { x.setAttribute("aria-pressed", String(x === b)); });
+          if ($("#dl-season")) $("#dl-season span").textContent = "Download season " + state.season;
           episodes();
         };
       });
+      // A whole season into the library, chosen like streaming (the older-series rules included).
+      if ($("#dl-season")) $("#dl-season").onclick = function () {
+        var b = this, season = state.season;
+        b.disabled = true;
+        api("/api/downloads/season", { method: "POST", body: { kind: "show", id: t.id, season: season } }).then(function (r) {
+          toast(r.queued ? "Season " + season + ": " + plural(r.queued, "episode") + " queued at " + r.label +
+            (r.skipped ? " (" + r.skipped + " already there or queued)" : "") + ". Progress is under Admin > Downloads."
+            : "Season " + season + " is already in the library or queued.");
+        }).catch(fail).then(function () { b.disabled = false; });
+      };
       $("#seasons").setAttribute("data-last", String(seasons.indexOf(state.season)));
     }
     if ($("#play")) $("#play").onclick = function () { play(next.season, next.episode); };
@@ -1812,7 +1826,7 @@
   function signOut() { api("/api/logout", { method: "POST" }).then(function () { ME = null; CACHE = {}; showLogin(); }); }
 
   // ---- admin: dashboard, library, people, live TV --------------------------------------------
-  var ADMIN_TABS = [["", "Dashboard", "pulse"], ["library", "Library", "folder"], ["users", "People", "users"], ["live", "Live TV", "live"]];
+  var ADMIN_TABS = [["", "Dashboard", "pulse"], ["library", "Library", "folder"], ["users", "People", "users"], ["downloads", "Downloads", "download"], ["live", "Live TV", "live"]];
   function adminHead(tab, extra) {
     return '<div class="page-head"><h1>Admin</h1>' + (extra || "") + '</div><nav class="subnav" data-row>' + ADMIN_TABS.map(function (t) {
       return '<a href="#/admin' + (t[0] ? "/" + t[0] : "") + '" class="' + (t[0] === tab ? "on" : "") + '"' + (t[0] === tab ? " data-autofocus" : "") + ">" + icon(t[2]) + t[1] + "</a>";
@@ -1823,6 +1837,7 @@
     if (ME.role !== "admin") return paint(view, stateHtml("shield", "Administrators only", "Ask an administrator if you need something changed."));
     if (tab === "library") return adminLibrary(view);
     if (tab === "users") return adminUsers(view);
+    if (tab === "downloads") return adminDownloads(view);
     if (tab === "live") {
       paint(view, adminHead("live") + '<div id="admin-live" class="box"><h2>Live TV</h2><div class="sk sk-line" style="width:50%"></div><div class="sk sk-line" style="width:30%"></div></div>');
       adminLive($("#admin-live"));
@@ -1941,6 +1956,48 @@
         };
       },
     });
+  }
+
+  // Season downloads of TV shows (downloads.py): every episode with its progress, refreshed while open.
+  var DL_STATES = { queued: "Queued", finding: "Choosing a release", downloading: "Downloading", copying: "Saving to the library",
+    done: "In the library", failed: "Failed", cancelled: "Cancelled" };
+  function downloadRow(j) {
+    var ep = "S" + (j.season < 10 ? "0" : "") + j.season + "E" + (j.episode < 10 ? "0" : "") + j.episode;
+    var pct = j.state === "downloading" && j.size ? Math.floor(100 * (j.downloaded || 0) / j.size)
+      : j.state === "copying" && j.size ? Math.floor(100 * (j.copied || 0) / j.size) : null;
+    var detail = j.state === "downloading" ? [pct + "%", j.size ? size(j.size) : "", j.rate ? rate(j.rate) : "", j.peers ? plural(j.peers, "peer") : ""]
+      : j.state === "copying" ? [pct + "%"] : j.state === "finding" ? [j.message || ""] : j.state === "failed" ? [j.error || ""] : [];
+    var rel = j.release ? [j.label, j.release.group || "", j.release.trusted ? "Trusted" : "", j.release.subtitles === true ? "Subtitles" : j.release.subtitles === false ? "No subtitles" : ""] : [j.label];
+    var buttons = (j.state === "failed" || j.state === "cancelled" ? '<button class="small" data-dl-retry="' + j.id + '">' + icon("refresh") + "Retry</button> " : "") +
+      '<button class="small" data-dl-cancel="' + j.id + '">' + (/^(queued|finding|downloading|copying)$/.test(j.state) ? "Cancel" : "Remove") + "</button>";
+    return "<tr><td><b>" + esc(j.show_name) + "</b> " + ep + (j.episode_name ? '<div class="muted small">' + esc(j.episode_name) + "</div>" : "") +
+      '</td><td><span class="pill ' + j.state + '">' + esc(DL_STATES[j.state] || j.state) + "</span>" +
+      (pct !== null ? '<div class="dl-bar"><span style="width:' + pct + '%"></span></div>' : "") +
+      '<div class="muted small">' + esc(detail.filter(Boolean).join(" · ")) + "</div>" +
+      (j.warnings && j.warnings.length ? '<div class="small warn">' + esc(j.warnings.join(" ")) + "</div>" : "") +
+      '</td><td class="muted small">' + esc(rel.filter(Boolean).join(" · ")) + '</td><td style="text-align:right;white-space:nowrap">' + buttons + "</td></tr>";
+  }
+  function adminDownloads(view) {
+    paint(view, adminHead("downloads") + '<div class="box" id="dl-box"><h2>Season downloads</h2><div class="sk sk-line" style="width:50%"></div></div>');
+    function draw() {
+      if (view !== VIEW) return;
+      api("/api/downloads").then(function (d) {
+        var box = $("#dl-box");
+        if (!box || view !== VIEW) return;
+        box.innerHTML = "<h2>Season downloads</h2>" + (!d.enabled ? '<p class="muted">' + esc(d.reason || "Season downloads are off.") + "</p>" : "") +
+          (d.jobs.length ? '<div class="table-wrap"><table><tr><th>Episode</th><th>Status</th><th>Release</th><th></th></tr>' + d.jobs.map(downloadRow).join("") + "</table></div>"
+            : '<p class="muted">Nothing yet. Open a TV show from Search and choose Download season.</p>');
+        $("[data-dl-cancel]", box).forEach(function (b) {
+          b.onclick = function () { api("/api/downloads/" + b.getAttribute("data-dl-cancel"), { method: "DELETE" }).then(draw).catch(fail); };
+        });
+        $("[data-dl-retry]", box).forEach(function (b) {
+          b.onclick = function () { api("/api/downloads/" + b.getAttribute("data-dl-retry") + "/retry", { method: "POST" }).then(draw).catch(fail); };
+        });
+        var busy = d.jobs.some(function (j) { return /^(queued|finding|downloading|copying)$/.test(j.state); });
+        setTimeout(draw, busy ? 2000 : 10000);
+      }).catch(function (err) { if (view === VIEW) { fail(err); setTimeout(draw, 10000); } });
+    }
+    draw();
   }
 
   // ---- live sports: the day's matches with the channels that show them, and every channel ----

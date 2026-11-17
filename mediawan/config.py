@@ -38,6 +38,9 @@ class Config:
     torrent_dev_sintel: str = ""
     # Release groups the streaming filter trusts; empty = release_rules.TRUSTED_GROUPS.
     torrent_trusted_groups: list[str] = field(default_factory=list)
+    # Where season downloads of TV shows are saved (downloads.py): the library's TV folder,
+    # mounted writable at this path only. None = season downloads are off.
+    download_dir: Path | None = None
     # Subtitle languages offered on every title; missing ones are machine-translated by the
     # LibreTranslate server at translate_url (see translate.py). Empty url = no translation.
     subtitle_languages: list[str] = field(default_factory=lambda: ["ar", "da", "pt"])
@@ -78,6 +81,7 @@ class Config:
             torrent_trusted_groups=[
                 g.strip() for g in env.get("TORRENT_TRUSTED_GROUPS", "").split(",") if g.strip()
             ],
+            download_dir=Path(env["DOWNLOAD_DIR"]).resolve() if env.get("DOWNLOAD_DIR", "").strip() else None,
             subtitle_languages=[
                 code.strip().lower()
                 for code in env.get("SUBTITLE_LANGUAGES", "ar,da,pt").split(",")

@@ -17,12 +17,13 @@ from fastapi.staticfiles import StaticFiles
 from starlette.background import BackgroundTask
 from starlette.concurrency import run_in_threadpool
 
-from . import __version__, live_api, media, subsource, translate
+from . import __version__, live_api, media, parse, subsource, translate
 from . import release_rules as rr
 from .auth import COOKIE, SESSION_DAYS, Accounts, admin_user, current_user, hash_password, public
 from .catalog import Catalog
 from .config import Config
 from .db import Database
+from .downloads import DownloadError, Downloads
 from .library import Library
 from .metadata import Metadata
 from .online import CDN_HEADERS, Online, OnlineError
@@ -155,7 +156,16 @@ def create_app(
         state.jobs = Jobs(state.scanner, state.metadata, state.sessions, config.scan_interval)
         if background:
             state.jobs.start()
+        state.downloads = Downloads(
+            state.db,
+            state.torrents,
+            config.download_dir,
+            title_of=lambda imdb_id: state.catalog.title("show", imdb_id),
+            on_saved=state.jobs.trigger,
+            background=background,
+        )
         yield
+        state.downloads.stop()
         state.torrents.stop()
         state.translator.stop()
         live_api.stop(state)
@@ -187,6 +197,10 @@ def create_app(
 
     @app.exception_handler(OnlineError)
     async def online_failed(_, error: OnlineError):
+        return JSONResponse({"detail": str(error)}, error.status)
+
+    @app.exception_handler(DownloadError)
+    async def download_refused(_, error: DownloadError):
         return JSONResponse({"detail": str(error)}, error.status)
 
     @app.exception_handler(TorrentError)
@@ -985,12 +999,39 @@ def create_app(
 
     @app.get("/api/watch/search")
     def watch_search(request: Request, q: str = "", user=Depends(current_user)):
-        return {"results": st(request).catalog.search(q)}
+        """Films and series from Cinemeta, without the anime among them: those are in the anime
+        results (AniList) and play through the anime flow, not torrents."""
+        s = st(request)
+        results = s.catalog.search(q)
+        if not s.online.enabled or not results:
+            return {"results": results}
+        try:
+            anime = s.online.search(q, 30)
+        except (OnlineError, httpx.HTTPError):
+            return {"results": results}
+        names = {}
+        for a in anime:
+            for t in a["titles"]:
+                names.setdefault(parse.normalise(t), []).append(a)
+
+        def is_anime(r: dict) -> bool:
+            year = r.get("year")
+            return any(
+                (a["format"] == "MOVIE") == (r["kind"] == "movie")
+                and (not year or not a["year"] or abs(a["year"] - int(year)) <= 1)
+                for a in names.get(parse.normalise(r.get("name") or ""), [])
+            )
+
+        return {"results": [r for r in results if not is_anime(r)]}
 
     @app.get("/api/watch/title/{kind}/{imdb_id}")
     def watch_title(kind: str, imdb_id: str, request: Request, user=Depends(current_user)):
         catalog = st(request).catalog
         found = dict(catalog.title(kind, imdb_id))
+        # Anime plays through the anime flow (AniList + MegaPlay): the page sends the viewer there.
+        anime_id = st(request).online.match(found.get("name") or "", found.get("year"), kind)
+        if anime_id:
+            return {"kind": kind, "id": imdb_id, "name": found.get("name"), "anime_id": anime_id}
         watched = catalog.watched(user["id"], imdb_id)
 
         def seen(season: int, episode: int) -> dict:
@@ -1004,6 +1045,8 @@ def create_app(
         found["episodes"] = [{**e, **seen(e["season"], e["episode"])} for e in found["episodes"]]
         found["next"] = catalog.next_up(found, watched)
         found["playable"] = st(request).torrents.enabled
+        # Season downloads: TV shows only, for administrators (they write to the library).
+        found["can_download"] = kind == "show" and user["role"] == "admin" and st(request).downloads.enabled
         # The quality last played is what Play uses again.
         last = max(watched.values(), key=lambda r: r["played_at"], default=None)
         found["quality"] = last["quality"] if last else 0
@@ -1288,6 +1331,33 @@ def create_app(
         if not row:
             raise KeyError(title_id)
         return _art(s, row["url"])
+
+    # ---- season downloads of TV shows (downloads.py) -----------------------------------
+
+    @app.get("/api/downloads")
+    def downloads_list(request: Request, _=Depends(admin_user)):
+        d = st(request).downloads
+        return {"enabled": d.enabled, "reason": d.why_off(), "jobs": d.list()}
+
+    @app.post("/api/downloads/season")
+    def downloads_season(request: Request, body: dict = Body(...), user=Depends(admin_user)):
+        s = st(request)
+        if str(body.get("kind") or "show") != "show":
+            raise DownloadError("Only TV shows can be downloaded by the season")
+        title = s.catalog.title("show", str(body.get("id") or ""))
+        if s.online.match(title.get("name") or "", title.get("year"), "show"):
+            raise DownloadError("This is anime: it plays through the anime pages, not torrents")
+        return s.downloads.request_season(user["id"], title, int(body.get("season") or 0))
+
+    @app.post("/api/downloads/{job_id}/retry")
+    def downloads_retry(job_id: int, request: Request, _=Depends(admin_user)):
+        st(request).downloads.retry(job_id)
+        return {"ok": True}
+
+    @app.delete("/api/downloads/{job_id}")
+    def downloads_cancel(job_id: int, request: Request, _=Depends(admin_user)):
+        st(request).downloads.cancel(job_id)
+        return {"ok": True}
 
     # ---- administration ----------------------------------------------------------------
 

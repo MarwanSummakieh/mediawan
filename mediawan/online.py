@@ -23,7 +23,7 @@ import httpx
 
 from .db import Database
 from .library import COMPLETE_RATIO, COMPLETE_REMAINING
-from .parse import LANGUAGES
+from .parse import LANGUAGES, normalise
 
 log = logging.getLogger("mediawan.online")
 
@@ -99,6 +99,11 @@ def available_episodes(media: dict) -> int:
     return media.get("episodes") or 0
 
 
+def _key(name: str) -> str:
+    """A title for comparing: lower-case words without punctuation."""
+    return normalise(name or "")
+
+
 def card(media: dict) -> dict:
     title = media.get("title") or {}
     cover = media.get("coverImage") or {}
@@ -106,6 +111,7 @@ def card(media: dict) -> dict:
         "id": media["id"],
         "mal_id": media.get("idMal"),
         "name": title.get("english") or title.get("romaji") or f"AniList {media['id']}",
+        "titles": [t for t in (title.get("english"), title.get("romaji")) if t],
         "year": media.get("seasonYear"),
         "format": media.get("format"),
         "status": media.get("status"),
@@ -245,6 +251,29 @@ class Online:
         data = self._graphql(query, {"q": q, "n": min(limit, 50)}, 600)
         media = (data.get("Page") or {}).get("media") or []
         return [card(m) for m in media]
+
+    def match(self, name: str, year, kind: str) -> int | None:
+        """The AniList id of a Cinemeta film or series that is anime, so it plays through the
+        anime flow (MegaPlay) instead of torrents. The name must match AniList's English or
+        romaji title, the year must agree within one, and the format must fit (a film is a
+        MOVIE, a series anything else), so a live-action remake from another year is left
+        alone. A series that AniList splits into seasons maps to its first season."""
+        if not self.enabled or not name:
+            return None
+        try:
+            found = self.search(name, 15)
+        except (OnlineError, httpx.HTTPError):
+            return None
+        want, year = _key(name), int(year) if str(year or "").isdigit() else None
+        hits = [
+            a
+            for a in found
+            if want in {_key(t) for t in a["titles"]}
+            and (a["format"] == "MOVIE") == (kind == "movie")
+            and (year is None or a["year"] is None or abs(a["year"] - year) <= 1)
+        ]
+        hits.sort(key=lambda a: (a["year"] or 9999, a["id"]))
+        return hits[0]["id"] if hits else None
 
     def anime(self, anilist_id: int) -> dict:
         self._need()

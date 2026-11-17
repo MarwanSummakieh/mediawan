@@ -12,9 +12,11 @@ because other containers share the VPN's network:
   POST   /v1/torrents                        {hash, trackers}     join a swarm (metadata only)
   GET    /v1/torrents/<hash>                                      status: peers, speed, files
   POST   /v1/torrents/<hash>/files           {index, name, mode}  choose the file to stream
-  POST   /v1/torrents/<hash>/files/<i>/mode  {mode}               prepare -> play
+  POST   /v1/torrents/<hash>/files/<i>/mode  {mode}               prepare -> play, or download
+  DELETE /v1/torrents/<hash>/files/<i>                            stop wanting one file
   POST   /v1/torrents/<hash>/files/<i>/hint  {position}           warm a resume point (bytes)
   DELETE /v1/torrents/<hash>                                      leave and delete the data
+                                                                  (files being downloaded stay)
   GET    /v1/status                                               tunnel, disk, every torrent
   GET    /health                                                  liveness, no key
 
@@ -26,6 +28,11 @@ Pieces are fetched in the order the reader needs them: the head and tail of the 
 reprioritises at once; while playing, the rest of the file follows in order behind the window.
 Data lives in a capped cache folder that is deleted on start, when a torrent is dropped, after
 it sits idle, and whenever the disk runs low.
+
+A file in "download" mode (season downloads, downloads.py) is fetched whole, in order. It keeps its
+torrent from going idle, and a plain DELETE (a stream that used the same torrent ending) leaves
+it in place; the app copies the finished file out and then deletes that one file. Losing the
+tunnel or running out of disk still drops everything.
 """
 
 import hmac
@@ -289,7 +296,7 @@ class Selected:
     size: int
     offset: int  # of the file inside the torrent
     token: str
-    mode: str = "prepare"  # prepare | play
+    mode: str = "prepare"  # prepare | play | download
     readers: list = field(default_factory=list)
     last_position: int | None = None
     hint: int | None = None  # byte offset playback will start from
@@ -318,7 +325,10 @@ class Torrent:
         self.touched = time.time()
 
     def busy(self) -> bool:
-        return any(sel.readers for sel in self.selected.values())
+        return any(sel.readers or sel.mode == "download" for sel in self.selected.values())
+
+    def downloading(self) -> bool:
+        return any(sel.mode == "download" for sel in self.selected.values())
 
 
 class Engine:
@@ -588,8 +598,8 @@ class Engine:
         with self.lock:
             existing = torrent.selected.get(chosen["index"])
             if existing:
-                if mode == "play":
-                    existing.mode = "play"
+                if mode in ("play", "download") and existing.mode != "download":
+                    existing.mode = mode
                 self.reprioritize(torrent)
                 return existing
             self._ensure_space(torrent, chosen["size"])
@@ -600,7 +610,7 @@ class Engine:
                 chosen["size"],
                 fs.file_offset(chosen["index"]),
                 secrets.token_hex(20),
-                "play" if mode == "play" else "prepare",
+                mode if mode in ("play", "download") else "prepare",
             )
             torrent.selected[sel.index] = sel
             self.tokens[sel.token] = (torrent, sel)
@@ -616,9 +626,31 @@ class Engine:
         sel = torrent.selected.get(index)
         if not sel:
             raise Refused(404, "gone", "That file is not selected")
-        sel.mode = "play" if mode == "play" else "prepare"
+        sel.mode = mode if mode in ("play", "download") else "prepare"
         torrent.touch()
         self.reprioritize(torrent)
+
+    def unselect(self, torrent: Torrent, index: int):
+        """Stop wanting one file; the torrent goes when nothing is left selected."""
+        with self.lock:
+            sel = torrent.selected.pop(index, None)
+            if sel:
+                self.tokens.pop(sel.token, None)
+            empty = not torrent.selected
+        if empty:
+            self.remove(torrent.hash)
+        else:
+            torrent.last_priorities = None
+            self.reprioritize(torrent)
+
+    def release(self, torrent: Torrent):
+        """A stream is done with this torrent: drop it, unless a file is being downloaded, in which
+        case only the other files are let go."""
+        if not torrent.downloading():
+            return self.remove(torrent.hash)
+        for index, sel in list(torrent.selected.items()):
+            if sel.mode != "download":
+                self.unselect(torrent, index)
 
     def _ensure_space(self, torrent: Torrent, size: int):
         def committed():
@@ -658,7 +690,8 @@ class Engine:
             behind = None if sel.last_position is None else (sel.offset + sel.last_position) // piece_length
             window = max(4, WINDOW_BYTES // piece_length)
             hints = [] if sel.hint is None or sel.readers else [(sel.offset + min(sel.hint, sel.size - 1)) // piece_length]
-            spans.append(Span(first, last, head_end, tail_start, sel.mode == "play", readers, window, behind, hints))
+            playing = sel.mode in ("play", "download")  # download: the whole file, in order
+            spans.append(Span(first, last, head_end, tail_start, playing, readers, window, behind, hints))
         priorities, urgent = plan_pieces(num_pieces, spans)
         handle = torrent.handle
         if priorities != torrent.last_priorities:
@@ -755,6 +788,7 @@ class Engine:
                         "mode": sel.mode,
                         "url": sel.url(),
                         "downloaded": min(sel.size, progress[sel.index]) if sel.index < len(progress) else 0,
+                        "complete": all(p < len(have) and have[p] for p in range(first, last + 1)),
                         "ready": done == len(needed),
                         "ready_fraction": round(done / len(needed), 3) if needed else 1.0,
                         "position": position,
@@ -889,7 +923,11 @@ def make_handler(engine: Engine, settings: Settings):
                     torrent.touch()
                     return self._json(200, engine.status(torrent))
                 if len(parts) == 2 and method == "DELETE":
-                    engine.remove(torrent.hash)
+                    kept = torrent.downloading()
+                    engine.release(torrent)
+                    return self._json(200, {"ok": True, "kept": kept})
+                if len(parts) == 4 and parts[2] == "files" and method == "DELETE":
+                    engine.unselect(torrent, int(parts[3]))
                     return self._json(200, {"ok": True})
                 if parts[2:] == ["files"] and method == "POST":
                     body = self._body()

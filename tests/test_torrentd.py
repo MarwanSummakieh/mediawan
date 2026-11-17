@@ -163,6 +163,46 @@ def test_a_file_streams_over_http_with_ranges_while_it_downloads(local_swarm):
     assert not torrent.directory.exists()
 
 
+def _delete(port: int, path: str):
+    conn = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+    conn.request("DELETE", path, headers={"Authorization": "Bearer k"})
+    response = conn.getresponse()
+    data = json.loads(response.read() or b"{}")
+    conn.close()
+    return response.status, data
+
+
+def test_a_downloaded_file_is_fetched_whole_and_outlives_the_stream_that_chose_it(local_swarm):
+    s = local_swarm
+    info_hash, port = str(s["info"].info_hash()), s["port"]
+    _post(port, "/v1/torrents", {"hash": info_hash, "trackers": []})
+    torrent = s["engine"].torrents[info_hash]
+    torrent.handle.connect_peer(("127.0.0.1", s["seeder"].listen_port()))
+    deadline = time.time() + 30
+    while not torrent.handle.status().has_metadata and time.time() < deadline:
+        time.sleep(0.1)
+    status, chosen = _post(port, f"/v1/torrents/{info_hash}/files", {"index": None, "name": "Film.2026.1080p.WEB-DL.mkv"})
+    assert status == 200, chosen
+    assert _post(port, f"/v1/torrents/{info_hash}/files/{chosen['index']}/mode", {"mode": "download"})[0] == 200
+    assert torrent.busy()  # never dropped as idle
+    # The stream that chose it lets go: the download stays.
+    assert _delete(port, f"/v1/torrents/{info_hash}") == (200, {"ok": True, "kept": True})
+    assert info_hash in s["engine"].torrents
+    deadline = time.time() + 30
+    while time.time() < deadline:
+        status = json.loads(_get(port, f"/v1/torrents/{info_hash}", {"Authorization": "Bearer k"})[2])
+        sel = status["selected"][0]
+        if sel["complete"]:
+            break
+        time.sleep(0.1)
+    assert sel["complete"] and sel["downloaded"] == len(s["payload"])
+    status, _, body = _get(port, chosen["url"])  # what the app copies into the library
+    assert status == 200 and body == s["payload"]
+    # Once copied, the app lets go of the file and the torrent goes with it.
+    assert _delete(port, f"/v1/torrents/{info_hash}/files/{chosen['index']}")[0] == 200
+    assert info_hash not in s["engine"].torrents
+
+
 def test_the_engine_refuses_without_a_tunnel_and_off_the_allow_list(tmp_path, monkeypatch):
     monkeypatch.setattr(td, "tunnel_interfaces", lambda root=Path("/sys/class/net"): [])
     engine = td.Engine(td.Settings(key="k", directory=tmp_path / "c", require_vpn=True, listen_port=0, dht=False))

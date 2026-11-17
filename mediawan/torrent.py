@@ -137,10 +137,18 @@ class Sidecar:
         return self._call("POST", f"/v1/torrents/{info_hash}/files/{index}/hint", {"position": position})
 
     def remove(self, info_hash: str):
+        """Let go of a torrent (a file being downloaded stays; see torrentd)."""
         try:
             self._call("DELETE", f"/v1/torrents/{info_hash}")
         except TorrentError:
             pass  # gone already, or the engine is down: it drops idle torrents itself
+
+    def unselect(self, info_hash: str, index: int):
+        """Stop wanting one file; the engine drops the torrent when nothing else is wanted."""
+        try:
+            self._call("DELETE", f"/v1/torrents/{info_hash}/files/{index}")
+        except TorrentError:
+            pass
 
     def overview(self) -> dict:
         return self._call("GET", "/v1/status")

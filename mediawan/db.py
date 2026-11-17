@@ -151,6 +151,17 @@ MIGRATIONS = [
       languages TEXT NOT NULL, at INTEGER NOT NULL,
       PRIMARY KEY(imdb_id, hash, file_index));
     """,
+    # 8: season downloads (downloads.py): one row per episode, saved into the library's TV folder.
+    """
+    CREATE TABLE downloads(
+      id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      imdb_id TEXT NOT NULL, show_name TEXT NOT NULL, year INTEGER,
+      season INTEGER NOT NULL, episode INTEGER NOT NULL, episode_name TEXT NOT NULL DEFAULT '',
+      quality INTEGER NOT NULL DEFAULT 0, state TEXT NOT NULL DEFAULT 'queued',
+      release TEXT, warnings TEXT NOT NULL DEFAULT '[]', path TEXT, size INTEGER, error TEXT,
+      created INTEGER NOT NULL, updated INTEGER NOT NULL,
+      UNIQUE(imdb_id, season, episode));
+    """,
 ]
 
 
