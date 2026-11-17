@@ -1987,10 +1987,10 @@
         box.innerHTML = "<h2>Season downloads</h2>" + (!d.enabled ? '<p class="muted">' + esc(d.reason || "Season downloads are off.") + "</p>" : "") +
           (d.jobs.length ? '<div class="table-wrap"><table><tr><th>Episode</th><th>Status</th><th>Release</th><th></th></tr>' + d.jobs.map(downloadRow).join("") + "</table></div>"
             : '<p class="muted">Nothing yet. Open a TV show from Search and choose Download season.</p>');
-        $("[data-dl-cancel]", box).forEach(function (b) {
+        $$("[data-dl-cancel]", box).forEach(function (b) {
           b.onclick = function () { api("/api/downloads/" + b.getAttribute("data-dl-cancel"), { method: "DELETE" }).then(draw).catch(fail); };
         });
-        $("[data-dl-retry]", box).forEach(function (b) {
+        $$("[data-dl-retry]", box).forEach(function (b) {
           b.onclick = function () { api("/api/downloads/" + b.getAttribute("data-dl-retry") + "/retry", { method: "POST" }).then(draw).catch(fail); };
         });
         var busy = d.jobs.some(function (j) { return /^(queued|finding|downloading|copying)$/.test(j.state); });
