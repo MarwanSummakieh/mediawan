@@ -22,8 +22,9 @@ services:
       TORRENT_KEY: ${TORRENT_KEY:-}
       # Release groups the streaming filter trusts, comma-separated; empty = the built-in list.
       TORRENT_TRUSTED_GROUPS: ${TORRENT_TRUSTED_GROUPS:-}
-      # Season downloads of TV shows are saved here (the TV folder, mounted below). Empty = off.
+      # TV season downloads and movie downloads are saved here (mounted writable below). Empty = off.
       DOWNLOAD_DIR: ${DOWNLOAD_DIR-/downloads}
+      MOVIE_DOWNLOAD_DIR: ${MOVIE_DOWNLOAD_DIR-/downloads-movies}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
       FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-127.0.0.1}
       # Offered on every title; missing ones are translated by the libretranslate service.
@@ -32,8 +33,9 @@ services:
     volumes:
       - ${DATA_DIR:-./data}:/data
       - ${MEDIA_DIR:-./media}:/media:ro # Mediawan never writes to your media...
-      # ...except season downloads of TV shows, into the TV folder only (DOWNLOAD_DIR).
+      # ...except TV season downloads (DOWNLOAD_DIR) and movie downloads (MOVIE_DOWNLOAD_DIR).
       - ${MEDIA_DIR:-./media}/TV:/downloads
+      - ${MEDIA_DIR:-./media}/Movies:/downloads-movies
       - ${TRANSCODE_DIR:-./transcode}:/transcode
     # QuickSync: pass the GPU through, and join the groups that own it. Read the real GIDs on
     # the NAS with `stat -c '%g %G %n' /dev/dri/*` — a wrong render GID leaves the device

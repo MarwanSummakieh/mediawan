@@ -1,12 +1,15 @@
-"""Season downloads of TV shows (downloads.py) against the fake torrent engine."""
+"""Library downloads of TV seasons and movies (downloads.py) against the fake torrent engine."""
 
 import httpx
 import pytest
+from fastapi.testclient import TestClient
 
+from mediawan.app import create_app
+from mediawan.config import Config
 from mediawan.downloads import DownloadError, Downloads, safe_name
 from mediawan.parse import parse_path
 
-from .test_torrent import FILM, SHOW, FakeSidecar, MiB, make, release
+from .test_torrent import FILM, SHOW, FakeSidecar, GiB, MiB, make, release
 
 SIZE = 4096
 
@@ -45,14 +48,36 @@ def pack(title, season, episode):
     return [release("p", name, seeders=80, size=3 * 1024 * MiB, file_index=episode - 1)]
 
 
-def setup(tmp_path, listing=pack, title=SHOW, root="TV"):
-    torrents, sidecar, db = make(tmp_path, listing, {"p" * 40: {"metadata": 0.02, "size": SIZE}, "d" * 40: {"metadata": 0.02, "size": SIZE}})
+def movie_releases(title, season, episode):
+    """Both 1080p and 4K releases for a film."""
+    return [
+        release("f", f"{title['name']}.{title['year']}.2160p.AMZN.WEB-DL.DDP5.1.H.265-NTb",
+                seeders=90, size=18 * GiB, resolution=2160),
+        release("m", f"{title['name']}.{title['year']}.1080p.AMZN.WEB-DL.DDP5.1.H.264-NTb",
+                seeders=70, size=8 * GiB, resolution=1080),
+    ]  # fmt: skip
+
+
+def setup(tmp_path, listing=pack, title=SHOW, root="TV", movie_root="Movies"):
+    swarms = {
+        h * 40: {"metadata": 0.02, "size": SIZE}
+        for h in ("p", "d", "f", "m")
+    }
+    torrents, sidecar, db = make(tmp_path, listing, swarms)
     saving = SavingSidecar(sidecar.swarms)
     torrents.sidecar = saving
     db.run("INSERT INTO users(id, email, name, pw_hash, role) VALUES(1, 'a@test', 'A', 'x', 'admin')")
     copies = httpx.Client(transport=httpx.MockTransport(lambda request: httpx.Response(200, content=b"v" * SIZE)))
-    downloads = Downloads(db, torrents, tmp_path / root if root else None, title_of=lambda imdb_id: title,
-                          poll=0.02, client=copies, background=False)  # fmt: skip
+    downloads = Downloads(
+        db,
+        torrents,
+        tmp_path / root if root else None,
+        title_of=lambda kind, imdb_id: title,
+        poll=0.02,
+        client=copies,
+        background=False,
+        movie_root=tmp_path / movie_root if movie_root else None,
+    )
     return downloads, saving, db
 
 
@@ -141,3 +166,117 @@ def test_cancel_retry_and_remove(tmp_path):
 def test_names_are_safe_for_any_filesystem():
     assert safe_name('Marvel\'s Agents of S.H.I.E.L.D.: "Part" 2/3') == "Marvel's Agents of S.H.I.E.L.D. Part 2 3"
     assert safe_name("...") == "Untitled"
+
+
+def test_a_movie_lands_in_the_library_at_default_and_chosen_quality(tmp_path):
+    downloads, sidecar, db = setup(tmp_path, movie_releases, FILM)
+    asked = downloads.request_movie(1, FILM)
+    assert (asked["queued"], asked["skipped"], asked["quality"], asked["label"]) == (1, 0, 2160, "4K")
+    run_all(downloads, db)
+    jobs = downloads.list()
+    assert len(jobs) == 1
+    assert jobs[0]["state"] == "done", jobs[0]["error"]
+    assert jobs[0]["kind"] == "movie"
+    dest = tmp_path / "Movies" / "Film (2026)" / "Film (2026).mkv"
+    assert dest.exists() and dest.read_bytes() == b"v" * SIZE
+    assert ("f" * 40, "download") in sidecar.modes and len(sidecar.unselected) == 1
+    parsed = parse_path(dest, tmp_path / "Movies")
+    assert (parsed.kind, parsed.name, parsed.year) == ("movie", "Film", 2026)
+    # Asking again queues nothing: already done.
+    assert downloads.request_movie(1, FILM)["queued"] == 0
+
+    # Explicit 1080p quality on another movie uses the 1080p release.
+    other = {**FILM, "id": "tt0000009", "name": "Other Film", "year": 2024}
+    downloads.title_of = lambda kind, imdb_id: other
+    asked1080 = downloads.request_movie(1, other, quality=1080)
+    assert (asked1080["queued"], asked1080["quality"], asked1080["label"]) == (1, 1080, "1080p")
+    run_all(downloads, db)
+    assert (tmp_path / "Movies" / "Other Film (2024)" / "Other Film (2024).mkv").exists()
+    assert ("m" * 40, "download") in sidecar.modes
+
+
+def test_movie_folder_reuse_respects_year_for_remakes(tmp_path):
+    downloads, _, db = setup(tmp_path, movie_releases, FILM)
+    # A remake with a different year must NOT be reused.
+    (tmp_path / "Movies" / "Film (1990)").mkdir(parents=True)
+    downloads.request_movie(1, FILM, quality=1080)
+    run_all(downloads, db)
+    assert (tmp_path / "Movies" / "Film (2026)" / "Film (2026).mkv").exists()
+    assert not list((tmp_path / "Movies" / "Film (1990)").iterdir())
+
+    # An existing folder without a year IS reused.
+    other = {**FILM, "id": "tt0000010", "name": "Heat", "year": 1995}
+    downloads.title_of = lambda kind, imdb_id: other
+    (tmp_path / "Movies" / "Heat").mkdir(parents=True)
+    downloads.request_movie(1, other, quality=1080)
+    run_all(downloads, db)
+    assert (tmp_path / "Movies" / "Heat" / "Heat (1995).mkv").exists()
+    assert not (tmp_path / "Movies" / "Heat (1995)").exists()
+
+
+def test_movie_downloads_check_config_kind_and_existing_library(tmp_path):
+    downloads, _, db = setup(tmp_path, movie_releases, FILM)
+    with pytest.raises(DownloadError, match="Only movies"):
+        downloads.request_movie(1, SHOW)
+    # Already in the library -> skipped without queueing.
+    tid = db.run("INSERT INTO titles(kind, key, name, year, imdb_id, added_at) VALUES('movie','movie:film:2026','Film',2026,'tt0000001',1)")
+    iid = db.run("INSERT INTO items(title_id, season, episode) VALUES(?,0,0)", tid)
+    db.run("INSERT INTO files(item_id, path, root, size, mtime, added_at, missing) VALUES(?,'/m/film.mkv','/m',1,1,1,0)", iid)
+    assert downloads.request_movie(1, FILM) == {"queued": 0, "skipped": 1, "quality": 0, "label": ""}
+
+    # MOVIE_DOWNLOAD_DIR unset disables movie downloads without disabling TV shows.
+    tv_only, _, _ = setup(tmp_path / "tv_only", movie_root=None)
+    assert tv_only.enabled and tv_only.can_download("show") and not tv_only.can_download("movie")
+    with pytest.raises(DownloadError, match="MOVIE_DOWNLOAD_DIR"):
+        tv_only.request_movie(1, FILM)
+
+    # DOWNLOAD_DIR unset disables TV shows without disabling movie downloads.
+    movies_only, _, _ = setup(tmp_path / "movies_only", movie_releases, FILM, root=None)
+    assert movies_only.enabled and movies_only.can_download("movie") and not movies_only.can_download("show")
+    with pytest.raises(DownloadError, match="DOWNLOAD_DIR"):
+        movies_only.request_season(1, SHOW, 1)
+
+
+def test_movie_download_api_routes(tmp_path):
+    torrents, sidecar, _ = make(
+        tmp_path / "t",
+        movie_releases,
+        {h * 40: {"metadata": 0.02, "size": SIZE} for h in ("f", "m")},
+    )
+    torrents.sidecar = SavingSidecar(sidecar.swarms)
+    cinemeta = httpx.Client(
+        transport=httpx.MockTransport(
+            lambda request: httpx.Response(
+                200,
+                json={"meta": {"id": FILM["id"], "type": "movie", "name": FILM["name"], "releaseInfo": "2026", "runtime": "120 min"}},
+            )
+        )
+    )
+    cfg = Config(
+        database=tmp_path / "app.sqlite",
+        runtime=tmp_path / "rt",
+        admin_email="admin@test",
+        admin_password="long-password-1",
+        download_dir=tmp_path / "TV",
+        movie_download_dir=tmp_path / "Movies",
+        online_anime=False,
+    )
+    app = create_app(cfg, http_client=cinemeta, torrents=torrents, background=False)
+    with TestClient(app) as client:
+        torrents.db = app.state.db
+        assert client.post("/api/login", json={"email": "admin@test", "password": "long-password-1"}).status_code == 200
+        title_resp = client.get(f"/api/watch/title/movie/{FILM['id']}")
+        assert title_resp.status_code == 200
+        assert title_resp.json()["can_download"] is True
+
+        resp = client.post("/api/downloads/movie", json={"kind": "movie", "id": FILM["id"], "quality": 1080})
+        assert resp.status_code == 200
+        assert resp.json() == {"queued": 1, "skipped": 0, "quality": 1080, "label": "1080p"}
+
+        listing = client.get("/api/downloads").json()
+        assert listing["enabled"] is True
+        assert len(listing["jobs"]) == 1 and listing["jobs"][0]["kind"] == "movie"
+
+        # Non-movie kind is rejected.
+        bad = client.post("/api/downloads/movie", json={"kind": "show", "id": FILM["id"]})
+        assert bad.status_code == 400

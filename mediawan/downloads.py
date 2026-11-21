@@ -1,17 +1,20 @@
-"""Season downloads: whole seasons of a TV show saved into the library, over BitTorrent.
+"""Library downloads: whole seasons of a TV show and individual movies saved into the library,
+over BitTorrent.
 
-TV shows only. Asking for a season queues one job per aired episode. A single worker takes them
-in order, and each episode goes through exactly what streaming does to choose a release
-(torrent.py): the hard rules and ranking, the season lock that keeps a season on one group or
-pack, the older-series ("sitcom") rules that fall back to 720p or SD when nothing sound exists
-at 1080p and refuse a revival labelled with another year, the wrong-episode check, and the
-viewer's streaming filter (trusted groups first, files read for subtitles before they are
-taken). The quality is chosen once for the season, from its first episode, and kept.
+Asking for a season queues one job per aired episode; asking for a movie queues one job for the
+film. A single worker takes them in order, and each job goes through exactly what streaming does
+to choose a release (torrent.py): the hard rules and ranking, the season lock that keeps a season
+on one group or pack, the older-series ("sitcom") rules that fall back to 720p or SD when nothing
+sound exists at 1080p and refuse a revival labelled with another year, the wrong-film and
+wrong-episode checks, and the viewer's streaming filter (trusted groups first, files read for
+subtitles before they are taken). For a TV season the quality is chosen once from its first
+episode and kept; for a movie the requested quality (or the default, 4K when available) is used.
 
 Once a release is chosen its file is switched to "download" mode in the torrent engine
 (torrentd.py), which fetches it whole, inside the VPN. When it is complete the file is copied
-from the engine into DOWNLOAD_DIR (the library's TV folder, mounted writable only there) as
-"<Show>/Season NN/<Show> - SxxEyy.<ext>", and a library scan picks it up.
+from the engine into DOWNLOAD_DIR (the library's TV folder) as
+"<Show>/Season NN/<Show> - SxxEyy.<ext>", or into MOVIE_DOWNLOAD_DIR (the library's Movies
+folder) as "<Movie> (<Year>)/<Movie> (<Year>).<ext>", and a library scan picks it up.
 """
 
 import json
@@ -57,10 +60,13 @@ class Downloads:
         poll: float = 1.0,
         client: httpx.Client | None = None,
         background: bool = True,
+        movie_root: Path | None = None,
     ):
-        """title_of(imdb_id) -> the catalog's show (catalog.title). on_saved() runs after each
-        episode lands in the library (a scan)."""
-        self.db, self.torrents, self.root = db, torrents, Path(root) if root else None
+        """title_of(kind, imdb_id) -> the catalog's title (catalog.title). on_saved() runs after
+        each file lands in the library (a scan)."""
+        self.db, self.torrents = db, torrents
+        self.root = Path(root) if root else None
+        self.movie_root = Path(movie_root) if movie_root else None
         self.title_of, self.on_saved, self.poll = title_of, on_saved, poll
         self.client = client or httpx.Client(timeout=httpx.Timeout(30, read=120), follow_redirects=False)
         self.live: dict[int, dict] = {}  # job id -> progress figures while it runs
@@ -75,13 +81,30 @@ class Downloads:
 
     @property
     def enabled(self) -> bool:
-        return self.root is not None and self.torrents.enabled
+        return self.torrents.enabled and (self.root is not None or self.movie_root is not None)
 
-    def why_off(self) -> str | None:
-        if self.root is None:
-            return "Season downloads are off (DOWNLOAD_DIR is not set)"
+    def can_download(self, kind: str) -> bool:
         if not self.torrents.enabled:
-            return "Season downloads need the torrent engine (TORRENT_URL is not set)"
+            return False
+        if kind == "movie":
+            return self.movie_root is not None
+        if kind == "show":
+            return self.root is not None
+        return False
+
+    def why_off(self, kind: str | None = None) -> str | None:
+        if not self.torrents.enabled:
+            return "Downloads need the torrent engine (TORRENT_URL is not set)"
+        if kind == "movie":
+            if self.movie_root is None:
+                return "Movie downloads are off (MOVIE_DOWNLOAD_DIR is not set)"
+            return None
+        if kind == "show":
+            if self.root is None:
+                return "Season downloads are off (DOWNLOAD_DIR is not set)"
+            return None
+        if self.root is None and self.movie_root is None:
+            return "Downloads are off (DOWNLOAD_DIR and MOVIE_DOWNLOAD_DIR are not set)"
         return None
 
     def stop(self):
@@ -90,8 +113,16 @@ class Downloads:
 
     # ---- asking ---------------------------------------------------------------------------
 
-    def _have(self, imdb_id: str, season: int, episode: int) -> bool:
-        """The library already holds this episode (any copy that is not missing)."""
+    def _have(self, kind: str, imdb_id: str, season: int = 0, episode: int = 0) -> bool:
+        """The library already holds this title/episode (any copy that is not missing)."""
+        if kind == "movie":
+            return bool(
+                self.db.one(
+                    "SELECT 1 FROM files f JOIN items i ON i.id=f.item_id JOIN titles t ON t.id=i.title_id "
+                    "WHERE t.kind='movie' AND t.imdb_id=? AND f.missing=0",
+                    imdb_id,
+                )
+            )
         return bool(
             self.db.one(
                 "SELECT 1 FROM files f JOIN items i ON i.id=f.item_id JOIN titles t ON t.id=i.title_id "
@@ -100,9 +131,53 @@ class Downloads:
             )
         )  # fmt: skip
 
+    def request_movie(self, user_id: int, title: dict, quality: int | None = None) -> dict:
+        """Queue a single movie for download into MOVIE_DOWNLOAD_DIR."""
+        off = self.why_off("movie")
+        if off:
+            raise DownloadError(off, 409)
+        if title.get("kind") != "movie":
+            raise DownloadError("Only movies can be downloaded here")
+        if self._have("movie", title["id"]):
+            return {"queued": 0, "skipped": 1, "quality": 0, "label": ""}
+        row = self.db.one(
+            "SELECT id, state, quality FROM downloads WHERE imdb_id=? AND season=0 AND episode=0",
+            title["id"],
+        )
+        if row and row["state"] in ("queued", "done", *ACTIVE):
+            return {
+                "queued": 0,
+                "skipped": 1,
+                "quality": row["quality"],
+                "label": LABELS.get(row["quality"], ""),
+            }
+        found = self.torrents.choices(title, 0, 0, user_id=user_id)
+        if quality:
+            option = found["qualities"].get(quality)
+            if not option or not option["ranked"]:
+                reason = option["reason"] if option else None
+                raise DownloadError(reason or f"No {LABELS.get(quality, '')} release is available")
+        else:
+            quality = found["default"]
+            option = found["qualities"].get(quality)
+            if not option or not option["ranked"]:
+                reason = option["reason"] if option else None
+                raise DownloadError(reason or f"No {LABELS.get(quality, '')} release is available")
+        now = int(time.time())
+        self.db.run(
+            "INSERT INTO downloads(user_id, kind, imdb_id, show_name, year, season, episode, episode_name, quality, "
+            "state, created, updated) VALUES(?,'movie',?,?,?,0,0,'',?,'queued',?,?) "
+            "ON CONFLICT(imdb_id, season, episode) DO UPDATE SET user_id=excluded.user_id, kind='movie', "
+            "show_name=excluded.show_name, year=excluded.year, quality=excluded.quality, state='queued', "
+            "error=NULL, release=NULL, warnings='[]', path=NULL, updated=excluded.updated",
+            user_id, title["id"], title["name"], title.get("year"), quality, now, now,
+        )  # fmt: skip
+        self.wake.set()
+        return {"queued": 1, "skipped": 0, "quality": quality, "label": LABELS.get(quality, "")}
+
     def request_season(self, user_id: int, title: dict, season: int) -> dict:
         """Queue every aired episode of a season. TV shows only."""
-        off = self.why_off()
+        off = self.why_off("show")
         if off:
             raise DownloadError(off, 409)
         if title.get("kind") != "show":
@@ -117,7 +192,7 @@ class Downloads:
         now = int(time.time())
         queued = skipped = 0
         for e in episodes:
-            if self._have(title["id"], season, e["episode"]):
+            if self._have("show", title["id"], season, e["episode"]):
                 skipped += 1
                 continue
             row = self.db.one(
@@ -128,9 +203,9 @@ class Downloads:
                 skipped += 1
                 continue
             self.db.run(
-                "INSERT INTO downloads(user_id, imdb_id, show_name, year, season, episode, episode_name, quality, "
-                "state, created, updated) VALUES(?,?,?,?,?,?,?,?,'queued',?,?) "
-                "ON CONFLICT(imdb_id, season, episode) DO UPDATE SET user_id=excluded.user_id, "
+                "INSERT INTO downloads(user_id, kind, imdb_id, show_name, year, season, episode, episode_name, quality, "
+                "state, created, updated) VALUES(?,'show',?,?,?,?,?,?,?,'queued',?,?) "
+                "ON CONFLICT(imdb_id, season, episode) DO UPDATE SET user_id=excluded.user_id, kind='show', "
                 "quality=excluded.quality, state='queued', error=NULL, release=NULL, warnings='[]', "
                 "path=NULL, updated=excluded.updated",
                 user_id, title["id"], title["name"], title.get("year"), season, e["episode"],
@@ -196,7 +271,12 @@ class Downloads:
             self._run(job)
         except (DownloadError, TorrentError, OSError, httpx.HTTPError) as error:
             if job_id not in self.cancelled:
-                log.warning("Download %s S%02dE%02d failed: %s", job["show_name"], job["season"], job["episode"], error)
+                if (job.get("kind") or "show") == "movie":
+                    log.warning("Download %s failed: %s", job["show_name"], error)
+                else:
+                    log.warning(
+                        "Download %s S%02dE%02d failed: %s", job["show_name"], job["season"], job["episode"], error
+                    )
                 self._set(job_id, state="failed", error=str(error)[:500])
         except Exception as error:  # keep the worker alive whatever happens
             log.exception("Download %s failed", job_id)
@@ -209,35 +289,52 @@ class Downloads:
         return job_id in self.cancelled or self.stopping.is_set()
 
     def _destination(self, job, filename: str) -> Path:
-        """<root>/<Show>/Season NN/<Show> - SxxEyy.<ext>. A folder the library already has for the
-        show is reused, so the episodes join it instead of becoming a second title."""
+        """Shows: <root>/<Show>/Season NN/<Show> - SxxEyy.<ext>.
+        Movies: <movie_root>/<Movie> (<Year>)/<Movie> (<Year>).<ext>.
+        An existing folder in the library for the same title is reused."""
+        kind = job.get("kind") or "show"
+        base = self.movie_root if kind == "movie" else self.root
         name = safe_name(job["show_name"])
-        folder = None
-        if self.root.is_dir():
-            want = normalise(job["show_name"])
-            for child in self.root.iterdir():
-                bare = re.sub(r"\s*\((?:19|20)\d\d\)$", "", child.name)
-                if child.is_dir() and normalise(bare) == want:
-                    folder = child
-                    break
-        if folder is None:
-            folder = self.root / (f"{name} ({job['year']})" if job["year"] else name)
         ext = Path(filename).suffix.lower() or ".mkv"
+        folder = None
+        if base and base.is_dir():
+            want = normalise(job["show_name"])
+            for child in base.iterdir():
+                if not child.is_dir():
+                    continue
+                year_hit = re.search(r"\s*\(((?:19|20)\d\d)\)$", child.name)
+                bare = child.name[: year_hit.start()] if year_hit else child.name
+                if normalise(bare) != want:
+                    continue
+                if kind == "movie" and year_hit and job["year"] and int(year_hit.group(1)) != int(job["year"]):
+                    continue
+                folder = child
+                break
+        label = f"{name} ({job['year']})" if job["year"] else name
+        if folder is None:
+            folder = base / label
+        if kind == "movie":
+            return folder / f"{label}{ext}"
         return folder / f"Season {job['season']:02d}" / f"{name} - S{job['season']:02d}E{job['episode']:02d}{ext}"
 
     def _run(self, job):
         job_id, user_id = job["id"], job["user_id"]
+        kind = job.get("kind") or "show"
         season, episode = job["season"], job["episode"]
+        off = self.why_off(kind)
+        if off:
+            raise DownloadError(off, 409)
         self._set(job_id, state="finding", error=None)
-        title = self.title_of(job["imdb_id"])
+        title = self.title_of(kind, job["imdb_id"])
         found = self.torrents.choices(title, season, episode, user_id=user_id)
         quality = job["quality"]
         if not found["qualities"].get(quality, {}).get("ranked"):
-            quality = found["offered"][0]  # this episode has nothing at the season's quality
+            # Fallback if this item has nothing at the originally queued quality.
+            quality = found["default"] if kind == "movie" else found["offered"][0]
         option = found["qualities"][quality]
         if not option["ranked"]:
             raise DownloadError(option["reason"] or f"No {LABELS.get(quality, '')} release is available")
-        # Choosing the release is a prepared stream: connect, check the episode, read the file.
+        # Choosing the release is a prepared stream: connect, check the film/episode, read the file.
         stream = self.torrents.open(user_id, title, season, episode, quality, f"download-{job_id}", "prepare")
         try:
             while True:
@@ -258,7 +355,7 @@ class Downloads:
             self.torrents.sidecar.mode(info_hash, index, "download")
         finally:
             # The engine keeps a file that is being downloaded when the stream lets go of it.
-            self.torrents.close(stream, "Handed to the season download")
+            self.torrents.close(stream, "Handed to the download")
         if self._stopped(job_id):
             self.torrents.sidecar.unselect(info_hash, index)
             return

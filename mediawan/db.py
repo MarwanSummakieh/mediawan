@@ -162,6 +162,10 @@ MIGRATIONS = [
       created INTEGER NOT NULL, updated INTEGER NOT NULL,
       UNIQUE(imdb_id, season, episode));
     """,
+    # 9: movie downloads share the downloads table (kind='movie', season=0, episode=0).
+    """
+    ALTER TABLE downloads ADD COLUMN kind TEXT NOT NULL DEFAULT 'show';
+    """,
 ]
 
 
