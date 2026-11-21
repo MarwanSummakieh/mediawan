@@ -58,13 +58,28 @@ def movie_releases(title, season, episode):
     ]  # fmt: skip
 
 
-def setup(tmp_path, listing=pack, title=SHOW, root="TV", movie_root="Movies"):
+class StallingSidecar(SavingSidecar):
+    """Swarms in `stuck` never send a byte once their file is being downloaded."""
+
+    def __init__(self, *args, **kw):
+        super().__init__(*args, **kw)
+        self.stuck = set()
+
+    def status(self, info_hash):
+        status = super().status(info_hash)
+        if info_hash in self.stuck:
+            for sel in status["selected"]:
+                sel.update(downloaded=0, complete=False)
+        return status
+
+
+def setup(tmp_path, listing=pack, title=SHOW, root="TV", movie_root="Movies", engine=SavingSidecar, **options):
     swarms = {
         h * 40: {"metadata": 0.02, "size": SIZE}
         for h in ("p", "d", "f", "m")
     }
     torrents, sidecar, db = make(tmp_path, listing, swarms)
-    saving = SavingSidecar(sidecar.swarms)
+    saving = engine(sidecar.swarms)
     torrents.sidecar = saving
     db.run("INSERT INTO users(id, email, name, pw_hash, role) VALUES(1, 'a@test', 'A', 'x', 'admin')")
     copies = httpx.Client(transport=httpx.MockTransport(lambda request: httpx.Response(200, content=b"v" * SIZE)))
@@ -77,6 +92,7 @@ def setup(tmp_path, listing=pack, title=SHOW, root="TV", movie_root="Movies"):
         client=copies,
         background=False,
         movie_root=tmp_path / movie_root if movie_root else None,
+        **options,
     )
     return downloads, saving, db
 
@@ -280,3 +296,40 @@ def test_movie_download_api_routes(tmp_path):
         # Non-movie kind is rejected.
         bad = client.post("/api/downloads/movie", json={"kind": "show", "id": FILM["id"]})
         assert bad.status_code == 400
+
+
+def test_a_stalled_release_is_left_for_another_one(tmp_path):
+    def two(title, season, episode):
+        name = f"{title['name']}.S{season:02d}E{episode:02d}"
+        return [release("p", f"{name}.1080p.AMZN.WEB-DL.DDP5.1.H.264-NTb", seeders=90, size=3 * 1024 * MiB),
+                release("d", f"{name}.1080p.NF.WEB-DL.DDP5.1.H.264-FLUX", seeders=40, size=3 * 1024 * MiB)]  # fmt: skip
+
+    downloads, sidecar, db = setup(tmp_path, two, engine=StallingSidecar, stall=0.2)
+    sidecar.stuck = {"p" * 40}
+    downloads.request_season(1, {**SHOW, "episodes": SHOW["episodes"][:1]}, 1)
+    run_all(downloads, db)
+    [job] = downloads.list()
+    assert job["state"] == "done", job["error"]
+    assert job["release"]["hash"] == "d" * 40
+    assert ("p" * 40, 0) in sidecar.unselected  # the stalled file was let go
+    assert (tmp_path / "TV" / "Show (2018)" / "Season 01" / "Show - S01E01.mkv").exists()
+
+
+def test_a_movie_whose_4k_release_stalls_downloads_in_1080p(tmp_path):
+    downloads, sidecar, db = setup(tmp_path, movie_releases, FILM, engine=StallingSidecar, stall=0.2)
+    sidecar.stuck = {"f" * 40}
+    downloads.request_movie(1, FILM)
+    run_all(downloads, db)
+    [job] = downloads.list()
+    assert job["state"] == "done", job["error"]
+    assert (job["quality"], job["release"]["hash"]) == (1080, "m" * 40)
+
+
+def test_when_every_release_stalls_the_job_fails_plainly(tmp_path):
+    downloads, sidecar, db = setup(tmp_path, movie_releases, FILM, engine=StallingSidecar, stall=0.2)
+    sidecar.stuck = {"f" * 40, "m" * 40}
+    downloads.request_movie(1, FILM)
+    run_all(downloads, db)
+    [job] = downloads.list()
+    assert job["state"] == "failed"
+    assert job["error"] == "No progress for 0 minutes: the swarm has stalled, and no other release is listed"

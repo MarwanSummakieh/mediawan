@@ -213,6 +213,13 @@ class Stream:
         return not self.closed and not self.error
 
 
+def probe_problem(error: Exception) -> str:
+    """Why FFprobe could not read a torrent file, short enough to show in full."""
+    if isinstance(error, subprocess.TimeoutExpired):
+        return f"no video data arrived within {round(error.timeout)} s (the swarm is too slow)"
+    return media.no_logins(str(error))[:200]
+
+
 def summary(entry: dict | None, quality: int | None = None) -> dict | None:
     """What the interface shows about a release."""
     if not entry:
@@ -658,13 +665,14 @@ class Torrents:
         )
 
     def open(self, user_id: int, title: dict, season: int, episode: int, quality: int | None, player: str,
-             intent: str = "prepare", pinned: str | None = None) -> Stream:  # fmt: skip
+             intent: str = "prepare", pinned: str | None = None, exclude: set[str] | None = None) -> Stream:  # fmt: skip
+        """exclude: info hashes never to try (a library download leaving a stalled release)."""
         if not self.enabled:
             raise TorrentError("Torrent streaming is off (TORRENT_URL is not set)", 409, "off")
         found = self.choices(title, season, episode, user_id=user_id)
         q = quality if quality in QUALITIES else found["default"]
         option = found["qualities"][q]
-        ranked = option["ranked"]
+        ranked = [e for e in option["ranked"] if e["release"]["hash"] not in (exclude or ())]
         if pinned:
             ranked = [e for e in ranked if e["release"]["hash"] == pinned] + [
                 e for e in ranked if e["release"]["hash"] != pinned
@@ -734,8 +742,17 @@ class Torrents:
                 attempt.state = "abandoned"
         self._release_unused(stream)
 
+    def _untried(self, stream: Stream, bare: list[dict]) -> list[dict]:
+        """The next releases to try: not failed, not rejected for this title, not already read."""
+        known = self.rejected(stream.title["id"])
+        failed = {a.hash for a in stream.attempts if a.state == "failed"}
+        return [
+            e for e in stream.ranked
+            if e["release"]["hash"] not in failed | set(known) and not any(e is b for b in bare)
+        ][:4]  # fmt: skip
+
     def _run(self, stream: Stream):
-        wrong = None
+        wrong = skipped = None
         # Files read and found to lack the viewer's subtitles, best first; once the search is
         # over the first of them to answer is accepted without the check. A release the viewer
         # picked by hand is never swapped for subtitles.
@@ -748,14 +765,27 @@ class Torrents:
             stream.timings["probing"] = time.time()
             url = self.sidecar.file_url(stream.file["url"])
             try:
-                info = self.probe(url)
+                info, unreadable = self.probe(url), None
             except (RuntimeError, OSError, ValueError, subprocess.SubprocessError) as error:
-                raise TorrentError(f"FFprobe could not read the video: {media.no_logins(str(error))[:200]}",
-                                   502, "probe") from None  # fmt: skip
+                info, unreadable = {}, f"FFprobe could not read the video: {probe_problem(error)}"
             if stream.closed:
                 return
-            if not info.get("video"):
-                raise TorrentError("The file has no video stream", 422, "probe")
+            if not unreadable and not info.get("video"):
+                unreadable = "The file has no video stream"
+            if unreadable:
+                # A swarm too slow to answer, or a broken file: try the next release.
+                bad = stream.chosen
+                skipped = skipped or {"entry": bad.entry, "reason": f"The first choice could not be read. {unreadable}"}
+                bad.state, bad.reason = "failed", unreadable
+                bare[:] = [b for b in bare if b is not bad.entry]
+                stream.chosen, stream.file, stream.fallback = None, None, None
+                self._release_unused(stream)
+                stream.candidates = self._untried(stream, bare)
+                if not stream.candidates and bare:  # only files without subtitles are left
+                    stream.candidates, settled = list(bare), True
+                if not stream.candidates:
+                    raise TorrentError(unreadable, 502, "probe")
+                continue
             mismatch = (
                 rr.wrong_film(info.get("duration") or 0, rr.runtime_seconds(stream.title.get("runtime")))
                 if stream.kind == "movie" else None
@@ -786,15 +816,12 @@ class Torrents:
             bad = stream.chosen
             self.reject(stream.title["id"], bad.hash, mismatch)
             wrong = wrong or {"entry": bad.entry, "reason": mismatch}
+            skipped = skipped or {"entry": bad.entry,
+                                  "reason": f"The first choice was a different film with the same name. {mismatch}"}  # fmt: skip
             bad.state, bad.reason = "failed", f"A different film with the same name. {mismatch}"
             stream.chosen, stream.file, stream.fallback = None, None, None
             self._release_unused(stream)
-            known = self.rejected(stream.title["id"])
-            failed = {a.hash for a in stream.attempts if a.state == "failed"}
-            stream.candidates = [
-                e for e in stream.ranked
-                if e["release"]["hash"] not in failed | set(known) and not any(e is b for b in bare)
-            ][:4]  # fmt: skip
+            stream.candidates = self._untried(stream, bare)
             if not stream.candidates and bare:  # only files without subtitles are left
                 stream.candidates, settled = list(bare), True
             if not stream.candidates:
@@ -804,10 +831,10 @@ class Torrents:
                     404,
                     "wrong-film",
                 )
-        if wrong and stream.chosen:
-            stream.fallback = {"from": summary(wrong["entry"], stream.quality),
+        if skipped and stream.chosen:
+            stream.fallback = {"from": summary(skipped["entry"], stream.quality),
                                "to": summary(stream.chosen.entry, stream.quality),
-                               "reason": f"The first choice was a different film with the same name. {wrong['reason']}"}  # fmt: skip
+                               "reason": skipped["reason"]}  # fmt: skip
         elif bare and stream.subtitles and stream.chosen:
             stream.fallback = {"from": summary(bare[0], stream.quality),
                                "to": summary(stream.chosen.entry, stream.quality),

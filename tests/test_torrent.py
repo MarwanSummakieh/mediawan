@@ -1,5 +1,6 @@
 """Torrent streaming in the web app (torrent.py and its routes), against a fake sidecar."""
 
+import subprocess
 import threading
 import time
 
@@ -187,6 +188,41 @@ def test_a_film_file_whose_length_is_wrong_is_rejected_for_good_and_the_next_rel
     assert torrents.rejected(FILM["id"]) == {lookalike["hash"]: "It runs 90 min; the film runs 120 min."}
     # Never offered again for this title.
     assert torrents.options(1, FILM, 0, 0)["qualities"][0]["release"]["hash"] == real["hash"]
+
+
+def test_a_file_ffprobe_cannot_read_in_time_is_left_for_the_next_release(tmp_path):
+    slow = release("a", "Film.2026.1080p.AMZN.WEB-DL.DDP5.1.H.264-GRP", seeders=400)
+    good = release("b", "Film.2026.1080p.NF.WEB-DL.DDP5.1.H.264-OTH", seeders=40)
+    torrents, _, _ = make(tmp_path, lambda *a: [slow, good], {slow["hash"]: {"metadata": 0}, good["hash"]: {"metadata": 0}})
+    reads = torrents.probe
+
+    def probe(url):
+        if slow["hash"] in url:
+            raise subprocess.TimeoutExpired(["ffprobe", url], 120)
+        return reads(url)
+
+    torrents.probe = probe
+    status = wait_done(torrents, torrents.open(1, FILM, 0, 0, 1080, "web"))
+    assert status["state"] == "ready" and status["release"]["hash"] == good["hash"]
+    assert status["fallback"]["from"]["hash"] == slow["hash"]
+    assert "no video data arrived within 120 s" in status["fallback"]["reason"]
+    # Only skipped for this stream: a slow swarm is not a wrong film.
+    assert torrents.rejected(FILM["id"]) == {}
+
+
+def test_when_no_file_can_be_read_the_stream_fails_with_the_whole_reason(tmp_path):
+    a = release("a", "Film.2026.1080p.AMZN.WEB-DL.DDP5.1.H.264-GRP")
+    torrents, _, _ = make(tmp_path, lambda *x: [a], {a["hash"]: {"metadata": 0}})
+
+    def probe(url):
+        raise subprocess.TimeoutExpired(["ffprobe", "http://vpn:8792/file/" + "x" * 300], 120)
+
+    torrents.probe = probe
+    status = wait_done(torrents, torrents.open(1, FILM, 0, 0, 1080, "web"))
+    assert status["state"] == "failed" and status["error"]["reason"] == "probe"
+    assert status["error"]["message"] == (
+        "FFprobe could not read the video: no video data arrived within 120 s (the swarm is too slow)"
+    )
 
 
 def test_when_every_release_is_a_different_film_the_stream_fails_plainly(tmp_path):

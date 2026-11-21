@@ -574,7 +574,7 @@ def create_app(
                     Path(file["path"]).name,
                     prefs["subtitle_language"] or None,
                 ),
-            ),  # fmt: skip
+            ),
             "next": None,
         }
         following = s.library.next_item(item["id"])
@@ -1242,7 +1242,7 @@ def create_app(
                     prefs["subtitle_language"] or None,
                 ),
                 online_always=True,
-            ),  # fmt: skip
+            ),
             "preferences": prefs,
             "next": {"season": following[0], "episode": following[1]} if following[1] else None,
         }

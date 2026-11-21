@@ -43,6 +43,14 @@ class DownloadError(Exception):
         self.status = status
 
 
+class Stalled(DownloadError):
+    """The release's swarm stopped sending data: worth trying another release."""
+
+    def __init__(self, info_hash: str, message: str):
+        super().__init__(message)
+        self.info_hash = info_hash
+
+
 def safe_name(text: str) -> str:
     """A folder or file name that is valid everywhere: no separators, no reserved characters."""
     text = _UNSAFE.sub(" ", text or "").strip(" .")
@@ -61,10 +69,14 @@ class Downloads:
         client: httpx.Client | None = None,
         background: bool = True,
         movie_root: Path | None = None,
+        stall: float = 30 * 60,
+        releases: int = 3,
     ):
         """title_of(kind, imdb_id) -> the catalog's title (catalog.title). on_saved() runs after
-        each file lands in the library (a scan)."""
+        each file lands in the library (a scan). A release that sends nothing for `stall` seconds
+        is left for another one; a job gives up after `releases` stalled releases."""
         self.db, self.torrents = db, torrents
+        self.stall, self.releases = stall, releases
         self.root = Path(root) if root else None
         self.movie_root = Path(movie_root) if movie_root else None
         self.title_of, self.on_saved, self.poll = title_of, on_saved, poll
@@ -318,24 +330,50 @@ class Downloads:
         return folder / f"Season {job['season']:02d}" / f"{name} - S{job['season']:02d}E{job['episode']:02d}{ext}"
 
     def _run(self, job):
-        job_id, user_id = job["id"], job["user_id"]
         kind = job.get("kind") or "show"
-        season, episode = job["season"], job["episode"]
         off = self.why_off(kind)
         if off:
             raise DownloadError(off, 409)
-        self._set(job_id, state="finding", error=None)
+        self._set(job["id"], state="finding", error=None)
         title = self.title_of(kind, job["imdb_id"])
+        # A release whose swarm stalls is left for the next one, up to `self.releases` of them.
+        stalled: dict[str, str] = {}
+        while True:
+            try:
+                self._fetch(job, title, stalled)
+                return
+            except Stalled as error:
+                stalled[error.info_hash] = str(error)
+                if len(stalled) >= self.releases:
+                    raise DownloadError(f"{error} ({len(stalled)} releases tried)") from None
+                log.warning("Download %s: %s; trying another release", job["show_name"], error)
+                self._set(job["id"], state="finding")
+
+    def _fetch(self, job, title: dict, stalled: dict[str, str]):
+        job_id, user_id = job["id"], job["user_id"]
+        kind = job.get("kind") or "show"
+        season, episode = job["season"], job["episode"]
         found = self.torrents.choices(title, season, episode, user_id=user_id)
-        quality = job["quality"]
-        if not found["qualities"].get(quality, {}).get("ranked"):
-            # Fallback if this item has nothing at the originally queued quality.
-            quality = found["default"] if kind == "movie" else found["offered"][0]
-        option = found["qualities"][quality]
-        if not option["ranked"]:
-            raise DownloadError(option["reason"] or f"No {LABELS.get(quality, '')} release is available")
+
+        def usable(q):
+            ranked = found["qualities"].get(q, {}).get("ranked") or []
+            return [e for e in ranked if e["release"]["hash"] not in stalled]
+
+        # The queued quality; else (nothing left there) the usual one; a movie may also take
+        # its other offered quality. A season keeps one quality.
+        order = [job["quality"], found["default"] if kind == "movie" else found["offered"][0]]
+        if kind == "movie":
+            order += found["offered"]
+        quality = next((q for q in order if usable(q)), None)
+        if quality is None:
+            if stalled:
+                raise DownloadError(f"{list(stalled.values())[-1]}, and no other release is listed")
+            q = order[1]
+            reason = found["qualities"].get(q, {}).get("reason")
+            raise DownloadError(reason or f"No {LABELS.get(q, '')} release is available")
         # Choosing the release is a prepared stream: connect, check the film/episode, read the file.
-        stream = self.torrents.open(user_id, title, season, episode, quality, f"download-{job_id}", "prepare")
+        stream = self.torrents.open(user_id, title, season, episode, quality, f"download-{job_id}", "prepare",
+                                    exclude=set(stalled))  # fmt: skip
         try:
             while True:
                 if self._stopped(job_id):
@@ -400,8 +438,9 @@ class Downloads:
                 return
             if done > last:
                 stalled_since, last = time.time(), done
-            elif time.time() - stalled_since > 30 * 60:
-                raise DownloadError("No progress for 30 minutes: the swarm has stalled")
+            elif time.time() - stalled_since > self.stall:
+                minutes = round(self.stall / 60)
+                raise Stalled(info_hash, f"No progress for {minutes} minute{'s' * (minutes != 1)}: the swarm has stalled")
             time.sleep(self.poll)
 
     def _copy(self, job_id: int, url: str, dest: Path, size: int):
