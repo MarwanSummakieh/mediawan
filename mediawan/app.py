@@ -160,9 +160,10 @@ def create_app(
             state.db,
             state.torrents,
             config.download_dir,
-            title_of=lambda imdb_id: state.catalog.title("show", imdb_id),
+            title_of=state.catalog.title,
             on_saved=state.jobs.trigger,
             background=background,
+            movie_root=config.movie_download_dir,
         )
         yield
         state.downloads.stop()
@@ -1045,8 +1046,8 @@ def create_app(
         found["episodes"] = [{**e, **seen(e["season"], e["episode"])} for e in found["episodes"]]
         found["next"] = catalog.next_up(found, watched)
         found["playable"] = st(request).torrents.enabled
-        # Season downloads: TV shows only, for administrators (they write to the library).
-        found["can_download"] = kind == "show" and user["role"] == "admin" and st(request).downloads.enabled
+        # Downloads: TV shows (by season) and movies, for administrators (they write to the library).
+        found["can_download"] = user["role"] == "admin" and st(request).downloads.can_download(kind)
         # The quality last played is what Play uses again.
         last = max(watched.values(), key=lambda r: r["played_at"], default=None)
         found["quality"] = last["quality"] if last else 0
@@ -1332,7 +1333,7 @@ def create_app(
             raise KeyError(title_id)
         return _art(s, row["url"])
 
-    # ---- season downloads of TV shows (downloads.py) -----------------------------------
+    # ---- library downloads: TV seasons and movies (downloads.py) -----------------------
 
     @app.get("/api/downloads")
     def downloads_list(request: Request, _=Depends(admin_user)):
@@ -1348,6 +1349,17 @@ def create_app(
         if s.online.match(title.get("name") or "", title.get("year"), "show"):
             raise DownloadError("This is anime: it plays through the anime pages, not torrents")
         return s.downloads.request_season(user["id"], title, int(body.get("season") or 0))
+
+    @app.post("/api/downloads/movie")
+    def downloads_movie(request: Request, body: dict = Body(...), user=Depends(admin_user)):
+        s = st(request)
+        if str(body.get("kind") or "movie") != "movie":
+            raise DownloadError("Only movies can be downloaded here")
+        title = s.catalog.title("movie", str(body.get("id") or ""))
+        if s.online.match(title.get("name") or "", title.get("year"), "movie"):
+            raise DownloadError("This is anime: it plays through the anime pages, not torrents")
+        quality = int(body.get("quality") or 0) or None
+        return s.downloads.request_movie(user["id"], title, quality)
 
     @app.post("/api/downloads/{job_id}/retry")
     def downloads_retry(job_id: int, request: Request, _=Depends(admin_user)):

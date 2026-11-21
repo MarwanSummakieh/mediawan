@@ -53,12 +53,14 @@ kept on the `backup/v2-before-rebuild` branch.
   first (`TORRENT_TRUSTED_GROUPS`, or the list in `release_rules.py`) and reads each file's
   subtitle tracks before playing, moving on when the viewer's subtitle language is missing;
   when nothing passes, the best release still plays with a warning.
-- **Season downloads of TV shows** (administrators): Download season on a show page saves every
-  aired episode into the library's TV folder (`DOWNLOAD_DIR`, the only place Mediawan writes to
-  your media) as `Show (Year)/Season NN/Show - SxxEyy.mkv`, one episode at a time, through the
-  torrent engine inside the VPN. Releases are chosen exactly as for streaming, including the
-  older-series rules (720p or SD when nothing sound exists at 1080p) and the streaming filter.
-  Progress, cancel and retry are under Admin > Downloads.
+- **Library downloads of movies and TV seasons** (administrators): Download on a movie page saves
+  the film into the library's Movies folder (`MOVIE_DOWNLOAD_DIR`) as
+  `Movie (Year)/Movie (Year).mkv`, and Download season on a show page saves every aired episode
+  into the library's TV folder (`DOWNLOAD_DIR`) as `Show (Year)/Season NN/Show - SxxEyy.mkv`, one
+  file at a time, through the torrent engine inside the VPN. Those folders are the only places
+  Mediawan writes to your media. Releases are chosen exactly as for streaming, including the
+  older-series rules (720p or SD when nothing sound exists at 1080p), wrong-film checks, and the
+  streaming filter. Progress, cancel and retry are under Admin > Downloads.
 - **Anime** found through Cinemeta plays through the anime pages (AniList + MegaPlay), not
   torrents: search lists it under Anime, and its film/TV page sends you there.
   Opening a title page prepares the stream, so play usually starts at once; while it connects

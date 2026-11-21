@@ -1411,7 +1411,8 @@
       show && t.status ? esc(t.status) : ""].filter(Boolean);
     var actions = !playable ? "" : '<button class="primary" id="play" data-autofocus>' + icon("play") + esc(playLabel) + "</button>" +
       '<button class="dd" id="source" aria-haspopup="menu">' + sourceLabel(state, null) + icon("down") + "</button>" +
-      (resume ? iconButton("restart", "restart", "Play from the start") : "") + '<button id="versions">' + icon("sliders") + "Versions</button>";
+      (resume ? iconButton("restart", "restart", "Play from the start") : "") + '<button id="versions">' + icon("sliders") + "Versions</button>" +
+      (!show && t.can_download ? '<button id="dl-movie">' + icon("download") + "Download</button>" : "");
     var body = '<div id="versions-box"></div>';
     if (show && t.episodes.length) {
       body += '<div class="section-h"><h2>Episodes</h2></div><div class="season-bar"><div class="tabs" id="seasons" data-row>' + seasons.map(function (s) {
@@ -1520,6 +1521,14 @@
     }
     if ($("#play")) $("#play").onclick = function () { play(next.season, next.episode); };
     if ($("#restart")) $("#restart").onclick = function () { play(next.season, next.episode, { start: 0 }); };
+    if ($("#dl-movie")) $("#dl-movie").onclick = function () {
+      var b = this;
+      b.disabled = true;
+      api("/api/downloads/movie", { method: "POST", body: { kind: "movie", id: t.id, quality: state.quality || 0 } }).then(function (r) {
+        toast(r.queued ? t.name + " queued at " + r.label + ". Progress is under Admin > Downloads."
+          : t.name + " is already in the library or queued.");
+      }).catch(fail).then(function () { b.disabled = false; });
+    };
     // Every release of the film, or of the episode Play would start, best picture first.
     if ($("#versions")) $("#versions").onclick = function () {
       var box = $("#versions-box");
@@ -1958,11 +1967,13 @@
     });
   }
 
-  // Season downloads of TV shows (downloads.py): every episode with its progress, refreshed while open.
+  // Library downloads of movies and TV seasons (downloads.py): refreshed while open.
   var DL_STATES = { queued: "Queued", finding: "Choosing a release", downloading: "Downloading", copying: "Saving to the library",
     done: "In the library", failed: "Failed", cancelled: "Cancelled" };
   function downloadRow(j) {
-    var ep = "S" + (j.season < 10 ? "0" : "") + j.season + "E" + (j.episode < 10 ? "0" : "") + j.episode;
+    var isMovie = j.kind === "movie";
+    var ep = isMovie ? (j.year ? "(" + j.year + ")" : "") : "S" + (j.season < 10 ? "0" : "") + j.season + "E" + (j.episode < 10 ? "0" : "") + j.episode;
+    var sub = isMovie ? "Movie" : j.episode_name;
     var pct = j.state === "downloading" && j.size ? Math.floor(100 * (j.downloaded || 0) / j.size)
       : j.state === "copying" && j.size ? Math.floor(100 * (j.copied || 0) / j.size) : null;
     var detail = j.state === "downloading" ? [pct + "%", j.size ? size(j.size) : "", j.rate ? rate(j.rate) : "", j.peers ? plural(j.peers, "peer") : ""]
@@ -1970,7 +1981,7 @@
     var rel = j.release ? [j.label, j.release.group || "", j.release.trusted ? "Trusted" : "", j.release.subtitles === true ? "Subtitles" : j.release.subtitles === false ? "No subtitles" : ""] : [j.label];
     var buttons = (j.state === "failed" || j.state === "cancelled" ? '<button class="small" data-dl-retry="' + j.id + '">' + icon("refresh") + "Retry</button> " : "") +
       '<button class="small" data-dl-cancel="' + j.id + '">' + (/^(queued|finding|downloading|copying)$/.test(j.state) ? "Cancel" : "Remove") + "</button>";
-    return "<tr><td><b>" + esc(j.show_name) + "</b> " + ep + (j.episode_name ? '<div class="muted small">' + esc(j.episode_name) + "</div>" : "") +
+    return "<tr><td><b>" + esc(j.show_name) + "</b>" + (ep ? " " + esc(ep) : "") + (sub ? '<div class="muted small">' + esc(sub) + "</div>" : "") +
       '</td><td><span class="pill ' + j.state + '">' + esc(DL_STATES[j.state] || j.state) + "</span>" +
       (pct !== null ? '<div class="dl-bar"><span style="width:' + pct + '%"></span></div>' : "") +
       '<div class="muted small">' + esc(detail.filter(Boolean).join(" · ")) + "</div>" +
@@ -1978,15 +1989,15 @@
       '</td><td class="muted small">' + esc(rel.filter(Boolean).join(" · ")) + '</td><td style="text-align:right;white-space:nowrap">' + buttons + "</td></tr>";
   }
   function adminDownloads(view) {
-    paint(view, adminHead("downloads") + '<div class="box" id="dl-box"><h2>Season downloads</h2><div class="sk sk-line" style="width:50%"></div></div>');
+    paint(view, adminHead("downloads") + '<div class="box" id="dl-box"><h2>Downloads</h2><div class="sk sk-line" style="width:50%"></div></div>');
     function draw() {
       if (view !== VIEW) return;
       api("/api/downloads").then(function (d) {
         var box = $("#dl-box");
         if (!box || view !== VIEW) return;
-        box.innerHTML = "<h2>Season downloads</h2>" + (!d.enabled ? '<p class="muted">' + esc(d.reason || "Season downloads are off.") + "</p>" : "") +
-          (d.jobs.length ? '<div class="table-wrap"><table><tr><th>Episode</th><th>Status</th><th>Release</th><th></th></tr>' + d.jobs.map(downloadRow).join("") + "</table></div>"
-            : '<p class="muted">Nothing yet. Open a TV show from Search and choose Download season.</p>');
+        box.innerHTML = "<h2>Downloads</h2>" + (!d.enabled ? '<p class="muted">' + esc(d.reason || "Downloads are off.") + "</p>" : "") +
+          (d.jobs.length ? '<div class="table-wrap"><table><tr><th>Title</th><th>Status</th><th>Release</th><th></th></tr>' + d.jobs.map(downloadRow).join("") + "</table></div>"
+            : '<p class="muted">Nothing yet. Open a movie or TV show from Search and choose Download.</p>');
         $$("[data-dl-cancel]", box).forEach(function (b) {
           b.onclick = function () { api("/api/downloads/" + b.getAttribute("data-dl-cancel"), { method: "DELETE" }).then(draw).catch(fail); };
         });
